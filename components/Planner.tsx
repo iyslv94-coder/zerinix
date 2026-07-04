@@ -67,6 +67,16 @@ const reportActions = [
   { label: "Export PDF", icon: Download },
 ];
 
+const reportSectionTitles = [
+  "Executive Summary",
+  "Market Analysis",
+  "Target Audience",
+  "Revenue Model",
+  "Risks",
+  "90-Day Roadmap",
+  "AI Success Score (0-100)",
+];
+
 function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -255,6 +265,50 @@ export default function Planner() {
     setResult(output || fallbackMessage);
   }
 
+  async function readStreamingSection(
+    response: Response,
+    onChunk: (chunk: string) => void,
+    fallbackMessage: string,
+    onFirstChunk?: () => void
+  ) {
+    if (!response.ok || !response.body) {
+      try {
+        const data = await response.json();
+        onChunk(data.error || fallbackMessage);
+      } catch {
+        onChunk(fallbackMessage);
+      }
+
+      return;
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let hasChunk = false;
+
+    while (true) {
+      const { done, value } = await reader.read();
+
+      if (done) {
+        break;
+      }
+
+      const chunk = decoder.decode(value, { stream: true });
+
+      if (!hasChunk && chunk) {
+        hasChunk = true;
+        onFirstChunk?.();
+      }
+
+      onChunk(chunk);
+    }
+
+    const finalChunk = decoder.decode();
+    if (finalChunk) {
+      onChunk(finalChunk);
+    }
+  }
+
   async function generatePlan() {
     setLoading(true);
     setResult("");
@@ -278,14 +332,78 @@ export default function Planner() {
     setAnalyzing(true);
     setResult("");
 
-    try {
+    const sectionOutput = Object.fromEntries(
+      reportSectionTitles.map((section) => [section, ""])
+    ) as Record<string, string>;
+    let frame: number | null = null;
+    let remainingSectionsStarted = false;
+    let remainingSectionsPromise: Promise<void[]> = Promise.resolve([]);
+
+    const renderReport = () => {
+      setResult(
+        reportSectionTitles
+          .map((section) => `${section}\n${sectionOutput[section]}`)
+          .join("\n\n")
+      );
+    };
+
+    const scheduleReportRender = () => {
+      if (frame !== null) {
+        return;
+      }
+
+      frame = requestAnimationFrame(() => {
+        frame = null;
+        renderReport();
+      });
+    };
+
+    const streamSection = async (section: string, onFirstChunk?: () => void) => {
       const res = await fetch("/api/market-analysis", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt }),
+        body: JSON.stringify({ prompt, section }),
       });
 
-      await readStreamingResult(res, "Pazar analizi alınamadı.");
+      await readStreamingSection(
+        res,
+        (chunk) => {
+          sectionOutput[section] += chunk;
+          scheduleReportRender();
+        },
+        "Bu bölüm için AI çıktısı alınamadı.",
+        onFirstChunk
+      );
+    };
+
+    const startRemainingSections = () => {
+      if (remainingSectionsStarted) {
+        return;
+      }
+
+      remainingSectionsStarted = true;
+      remainingSectionsPromise = Promise.all(
+        reportSectionTitles
+          .slice(1)
+          .map((section) =>
+            streamSection(section).catch(() => {
+              sectionOutput[section] = "Bu bölüm için AI çıktısı alınamadı.";
+              scheduleReportRender();
+            })
+          )
+      );
+    };
+
+    try {
+      await streamSection("Executive Summary", startRemainingSections);
+      startRemainingSections();
+      await remainingSectionsPromise;
+
+      if (frame !== null) {
+        cancelAnimationFrame(frame);
+      }
+
+      renderReport();
     } catch {
       setResult("Pazar analizi sırasında bir hata oluştu.");
     } finally {
