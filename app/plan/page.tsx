@@ -128,7 +128,7 @@ export default function PlanPage() {
             disabled={checking}
             className="mt-4 w-full bg-zinc-700 text-white py-4 rounded-2xl font-semibold disabled:opacity-60"
           >
-            {checking ? "Domainler kontrol ediliyor..." : "30 Marka Domaini Bul"}
+            {checking ? "Domainler kontrol ediliyor..." : "Pazar Analizi Yap"}
           </button>
         </div>
 
