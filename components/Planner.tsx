@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useMemo, useState } from "react";
+import { memo, useMemo, useRef, useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
   BarChart3,
@@ -60,7 +60,6 @@ const reportActions = [
   { label: "Competitor Analysis", icon: Search },
   { label: "Financial Plan", icon: PieChart },
   { label: "Brand Strategy", icon: Palette },
-  { label: "Export PDF", icon: Download },
 ];
 
 const reportFields: Array<{
@@ -141,6 +140,8 @@ const ReportPanel = memo(function ReportPanel({
   reportTitle: string;
   result: string;
 }) {
+  const reportRef = useRef<HTMLElement | null>(null);
+  const [exportingPdf, setExportingPdf] = useState(false);
   const sections = useMemo<ReportSection[]>(() => {
     if (reportData) {
       return reportFields.map(({ field, title, icon }) => ({
@@ -163,6 +164,76 @@ const ReportPanel = memo(function ReportPanel({
       : [];
   }, [reportData, reportFields, result]);
 
+  const hasReportContent = sections.some(
+    (section) =>
+      section.content && section.content !== "Bu bölüm için AI çıktısı bekleniyor."
+  );
+
+  async function downloadPdf() {
+    if (!reportRef.current || !hasReportContent || exportingPdf) {
+      return;
+    }
+
+    setExportingPdf(true);
+
+    const target = reportRef.current;
+    const previousMaxHeight = target.style.maxHeight;
+    const previousOverflow = target.style.overflow;
+    const previousPaddingRight = target.style.paddingRight;
+
+    try {
+      const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
+        import("html2canvas"),
+        import("jspdf"),
+      ]);
+
+      target.style.maxHeight = "none";
+      target.style.overflow = "visible";
+      target.style.paddingRight = "0";
+
+      const canvas = await html2canvas(target, {
+        backgroundColor: "#000000",
+        scale: Math.min(2, window.devicePixelRatio || 1),
+        useCORS: true,
+        logging: false,
+      });
+
+      const pdf = new jsPDF("p", "mm", "a4");
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const margin = 10;
+      const contentWidth = pageWidth - margin * 2;
+      const contentHeight = (canvas.height * contentWidth) / canvas.width;
+      const imageData = canvas.toDataURL("image/png");
+
+      let heightLeft = contentHeight;
+      let position = margin;
+
+      pdf.setFillColor(0, 0, 0);
+      pdf.rect(0, 0, pageWidth, pageHeight, "F");
+      pdf.addImage(imageData, "PNG", margin, position, contentWidth, contentHeight);
+      heightLeft -= pageHeight - margin * 2;
+
+      while (heightLeft > 0) {
+        pdf.addPage();
+        pdf.setFillColor(0, 0, 0);
+        pdf.rect(0, 0, pageWidth, pageHeight, "F");
+        position = heightLeft - contentHeight + margin;
+        pdf.addImage(imageData, "PNG", margin, position, contentWidth, contentHeight);
+        heightLeft -= pageHeight - margin * 2;
+      }
+
+      const fileName = `${reportTitle.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "zerinix-report"}.pdf`;
+
+      pdf.save(fileName);
+    } finally {
+      target.style.maxHeight = previousMaxHeight;
+      target.style.overflow = previousOverflow;
+      target.style.paddingRight = previousPaddingRight;
+      setExportingPdf(false);
+    }
+  }
+
   if (!reportData && !result) {
     return (
       <div className="flex min-h-[520px] items-center justify-center rounded-3xl border border-white/10 bg-zinc-950/70 p-8 text-center shadow-2xl shadow-black/40">
@@ -182,7 +253,7 @@ const ReportPanel = memo(function ReportPanel({
   }
 
   return (
-    <section className="max-h-[80vh] overflow-y-auto pr-1">
+    <section ref={reportRef} className="max-h-[80vh] overflow-y-auto pr-1">
       <div className="mb-5 flex items-end justify-between gap-4">
         <div>
           <p className="text-xs font-semibold tracking-[0.35em] text-teal-300/70">
@@ -239,6 +310,18 @@ const ReportPanel = memo(function ReportPanel({
             </button>
           );
         })}
+
+        {hasReportContent ? (
+          <button
+            type="button"
+            onClick={downloadPdf}
+            disabled={exportingPdf}
+            className="flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-zinc-900 px-4 py-3 text-sm font-semibold text-zinc-200 transition hover:border-white/20 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <Download className="h-4 w-4 text-teal-200" />
+            {exportingPdf ? "PDF hazırlanıyor..." : "Download PDF"}
+          </button>
+        ) : null}
       </div>
     </section>
   );
