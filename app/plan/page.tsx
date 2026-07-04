@@ -95,13 +95,13 @@ export default function PlanPage() {
       <div className="grid md:grid-cols-2 gap-8 mt-8">
         <div className="bg-zinc-900 rounded-3xl p-8">
           <p className="text-sm tracking-[6px] text-zinc-500 mb-6">
-            NEXORA AI PLANLAYICI
+            ZERINIX PLANLAYICI
           </p>
 
           <h1 className="text-5xl font-bold leading-tight mb-8">
             Hedefini anlat,
             <br />
-            Nexora yol haritanı hazırlasın.
+            ZERINIX yol haritanı hazırlasın.
           </h1>
 
           <p className="text-zinc-400 mb-6">

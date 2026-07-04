@@ -1,11 +1,11 @@
 export default function AIDashboard() {
   return (
-    <div className="w-[520px] rounded-3xl border border-white/10 bg-zinc-950/90 p-6 shadow-2xl backdrop-blur-xl">
+    <div className="w-[520px] rounded-3xl border border-white/10 bg-zinc-950/90 p-6 shadow-2xl shadow-black/50 backdrop-blur-xl">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-sm text-gray-500">Nexora AI Dashboard</p>
+          <p className="text-sm text-gray-500">ZERINIX Command Center</p>
           <h2 className="mt-1 text-2xl font-bold text-white">
-            Bugünün İş Planı
+            Bugünün İşletim Planı
           </h2>
         </div>
 
@@ -17,12 +17,12 @@ export default function AIDashboard() {
 
       <div className="mt-8 rounded-2xl bg-zinc-900/80 p-5">
         <div className="flex justify-between text-sm">
-          <span className="text-gray-400">Günlük ilerleme</span>
+          <span className="text-gray-400">Günlük operasyon ilerlemesi</span>
           <span className="font-bold text-white">68%</span>
         </div>
 
         <div className="mt-3 h-3 rounded-full bg-zinc-800">
-          <div className="h-3 w-[68%] rounded-full bg-gradient-to-r from-purple-500 to-white" />
+          <div className="h-3 w-[68%] rounded-full bg-gradient-to-r from-teal-400 to-white" />
         </div>
       </div>
 
@@ -34,28 +34,31 @@ export default function AIDashboard() {
         </div>
 
         <div className="rounded-2xl bg-zinc-900/80 p-5">
-          <p className="text-sm text-gray-500">Tamamlanan</p>
+          <p className="text-sm text-gray-500">Aksiyonlar</p>
           <h3 className="mt-2 text-2xl font-bold text-white">7/10</h3>
-          <p className="mt-1 text-xs text-purple-400">3 görev kaldı</p>
+          <p className="mt-1 text-xs text-teal-300">3 görev kaldı</p>
         </div>
       </div>
 
       <div className="mt-5 space-y-3">
-        <div className="rounded-2xl bg-zinc-900/80 p-4 text-white">
-          ✅ Marka konumlandırması
+        <div className="flex items-center gap-3 rounded-2xl bg-zinc-900/80 p-4 text-white">
+          <span className="h-2.5 w-2.5 rounded-full bg-teal-300" />
+          Marka konumlandırması
         </div>
 
-        <div className="rounded-2xl bg-zinc-900/80 p-4 text-white">
-          ⏳ Reklam metni hazırlanıyor
+        <div className="flex items-center gap-3 rounded-2xl bg-zinc-900/80 p-4 text-white">
+          <span className="h-2.5 w-2.5 rounded-full bg-amber-300" />
+          Reklam metni hazırlanıyor
         </div>
 
-        <div className="rounded-2xl bg-zinc-900/80 p-4 text-white">
-          📈 Rakip analizi bekliyor
+        <div className="flex items-center gap-3 rounded-2xl bg-zinc-900/80 p-4 text-white">
+          <span className="h-2.5 w-2.5 rounded-full bg-zinc-500" />
+          Rakip analizi bekliyor
         </div>
       </div>
 
-      <div className="mt-6 rounded-2xl border border-purple-500/20 bg-purple-500/10 p-4">
-        <p className="text-sm text-purple-300">AI Önerisi</p>
+      <div className="mt-6 rounded-2xl border border-teal-400/20 bg-teal-400/10 p-4">
+        <p className="text-sm text-teal-200">AI Önerisi</p>
         <p className="mt-2 text-sm text-gray-300">
           Bugün reklam metnini tamamla ve ilk kampanya için 3 farklı başlık test et.
         </p>

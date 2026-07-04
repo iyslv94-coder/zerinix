@@ -1,6 +1,6 @@
 import OpenAI from "openai";
 import { NextResponse } from "next/server";
-import { buildNexoraPrompt } from "../../lib/orchestrator";
+import { buildZerinixPrompt } from "../../lib/orchestrator";
 
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY!,
@@ -12,8 +12,7 @@ export async function POST(req: Request) {
 
     const response = await client.responses.create({
       model: "gpt-5-mini",
-      input: buildNexoraPrompt(prompt),
-    
+      input: buildZerinixPrompt(prompt),
     });
 
     return NextResponse.json({

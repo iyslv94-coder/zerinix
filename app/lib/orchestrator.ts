@@ -1,8 +1,8 @@
 import { ceoAgent } from "./agents/ceo";
 
-export function buildNexoraPrompt(prompt: string) {
+export function buildZerinixPrompt(prompt: string) {
   return `
-Sen Nexora CEO Agent'sın.
+Sen ZERINIX CEO Agent'sın.
 
 ${ceoAgent(prompt)}
 
