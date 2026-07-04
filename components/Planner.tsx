@@ -48,6 +48,7 @@ const sectionMatchers: Record<string, string[]> = {
     "AI Başarı Skoru",
     "AI Skoru",
   ],
+  Sources: ["Sources", "Kaynaklar"],
 };
 
 const sectionIcons: Record<string, LucideIcon> = {
@@ -58,6 +59,7 @@ const sectionIcons: Record<string, LucideIcon> = {
   Risks: ShieldAlert,
   "90-Day Roadmap": CalendarDays,
   "AI Success Score (0-100)": Gauge,
+  Sources: Search,
 };
 
 const reportActions = [
@@ -75,6 +77,7 @@ const reportSectionTitles = [
   "Risks",
   "90-Day Roadmap",
   "AI Success Score (0-100)",
+  "Sources",
 ];
 
 function escapeRegExp(value: string) {
