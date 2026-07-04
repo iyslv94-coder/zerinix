@@ -1,6 +1,202 @@
 "use client";
 
 import { useState } from "react";
+import type { LucideIcon } from "lucide-react";
+import {
+  BarChart3,
+  CalendarDays,
+  Download,
+  FileText,
+  Gauge,
+  Landmark,
+  Palette,
+  PieChart,
+  Search,
+  ShieldAlert,
+  Sparkles,
+  Users,
+} from "lucide-react";
+
+type ReportSection = {
+  title: string;
+  icon: LucideIcon;
+  content: string;
+};
+
+const sectionMatchers: Record<string, string[]> = {
+  "Executive Summary": ["Executive Summary", "Özet", "Yönetici Özeti"],
+  "Market Analysis": [
+    "Market Analysis",
+    "Market size",
+    "Competition level",
+    "Pazar Analizi",
+    "Pazar Büyüklüğü",
+    "Rekabet Seviyesi",
+  ],
+  "Target Audience": ["Target Audience", "Hedef Kitle"],
+  "Revenue Model": ["Revenue Model", "Revenue potential", "Gelir Modeli", "Gelir Potansiyeli"],
+  Risks: ["Risks", "Main risks", "Riskler", "Ana Riskler"],
+  "90-Day Roadmap": [
+    "90-Day Roadmap",
+    "Recommended first steps",
+    "90 Günlük Yol Haritası",
+    "Önerilen İlk Adımlar",
+  ],
+  "AI Success Score (0-100)": [
+    "AI Success Score",
+    "AI score",
+    "AI Başarı Skoru",
+    "AI Skoru",
+  ],
+};
+
+const sectionIcons: Record<string, LucideIcon> = {
+  "Executive Summary": Sparkles,
+  "Market Analysis": BarChart3,
+  "Target Audience": Users,
+  "Revenue Model": Landmark,
+  Risks: ShieldAlert,
+  "90-Day Roadmap": CalendarDays,
+  "AI Success Score (0-100)": Gauge,
+};
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function normalizeHeading(value: string) {
+  return value
+    .replace(/^\s*[-*#\d.)]+\s*/, "")
+    .replace(/\*\*/g, "")
+    .replace(/:$/, "")
+    .trim()
+    .toLowerCase();
+}
+
+function parseReportSections(result: string): ReportSection[] {
+  const headings = Object.values(sectionMatchers).flat();
+  const headingPattern = headings.map(escapeRegExp).join("|");
+  const parts = result.split(new RegExp(`(^|\\n)\\s*(?:#{1,3}\\s*)?(${headingPattern})\\s*:?\\s*`, "i"));
+  const contentByHeading = new Map<string, string>();
+
+  for (let index = 2; index < parts.length; index += 3) {
+    const heading = normalizeHeading(parts[index]);
+    const content = (parts[index + 1] || "").trim();
+
+    if (content) {
+      contentByHeading.set(heading, content);
+    }
+  }
+
+  const fallback = result.trim();
+
+  return Object.entries(sectionMatchers).map(([title, aliases], index) => {
+    const matchedContent = aliases
+      .map((alias) => contentByHeading.get(normalizeHeading(alias)))
+      .filter(Boolean)
+      .join("\n\n");
+
+    return {
+      title,
+      icon: sectionIcons[title],
+      content:
+        matchedContent ||
+        (index === 0 && fallback
+          ? fallback
+          : "Bu bölüm için AI çıktısı bekleniyor."),
+    };
+  });
+}
+
+function ReportPanel({ result }: { result: string }) {
+  const sections = result ? parseReportSections(result) : [];
+  const actions = [
+    { label: "Competitor Analysis", icon: Search },
+    { label: "Financial Plan", icon: PieChart },
+    { label: "Brand Strategy", icon: Palette },
+    { label: "Export PDF", icon: Download },
+  ];
+
+  if (!result) {
+    return (
+      <div className="flex min-h-[520px] items-center justify-center rounded-3xl border border-white/10 bg-zinc-950/70 p-8 text-center shadow-2xl shadow-black/40">
+        <div>
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/5">
+            <FileText className="h-5 w-5 text-teal-200" />
+          </div>
+          <p className="mt-5 text-lg font-semibold text-white">
+            AI raporu burada hazırlanacak.
+          </p>
+          <p className="mt-2 text-sm leading-6 text-zinc-500">
+            İş fikrini yaz ve ZERINIX rapor panelini oluştur.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <section className="max-h-[80vh] overflow-y-auto pr-1">
+      <div className="mb-5 flex items-end justify-between gap-4">
+        <div>
+          <p className="text-xs font-semibold tracking-[0.35em] text-teal-300/70">
+            ZERINIX REPORT
+          </p>
+          <h2 className="mt-2 text-3xl font-bold text-white">
+            Business Intelligence Report
+          </h2>
+        </div>
+        <div className="rounded-full border border-teal-300/20 bg-teal-300/10 px-4 py-2 text-sm text-teal-100">
+          AI Ready
+        </div>
+      </div>
+
+      <div className="space-y-4">
+        {sections.map((section) => {
+          const Icon = section.icon;
+
+          return (
+            <article
+              key={section.title}
+              className="rounded-3xl border border-white/10 bg-zinc-950/80 p-5 shadow-xl shadow-black/30"
+            >
+              <div className="flex items-start gap-4">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/5">
+                  <Icon className="h-5 w-5 text-teal-200" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-white">
+                    {section.title}
+                  </h3>
+                  <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-zinc-300">
+                    {section.content}
+                  </p>
+                </div>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+
+      <div className="mt-5 grid gap-3 sm:grid-cols-2">
+        {actions.map((action) => {
+          const Icon = action.icon;
+
+          return (
+            <button
+              key={action.label}
+              type="button"
+              className="flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-zinc-900 px-4 py-3 text-sm font-semibold text-zinc-200 transition hover:border-white/20 hover:bg-zinc-800"
+            >
+              <Icon className="h-4 w-4 text-teal-200" />
+              {action.label}
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
 
 export default function Planner() {
   const [prompt, setPrompt] = useState("");
@@ -90,9 +286,7 @@ export default function Planner() {
           </button>
         </div>
 
-        <div className="bg-zinc-900 rounded-3xl p-8 whitespace-pre-wrap overflow-y-auto max-h-[80vh]">
-          {result || "AI sonucu burada görünecek."}
-        </div>
+        <ReportPanel result={result} />
       </div>
     </main>
   );
