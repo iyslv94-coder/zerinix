@@ -72,6 +72,16 @@ const emptyMarketReport: MarketReport = {
   sources: "",
 };
 
+function sanitizeReportContent(content: string) {
+  return content
+    .replace(/\n\s*(?:sources|kaynaklar)\s*:[\s\S]*$/im, "")
+    .replace(/\[([^\]]+)\]\((?:https?:\/\/|www\.)[^\s)]+\)/gi, "$1")
+    .replace(/(?:https?:\/\/|www\.)[^\s),]+/gi, "")
+    .replace(/\(\s*\)/g, "")
+    .replace(/[ \t]+\n/g, "\n")
+    .trim();
+}
+
 const ReportPanel = memo(function ReportPanel({
   marketReport,
   result,
@@ -85,7 +95,8 @@ const ReportPanel = memo(function ReportPanel({
         title,
         icon,
         content:
-          marketReport[field].trim() || "Bu bölüm için AI çıktısı bekleniyor.",
+          sanitizeReportContent(marketReport[field]) ||
+          "Bu bölüm için AI çıktısı bekleniyor.",
       }));
     }
 
@@ -94,7 +105,7 @@ const ReportPanel = memo(function ReportPanel({
           {
             title: "Executive Summary",
             icon: Sparkles,
-            content: result,
+            content: sanitizeReportContent(result),
           },
         ]
       : [];
