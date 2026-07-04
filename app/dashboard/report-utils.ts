@@ -13,6 +13,7 @@ export type DashboardReport = {
 };
 
 type ReportRow = Record<string, unknown>;
+type ReportSection = DashboardReport["sections"][number];
 
 const sectionLabels: Record<string, string> = {
   executiveSummary: "Executive Summary",
@@ -43,7 +44,14 @@ function readString(row: ReportRow, keys: string[], fallback = "") {
 }
 
 function readReportPayload(row: ReportRow) {
-  const candidates = [row.report, row.report_data, row.content, row.result, row.data];
+  const candidates = [
+    row.sections,
+    row.report,
+    row.report_data,
+    row.content,
+    row.result,
+    row.data,
+  ];
 
   for (const candidate of candidates) {
     if (candidate && typeof candidate === "object" && !Array.isArray(candidate)) {
@@ -52,6 +60,34 @@ function readReportPayload(row: ReportRow) {
   }
 
   return row;
+}
+
+function isSectionRecord(value: unknown): value is ReportSection {
+  return (
+    !!value &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    typeof (value as ReportRow).title === "string" &&
+    typeof (value as ReportRow).content === "string"
+  );
+}
+
+function normalizeJsonSections(value: unknown) {
+  if (Array.isArray(value)) {
+    const sections = value
+      .filter(isSectionRecord)
+      .map((section) => ({
+        title: section.title.trim(),
+        content: section.content.trim(),
+      }))
+      .filter((section) => section.title && section.content);
+
+    if (sections.length > 0) {
+      return sections;
+    }
+  }
+
+  return null;
 }
 
 function inferReportType(row: ReportRow) {
@@ -65,6 +101,12 @@ function inferReportType(row: ReportRow) {
 }
 
 function normalizeSections(row: ReportRow) {
+  const jsonSections = normalizeJsonSections(row.sections);
+
+  if (jsonSections) {
+    return jsonSections;
+  }
+
   const payload = readReportPayload(row);
   const sections = sectionOrder
     .map((field) => {
@@ -103,7 +145,7 @@ export function normalizeReport(row: ReportRow): DashboardReport {
     title: readString(row, ["title", "name"], titleFallback),
     createdAt,
     type: reportType,
-    status: readString(row, ["status", "state"], "Ready"),
+    status: readString(row, ["status", "state"], "completed"),
     sections: normalizeSections(row),
   };
 }
@@ -119,7 +161,7 @@ export async function getAuthenticatedUser(supabase: SupabaseClient) {
 export async function loadUserReports(supabase: SupabaseClient, user: User) {
   const { data, error } = await supabase
     .from("reports")
-    .select("*")
+    .select("id,user_id,title,prompt,report_type,status,created_at,updated_at,sections")
     .eq("user_id", user.id)
     .order("created_at", { ascending: false });
 
@@ -140,7 +182,7 @@ export async function loadUserReport(
 ) {
   const { data, error } = await supabase
     .from("reports")
-    .select("*")
+    .select("id,user_id,title,prompt,report_type,status,created_at,updated_at,sections")
     .eq("user_id", user.id)
     .eq("id", reportId)
     .maybeSingle();
