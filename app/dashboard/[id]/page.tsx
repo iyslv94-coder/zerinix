@@ -11,6 +11,7 @@ import {
 import { createClient } from "@/app/lib/supabase/server";
 import DashboardSidebar from "../DashboardSidebar";
 import { getAuthenticatedUser, loadUserReport } from "../report-utils";
+import ReportPdfButton from "./ReportPdfButton";
 
 export const dynamic = "force-dynamic";
 
@@ -54,14 +55,14 @@ export default async function ReportDetailPage({
         <DashboardSidebar />
 
         <section className="flex-1 px-5 py-6 sm:px-8 lg:px-10 lg:py-8">
-          <div className="flex flex-col gap-5 border-b border-white/10 pb-8 md:flex-row md:items-end md:justify-between">
-            <div>
+          <div className="flex flex-col gap-5 border-b border-white/10 pb-8 md:flex-row md:items-start md:justify-between">
+            <div className="min-w-0">
               <Link
                 href="/dashboard"
                 className="inline-flex items-center gap-2 text-sm font-medium text-zinc-400 transition hover:text-white"
               >
                 <ArrowLeft className="h-4 w-4" />
-                Dashboard
+                Back to Dashboard
               </Link>
               <p className="mt-6 text-xs font-semibold tracking-[0.35em] text-teal-300/70">
                 ZERINIX REPORT
@@ -71,13 +72,16 @@ export default async function ReportDetailPage({
               </h1>
             </div>
 
-            <Link
-              href="/plan"
-              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-black transition hover:bg-zinc-200"
-            >
-              <Plus className="h-4 w-4" />
-              Create New Report
-            </Link>
+            <div className="flex flex-row items-center gap-3 md:shrink-0">
+              <ReportPdfButton report={report} />
+              <Link
+                href="/plan"
+                className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-black transition hover:bg-zinc-200"
+              >
+                <Plus className="h-4 w-4" />
+                Create New Report
+              </Link>
+            </div>
           </div>
 
           <div className="mt-6 grid gap-4 md:grid-cols-3">
