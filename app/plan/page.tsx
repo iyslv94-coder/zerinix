@@ -2,23 +2,15 @@
 
 import { useState } from "react";
 
-type DomainResult = {
-  domain: string;
-  available: boolean | null;
-  status: string;
-};
-
 export default function PlanPage() {
   const [prompt, setPrompt] = useState("");
   const [result, setResult] = useState("");
-  const [domains, setDomains] = useState<DomainResult[]>([]);
   const [loading, setLoading] = useState(false);
-  const [checking, setChecking] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
 
   async function generatePlan() {
     setLoading(true);
     setResult("");
-    setDomains([]);
 
     try {
       const res = await fetch("/api/plan", {
@@ -36,58 +28,43 @@ export default function PlanPage() {
     }
   }
 
-  function generateBrandNames(count: number) {
-    const starts = [
-      "zor", "vel", "kor", "rav", "xen", "var", "nov", "kar",
-      "ory", "sol", "ven", "lyr", "qor", "zer", "kal", "mor"
-    ];
+  async function analyzeMarket() {
+    setAnalyzing(true);
+    setResult("");
 
-    const mids = [
-      "a", "e", "i", "o", "y", "ar", "en", "or", "iv", "el",
-      "on", "ur", "ai", "ev"
-    ];
+    try {
+      const res = await fetch("/api/plan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt: `
+Kullanıcının iş fikri için profesyonel pazar analizi yap.
 
-    const ends = [
-      "via", "nix", "ron", "vex", "ora", "ion", "exa", "rix",
-      "ira", "yon", "ara", "xis", "nor", "lia"
-    ];
+İş fikri:
+${prompt}
 
-    const names = new Set<string>();
+Sadece aşağıdaki başlıklarla cevap ver:
 
-    while (names.size < count) {
-      const name =
-        starts[Math.floor(Math.random() * starts.length)] +
-        mids[Math.floor(Math.random() * mids.length)] +
-        ends[Math.floor(Math.random() * ends.length)];
+Market size
+Competition level
+Target audience
+Revenue potential
+Main risks
+Recommended first steps
+AI score (0-100)
 
-      names.add(name.toLowerCase() + ".com");
+Web adresi, alan adı veya marka adı önerisi üretme.
+`,
+        }),
+      });
+
+      const data = await res.json();
+      setResult(data.result || data.error || "Pazar analizi alınamadı.");
+    } catch {
+      setResult("Pazar analizi sırasında bir hata oluştu.");
+    } finally {
+      setAnalyzing(false);
     }
-
-    return Array.from(names);
-  }
-
-  async function checkDomain(domain: string) {
-    const res = await fetch("/api/domain", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ domain }),
-    });
-
-    const data = await res.json();
-    setDomains((prev) => [...prev, data]);
-  }
-
-  async function checkBrandNames() {
-    setChecking(true);
-    setDomains([]);
-
-    const names = generateBrandNames(30);
-
-    for (const domain of names) {
-      await checkDomain(domain);
-    }
-
-    setChecking(false);
   }
 
   return (
@@ -124,43 +101,16 @@ export default function PlanPage() {
           </button>
 
           <button
-            onClick={checkBrandNames}
-            disabled={checking}
+            onClick={analyzeMarket}
+            disabled={analyzing}
             className="mt-4 w-full bg-zinc-700 text-white py-4 rounded-2xl font-semibold disabled:opacity-60"
           >
-            {checking ? "Domainler kontrol ediliyor..." : "Pazar Analizi Yap"}
+            {analyzing ? "Pazar analizi yapılıyor..." : "Pazar Analizi Yap"}
           </button>
         </div>
 
         <div className="bg-zinc-900 rounded-3xl p-8 whitespace-pre-wrap overflow-y-auto max-h-[80vh]">
           {result || "AI sonucu burada görünecek."}
-
-          {domains.length > 0 && (
-            <div className="mt-8 border-t border-zinc-700 pt-6">
-              <h2 className="text-2xl font-bold mb-4">
-                Domain Kontrol Sonuçları
-              </h2>
-
-              <div className="space-y-3">
-                {domains.map((item, index) => (
-                  <div
-                    key={index}
-                    className="flex justify-between items-center bg-zinc-800 p-4 rounded-xl"
-                  >
-                    <span>{item.domain}</span>
-
-                    <span>
-                      {item.available === true
-                        ? "🟢 Available"
-                        : item.available === false
-                        ? "🔴 Taken"
-                        : "⚪ Unknown"}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
       </div>
     </main>
