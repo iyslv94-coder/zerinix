@@ -1,6 +1,7 @@
 "use client";
 
-import { memo, useMemo, useRef, useState } from "react";
+import { memo, useMemo, useState } from "react";
+import { jsPDF } from "jspdf";
 import type { LucideIcon } from "lucide-react";
 import {
   BarChart3,
@@ -140,8 +141,8 @@ const ReportPanel = memo(function ReportPanel({
   reportTitle: string;
   result: string;
 }) {
-  const reportRef = useRef<HTMLElement | null>(null);
   const [exportingPdf, setExportingPdf] = useState(false);
+  const [pdfError, setPdfError] = useState("");
   const sections = useMemo<ReportSection[]>(() => {
     if (reportData) {
       return reportFields.map(({ field, title, icon }) => ({
@@ -169,67 +170,132 @@ const ReportPanel = memo(function ReportPanel({
       section.content && section.content !== "Bu bölüm için AI çıktısı bekleniyor."
   );
 
-  async function downloadPdf() {
-    if (!reportRef.current || !hasReportContent || exportingPdf) {
+  function downloadPdf() {
+    if (!hasReportContent || exportingPdf) {
       return;
     }
 
     setExportingPdf(true);
-
-    const target = reportRef.current;
-    const previousMaxHeight = target.style.maxHeight;
-    const previousOverflow = target.style.overflow;
-    const previousPaddingRight = target.style.paddingRight;
+    setPdfError("");
+    const isSafari =
+      /^((?!chrome|android).)*safari/i.test(navigator.userAgent) ||
+      navigator.vendor.includes("Apple");
 
     try {
-      const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
-        import("html2canvas"),
-        import("jspdf"),
-      ]);
-
-      target.style.maxHeight = "none";
-      target.style.overflow = "visible";
-      target.style.paddingRight = "0";
-
-      const canvas = await html2canvas(target, {
-        backgroundColor: "#000000",
-        scale: Math.min(2, window.devicePixelRatio || 1),
-        useCORS: true,
-        logging: false,
-      });
-
       const pdf = new jsPDF("p", "mm", "a4");
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
-      const margin = 10;
+      const margin = 14;
       const contentWidth = pageWidth - margin * 2;
-      const contentHeight = (canvas.height * contentWidth) / canvas.width;
-      const imageData = canvas.toDataURL("image/png");
+      let y = margin;
 
-      let heightLeft = contentHeight;
-      let position = margin;
-
-      pdf.setFillColor(0, 0, 0);
-      pdf.rect(0, 0, pageWidth, pageHeight, "F");
-      pdf.addImage(imageData, "PNG", margin, position, contentWidth, contentHeight);
-      heightLeft -= pageHeight - margin * 2;
-
-      while (heightLeft > 0) {
-        pdf.addPage();
-        pdf.setFillColor(0, 0, 0);
+      const paintPage = () => {
+        pdf.setFillColor("#000000");
         pdf.rect(0, 0, pageWidth, pageHeight, "F");
-        position = heightLeft - contentHeight + margin;
-        pdf.addImage(imageData, "PNG", margin, position, contentWidth, contentHeight);
-        heightLeft -= pageHeight - margin * 2;
+      };
+
+      const ensureSpace = (height: number) => {
+        if (y + height <= pageHeight - margin) {
+          return;
+        }
+
+        pdf.addPage();
+        paintPage();
+        y = margin;
+      };
+
+      paintPage();
+
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(10);
+      pdf.setTextColor("#5eead4");
+      pdf.text("ZERINIX REPORT", margin, y);
+
+      pdf.setFontSize(24);
+      pdf.setTextColor("#ffffff");
+      pdf.text(reportTitle, margin, y + 11);
+
+      pdf.setFillColor("#042f2e");
+      pdf.setDrawColor("#115e59");
+      pdf.roundedRect(pageWidth - margin - 32, y + 1, 32, 10, 5, 5, "FD");
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(8);
+      pdf.setTextColor("#ccfbf1");
+      pdf.text("AI Ready", pageWidth - margin - 25, y + 7.3);
+
+      y += 26;
+
+      sections.forEach((section) => {
+        const bodyLines = pdf.splitTextToSize(section.content, contentWidth - 25);
+        const cardHeight = Math.max(31, 20 + bodyLines.length * 5.6);
+
+        ensureSpace(cardHeight + 5);
+
+        pdf.setFillColor("#09090b");
+        pdf.setDrawColor("#27272a");
+        pdf.roundedRect(margin, y, contentWidth, cardHeight, 5, 5, "FD");
+
+        pdf.setFillColor("#18181b");
+        pdf.setDrawColor("#27272a");
+        pdf.roundedRect(margin + 4, y + 5, 11, 11, 3, 3, "FD");
+
+        pdf.setDrawColor("#99f6e4");
+        pdf.circle(margin + 9.5, y + 10.5, 2.9, "S");
+        pdf.line(margin + 9.5, y + 7.8, margin + 9.5, y + 13.2);
+        pdf.line(margin + 6.8, y + 10.5, margin + 12.2, y + 10.5);
+
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(13);
+        pdf.setTextColor("#ffffff");
+        pdf.text(section.title, margin + 20, y + 11);
+
+        pdf.setFont("helvetica", "normal");
+        pdf.setFontSize(9.5);
+        pdf.setTextColor("#d4d4d8");
+        pdf.text(bodyLines, margin + 20, y + 20, {
+          lineHeightFactor: 1.35,
+        });
+
+        y += cardHeight + 5;
+      });
+
+      const blob = pdf.output("blob");
+      const url = URL.createObjectURL(blob);
+      const fileName = "zerinix-report.pdf";
+
+      if (isSafari) {
+        const openedWindow = window.open(url, "_blank");
+
+        if (!openedWindow) {
+          URL.revokeObjectURL(url);
+          setPdfError(
+            "Safari PDF sekmesini engelledi. Lütfen açılır pencerelere izin verip tekrar deneyin."
+          );
+          return;
+        }
+
+        window.setTimeout(() => {
+          URL.revokeObjectURL(url);
+        }, 300000);
+      } else {
+        const link = document.createElement("a");
+
+        link.href = url;
+        link.download = fileName;
+        link.rel = "noopener";
+        link.style.display = "none";
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+
+        window.setTimeout(() => {
+          URL.revokeObjectURL(url);
+        }, 120000);
       }
-
-      const fileName = `${reportTitle.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "zerinix-report"}.pdf`;
-
-      pdf.save(fileName);
+    } catch (error) {
+      console.error(error);
+      setPdfError("PDF oluşturulamadı. Lütfen tekrar deneyin.");
     } finally {
-      target.style.maxHeight = previousMaxHeight;
-      target.style.overflow = previousOverflow;
-      target.style.paddingRight = previousPaddingRight;
       setExportingPdf(false);
     }
   }
@@ -253,7 +319,7 @@ const ReportPanel = memo(function ReportPanel({
   }
 
   return (
-    <section ref={reportRef} className="max-h-[80vh] overflow-y-auto pr-1">
+    <section className="max-h-[80vh] overflow-y-auto pr-1">
       <div className="mb-5 flex items-end justify-between gap-4">
         <div>
           <p className="text-xs font-semibold tracking-[0.35em] text-teal-300/70">
@@ -312,15 +378,22 @@ const ReportPanel = memo(function ReportPanel({
         })}
 
         {hasReportContent ? (
-          <button
-            type="button"
-            onClick={downloadPdf}
-            disabled={exportingPdf}
-            className="flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-zinc-900 px-4 py-3 text-sm font-semibold text-zinc-200 transition hover:border-white/20 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <Download className="h-4 w-4 text-teal-200" />
-            {exportingPdf ? "PDF hazırlanıyor..." : "Download PDF"}
-          </button>
+          <>
+            <button
+              type="button"
+              onClick={downloadPdf}
+              disabled={exportingPdf}
+              className="flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-zinc-900 px-4 py-3 text-sm font-semibold text-zinc-200 transition hover:border-white/20 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <Download className="h-4 w-4 text-teal-200" />
+              {exportingPdf ? "PDF hazırlanıyor..." : "Download PDF"}
+            </button>
+            {pdfError ? (
+              <p className="sm:col-span-2 text-sm leading-6 text-red-300">
+                {pdfError}
+              </p>
+            ) : null}
+          </>
         ) : null}
       </div>
     </section>
