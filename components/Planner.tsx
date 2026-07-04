@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { memo, useMemo, useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
   BarChart3,
@@ -60,6 +60,13 @@ const sectionIcons: Record<string, LucideIcon> = {
   "AI Success Score (0-100)": Gauge,
 };
 
+const reportActions = [
+  { label: "Competitor Analysis", icon: Search },
+  { label: "Financial Plan", icon: PieChart },
+  { label: "Brand Strategy", icon: Palette },
+  { label: "Export PDF", icon: Download },
+];
+
 function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -108,14 +115,11 @@ function parseReportSections(result: string): ReportSection[] {
   });
 }
 
-function ReportPanel({ result }: { result: string }) {
-  const sections = result ? parseReportSections(result) : [];
-  const actions = [
-    { label: "Competitor Analysis", icon: Search },
-    { label: "Financial Plan", icon: PieChart },
-    { label: "Brand Strategy", icon: Palette },
-    { label: "Export PDF", icon: Download },
-  ];
+const ReportPanel = memo(function ReportPanel({ result }: { result: string }) {
+  const sections = useMemo(
+    () => (result ? parseReportSections(result) : []),
+    [result]
+  );
 
   if (!result) {
     return (
@@ -179,7 +183,7 @@ function ReportPanel({ result }: { result: string }) {
       </div>
 
       <div className="mt-5 grid gap-3 sm:grid-cols-2">
-        {actions.map((action) => {
+        {reportActions.map((action) => {
           const Icon = action.icon;
 
           return (
@@ -196,13 +200,60 @@ function ReportPanel({ result }: { result: string }) {
       </div>
     </section>
   );
-}
+});
 
 export default function Planner() {
   const [prompt, setPrompt] = useState("");
   const [result, setResult] = useState("");
   const [loading, setLoading] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
+
+  async function readStreamingResult(response: Response, fallbackMessage: string) {
+    if (!response.ok || !response.body) {
+      try {
+        const data = await response.json();
+        setResult(data.error || fallbackMessage);
+      } catch {
+        setResult(fallbackMessage);
+      }
+
+      return;
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let output = "";
+    let frame: number | null = null;
+
+    const scheduleResultUpdate = () => {
+      if (frame !== null) {
+        return;
+      }
+
+      frame = requestAnimationFrame(() => {
+        frame = null;
+        setResult(output);
+      });
+    };
+
+    while (true) {
+      const { done, value } = await reader.read();
+
+      if (done) {
+        break;
+      }
+
+      output += decoder.decode(value, { stream: true });
+      scheduleResultUpdate();
+    }
+
+    output += decoder.decode();
+    if (frame !== null) {
+      cancelAnimationFrame(frame);
+    }
+
+    setResult(output || fallbackMessage);
+  }
 
   async function generatePlan() {
     setLoading(true);
@@ -215,8 +266,7 @@ export default function Planner() {
         body: JSON.stringify({ prompt }),
       });
 
-      const data = await res.json();
-      setResult(data.result || data.error || "Cevap alınamadı.");
+      await readStreamingResult(res, "Cevap alınamadı.");
     } catch {
       setResult("Bir hata oluştu.");
     } finally {
@@ -235,8 +285,7 @@ export default function Planner() {
         body: JSON.stringify({ prompt }),
       });
 
-      const data = await res.json();
-      setResult(data.result || data.error || "Pazar analizi alınamadı.");
+      await readStreamingResult(res, "Pazar analizi alınamadı.");
     } catch {
       setResult("Pazar analizi sırasında bir hata oluştu.");
     } finally {

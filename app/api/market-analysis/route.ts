@@ -9,31 +9,47 @@ export async function POST(req: Request) {
   try {
     const { prompt } = await req.json();
 
-    const response = await client.responses.create({
-      model: "gpt-5-mini",
-      input: `
-Sen ZERINIX pazar analizi uzmanısın.
+    const stream = await client.responses.create(
+      {
+        model: "gpt-5-mini",
+        input: `ZERINIX için Türkçe pazar raporu yaz. İş fikri: ${prompt}
 
-Kullanıcının iş fikri:
-${prompt}
+Başlıklar: Executive Summary, Market Analysis, Target Audience, Revenue Model, Risks, 90-Day Roadmap, AI Success Score (0-100).
+Net, uygulanabilir, kısa paragraflar kullan. Web adresi, alan adı, marka adı veya site önerisi verme.`,
+        max_output_tokens: 1000,
+        stream: true,
+        text: {
+          verbosity: "medium",
+        },
+      },
+      { signal: req.signal }
+    );
 
-Sadece aşağıdaki başlıklarla Türkçe, net ve uygulanabilir bir pazar analizi ver:
+    const encoder = new TextEncoder();
 
-Market size
-Competition level
-Target audience
-Revenue potential
-Main risks
-Recommended first steps
-AI score (0-100)
+    return new Response(
+      new ReadableStream({
+        async start(controller) {
+          try {
+            for await (const event of stream) {
+              if (event.type === "response.output_text.delta") {
+                controller.enqueue(encoder.encode(event.delta));
+              }
+            }
 
-Web adresi, alan adı, marka adı veya site önerisi üretme.
-`,
-    });
-
-    return NextResponse.json({
-      result: response.output_text,
-    });
+            controller.close();
+          } catch (error) {
+            controller.error(error);
+          }
+        },
+      }),
+      {
+        headers: {
+          "Content-Type": "text/plain; charset=utf-8",
+          "Cache-Control": "no-cache, no-transform",
+        },
+      }
+    );
   } catch (error) {
     console.error(error);
 
