@@ -1,17 +1,19 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import {
-  Plus,
-  Settings,
-} from "lucide-react";
+import { notFound, redirect } from "next/navigation";
+import { ArrowLeft, Plus } from "lucide-react";
 import { createClient } from "@/app/lib/supabase/server";
-import DashboardSidebar from "./DashboardSidebar";
-import WorkspaceManager from "./WorkspaceManager";
-import { getAuthenticatedUser, loadUserWorkspaces } from "./report-utils";
+import DashboardSidebar from "../../DashboardSidebar";
+import ReportManager from "../../ReportManager";
+import { getAuthenticatedUser, loadWorkspaceReports } from "../../report-utils";
 
 export const dynamic = "force-dynamic";
 
-export default async function DashboardPage() {
+export default async function WorkspaceReportsPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
   const supabase = await createClient();
   const user = await getAuthenticatedUser(supabase);
 
@@ -19,7 +21,11 @@ export default async function DashboardPage() {
     redirect("/login");
   }
 
-  const { workspaces, error } = await loadUserWorkspaces(supabase, user);
+  const data = await loadWorkspaceReports(supabase, user, id);
+
+  if (!data) {
+    notFound();
+  }
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-black text-white">
@@ -30,15 +36,21 @@ export default async function DashboardPage() {
         <section className="flex-1 px-5 py-6 sm:px-8 lg:px-10 lg:py-8">
           <div className="flex flex-col gap-5 border-b border-white/10 pb-8 md:flex-row md:items-end md:justify-between">
             <div>
-              <p className="text-xs font-semibold tracking-[0.35em] text-teal-300/70">
-                USER DASHBOARD
+              <Link
+                href="/dashboard"
+                className="inline-flex items-center gap-2 text-sm font-medium text-zinc-400 transition hover:text-white"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Back to Workspaces
+              </Link>
+              <p className="mt-6 text-xs font-semibold tracking-[0.35em] text-teal-300/70">
+                WORKSPACE
               </p>
               <h1 className="mt-3 text-4xl font-bold tracking-tight text-white md:text-5xl">
-                Workspace Merkezi
+                {data.workspace.name}
               </h1>
               <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-400">
-                ZERINIX raporlarını workspace'lere ayır, ekipli düşün ve iş
-                kararlarını düzenli bir rapor sistemi içinde yönet.
+                Bu workspace içindeki raporları ara, aç ve dışa aktar.
               </p>
             </div>
 
@@ -51,26 +63,13 @@ export default async function DashboardPage() {
             </Link>
           </div>
 
-          {error ? (
+          {data.error ? (
             <div className="mt-6 rounded-3xl border border-amber-300/20 bg-amber-950/20 p-5 text-sm leading-6 text-amber-100">
-              Supabase workspace verileri şu anda okunamadı: {error}
+              Workspace raporları şu anda okunamadı: {data.error}
             </div>
           ) : null}
 
-          <WorkspaceManager workspaces={workspaces} />
-
-          <div
-            id="settings"
-            className="mt-8 rounded-3xl border border-white/10 bg-zinc-950/60 p-5"
-          >
-            <div className="flex items-center gap-3">
-              <Settings className="h-5 w-5 text-teal-200" />
-              <h2 className="text-lg font-semibold text-white">Settings</h2>
-            </div>
-            <p className="mt-3 text-sm leading-6 text-zinc-500">
-              Hesap ve çalışma alanı ayarları sonraki sürümde burada yönetilecek.
-            </p>
-          </div>
+          <ReportManager reports={data.reports} />
         </section>
       </div>
     </main>

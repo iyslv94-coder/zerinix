@@ -518,6 +518,44 @@ export default function Planner() {
   const [loading, setLoading] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
 
+  async function getGeneralWorkspaceId(
+    supabase: ReturnType<typeof createClient>,
+    userId: string
+  ) {
+    const { data: existingWorkspace } = await supabase
+      .from("report_workspaces")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("name", "General")
+      .maybeSingle();
+
+    if (existingWorkspace?.id) {
+      return existingWorkspace.id as string;
+    }
+
+    const { data: createdWorkspace, error } = await supabase
+      .from("report_workspaces")
+      .insert({
+        user_id: userId,
+        name: "General",
+      })
+      .select("id")
+      .single();
+
+    if (error || !createdWorkspace?.id) {
+      const { data: retryWorkspace } = await supabase
+        .from("report_workspaces")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("name", "General")
+        .maybeSingle();
+
+      return (retryWorkspace?.id as string | undefined) || "";
+    }
+
+    return createdWorkspace.id as string;
+  }
+
   async function saveGeneratedReport({
     title,
     reportType,
@@ -539,8 +577,16 @@ export default function Planner() {
         return;
       }
 
+      const workspaceId = await getGeneralWorkspaceId(supabase, user.id);
+
+      if (!workspaceId) {
+        console.error(new Error("Default workspace not found."));
+        return;
+      }
+
       const { error } = await supabase.from("reports").insert({
         user_id: user.id,
+        workspace_id: workspaceId,
         title,
         prompt,
         report_type: reportType,

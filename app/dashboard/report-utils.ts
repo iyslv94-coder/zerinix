@@ -2,6 +2,7 @@ import type { SupabaseClient, User } from "@supabase/supabase-js";
 
 export type DashboardReport = {
   id: string;
+  workspaceId: string;
   title: string;
   createdAt: string;
   type: "Business Plan" | "Market Analysis";
@@ -10,6 +11,14 @@ export type DashboardReport = {
     title: string;
     content: string;
   }>;
+};
+
+export type DashboardWorkspace = {
+  id: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+  reportCount: number;
 };
 
 type ReportRow = Record<string, unknown>;
@@ -142,11 +151,24 @@ export function normalizeReport(row: ReportRow): DashboardReport {
 
   return {
     id: readString(row, ["id", "report_id"], crypto.randomUUID()),
+    workspaceId: readString(row, ["workspace_id", "workspaceId"], ""),
     title: readString(row, ["title", "name"], titleFallback),
     createdAt,
     type: reportType,
     status: readString(row, ["status", "state"], "completed"),
     sections: normalizeSections(row),
+  };
+}
+
+function normalizeWorkspace(row: ReportRow): DashboardWorkspace {
+  const reports = Array.isArray(row.reports) ? row.reports : [];
+
+  return {
+    id: readString(row, ["id"], crypto.randomUUID()),
+    name: readString(row, ["name"], "General"),
+    createdAt: readString(row, ["created_at", "createdAt"], ""),
+    updatedAt: readString(row, ["updated_at", "updatedAt"], ""),
+    reportCount: reports.length,
   };
 }
 
@@ -158,10 +180,62 @@ export async function getAuthenticatedUser(supabase: SupabaseClient) {
   return user;
 }
 
+export async function ensureDefaultWorkspace(supabase: SupabaseClient, user: User) {
+  const { data: existingWorkspace } = await supabase
+    .from("report_workspaces")
+    .select("id")
+    .eq("user_id", user.id)
+    .eq("name", "General")
+    .maybeSingle();
+
+  if (existingWorkspace?.id) {
+    return existingWorkspace.id as string;
+  }
+
+  const { data: createdWorkspace, error } = await supabase
+    .from("report_workspaces")
+    .insert({
+      user_id: user.id,
+      name: "General",
+    })
+    .select("id")
+    .single();
+
+  if (error || !createdWorkspace?.id) {
+    const { data: retryWorkspace } = await supabase
+      .from("report_workspaces")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("name", "General")
+      .maybeSingle();
+
+    return (retryWorkspace?.id as string | undefined) || "";
+  }
+
+  return createdWorkspace.id as string;
+}
+
+export async function loadUserWorkspaces(supabase: SupabaseClient, user: User) {
+  const { data, error } = await supabase
+    .from("report_workspaces")
+    .select("id,user_id,name,created_at,updated_at,reports(id)")
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    return { workspaces: [] as DashboardWorkspace[], error: error.message };
+  }
+
+  return {
+    workspaces: (data || []).map((row) => normalizeWorkspace(row as ReportRow)),
+    error: "",
+  };
+}
+
 export async function loadUserReports(supabase: SupabaseClient, user: User) {
   const { data, error } = await supabase
     .from("reports")
-    .select("id,user_id,title,prompt,report_type,status,created_at,updated_at,sections")
+    .select("id,user_id,workspace_id,title,prompt,report_type,status,created_at,updated_at,sections")
     .eq("user_id", user.id)
     .order("created_at", { ascending: false });
 
@@ -175,6 +249,39 @@ export async function loadUserReports(supabase: SupabaseClient, user: User) {
   };
 }
 
+export async function loadWorkspaceReports(
+  supabase: SupabaseClient,
+  user: User,
+  workspaceId: string
+) {
+  const { data: workspace, error: workspaceError } = await supabase
+    .from("report_workspaces")
+    .select("id,user_id,name,created_at,updated_at")
+    .eq("user_id", user.id)
+    .eq("id", workspaceId)
+    .maybeSingle();
+
+  if (workspaceError || !workspace) {
+    return null;
+  }
+
+  const { data, error } = await supabase
+    .from("reports")
+    .select("id,user_id,workspace_id,title,prompt,report_type,status,created_at,updated_at,sections")
+    .eq("user_id", user.id)
+    .eq("workspace_id", workspaceId)
+    .order("created_at", { ascending: false });
+
+  return {
+    workspace: normalizeWorkspace({
+      ...(workspace as ReportRow),
+      reports: data || [],
+    }),
+    reports: error ? [] : (data || []).map((row) => normalizeReport(row as ReportRow)),
+    error: error?.message || "",
+  };
+}
+
 export async function loadUserReport(
   supabase: SupabaseClient,
   user: User,
@@ -182,7 +289,7 @@ export async function loadUserReport(
 ) {
   const { data, error } = await supabase
     .from("reports")
-    .select("id,user_id,title,prompt,report_type,status,created_at,updated_at,sections")
+    .select("id,user_id,workspace_id,title,prompt,report_type,status,created_at,updated_at,sections")
     .eq("user_id", user.id)
     .eq("id", reportId)
     .maybeSingle();
