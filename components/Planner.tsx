@@ -90,6 +90,8 @@ type ReportFieldDefinition = {
 
 type ChatMode = "plan" | "market";
 
+type ResponseLanguage = "English" | "Turkish";
+
 type ChatAttachment = {
   id: string;
   name: string;
@@ -204,6 +206,36 @@ const planReportFields: Array<{
   { field: "successScore", title: "AI Success Score", icon: Gauge },
 ];
 
+const turkishReportSectionTitles: Partial<
+  Record<keyof (MarketReport & PlanReport), string>
+> = {
+  executiveSummary: "Yönetici Özeti",
+  marketAnalysis: "Pazar Analizi",
+  targetAudience: "Hedef Kitle",
+  businessModel: "İş Modeli",
+  targetCustomer: "Hedef Müşteri",
+  revenueModel: "Gelir Modeli",
+  roadmap90Days: "90 Günlük Yol Haritası",
+  risks: "Riskler",
+  firstCustomerStrategy: "İlk Müşteri Stratejisi",
+  kpiMetrics: "KPI Metrikleri",
+  successScore: "AI Başarı Skoru",
+};
+
+function localizeReportFields<T extends ReportFieldDefinition>(
+  fields: T[],
+  language: ResponseLanguage
+) {
+  if (language === "English") {
+    return fields;
+  }
+
+  return fields.map((field) => ({
+    ...field,
+    title: turkishReportSectionTitles[field.field] || field.title,
+  }));
+}
+
 const emptyMarketReport: MarketReport = {
   executiveSummary: "",
   marketAnalysis: "",
@@ -293,10 +325,61 @@ function needsClarification(value: string) {
   return words.length < 3 && normalized.length < 18;
 }
 
-function createClarificationQuestion(mode: ChatMode) {
-  return mode === "market"
-    ? "Hangi iş fikri veya sektör için pazar analizi yapmamı istersin? Kısaca ürününü, hedef müşterini ve ülke/pazarını yaz."
-    : "Hangi iş fikrini planlayalım? Kısaca ürününü, hedef müşterini ve ulaşmak istediğin sonucu yaz.";
+function detectResponseLanguage(value: string): ResponseLanguage {
+  const normalized = value.toLocaleLowerCase("tr-TR");
+  const turkishSignals = [
+    /[çğıöşü]/i,
+    /\b(ve|bir|için|ile|ama|fakat|iş|hedef|müşteri|pazar|gelir|risk|strateji|plan|istiyorum|yap|kurmak|deneme|merhaba|selam|evet|hayır|lutfen|lütfen)\b/i,
+  ];
+
+  return turkishSignals.some((signal) => signal.test(normalized)) ? "Turkish" : "English";
+}
+
+function getLanguageCopy(language: ResponseLanguage) {
+  if (language === "Turkish") {
+    return {
+      planTitle: "İş Planı Raporu",
+      marketTitle: "Pazar Analizi Raporu",
+      preparingPlan: "## İş Planı Raporu\n\nİlk bölümler hazırlanıyor...",
+      preparingMarket: "## Pazar Analizi Raporu\n\nCanlı pazar araştırması hazırlanıyor...",
+      waitingSection: "Bu bölüm için AI çıktısı bekleniyor.",
+      sectionFallback: "Bu bölüm için AI çıktısı alınamadı.",
+      genericError: "Bir hata oluştu.",
+      retryError: "Bir hata oluştu. Lütfen tekrar deneyin.",
+      marketError: "Pazar analizi sırasında bir hata oluştu.",
+      marketRetryError: "Pazar analizi sırasında bir hata oluştu. Lütfen tekrar deneyin.",
+      planClarification:
+        "Hangi iş fikrini planlayalım? Kısaca ürününü, hedef müşterini ve ulaşmak istediğin sonucu yaz.",
+      marketClarification:
+        "Hangi iş fikri veya sektör için pazar analizi yapmamı istersin? Kısaca ürününü, hedef müşterini ve ülke/pazarını yaz.",
+    };
+  }
+
+  return {
+    planTitle: "Business Plan Report",
+    marketTitle: "Business Intelligence Report",
+    preparingPlan: "## Business Plan Report\n\nPreparing the first sections...",
+    preparingMarket: "## Business Intelligence Report\n\nPreparing live market research...",
+    waitingSection: "This section is waiting for AI output.",
+    sectionFallback: "AI output could not be received for this section.",
+    genericError: "Something went wrong.",
+    retryError: "Something went wrong. Please try again.",
+    marketError: "Something went wrong during market analysis.",
+    marketRetryError: "Something went wrong during market analysis. Please try again.",
+    planClarification:
+      "Which business idea should we plan? Briefly describe your product, target customer, and desired outcome.",
+    marketClarification:
+      "Which business idea or industry should I analyze? Briefly share your product, target customer, and target country or market.",
+  };
+}
+
+function createClarificationQuestionForLanguage(
+  mode: ChatMode,
+  language: ResponseLanguage
+) {
+  const copy = getLanguageCopy(language);
+
+  return mode === "market" ? copy.marketClarification : copy.planClarification;
 }
 
 function generateConversationTitle(content: string) {
@@ -1043,6 +1126,7 @@ const ReportPanel = memo(function ReportPanel({
   reportData,
   reportFields,
   reportTitle,
+  waitingMessage,
   result,
 }: {
   reportData: Partial<MarketReport & PlanReport> | null;
@@ -1052,6 +1136,7 @@ const ReportPanel = memo(function ReportPanel({
     icon: LucideIcon;
   }>;
   reportTitle: string;
+  waitingMessage: string;
   result: string;
 }) {
   const [exportingPdf, setExportingPdf] = useState(false);
@@ -1064,7 +1149,7 @@ const ReportPanel = memo(function ReportPanel({
         icon,
         content:
           sanitizeReportContent(reportData[field] || "") ||
-          "Bu bölüm için AI çıktısı bekleniyor.",
+          waitingMessage,
       }));
     }
 
@@ -1077,11 +1162,11 @@ const ReportPanel = memo(function ReportPanel({
           },
         ]
       : [];
-  }, [reportData, reportFields, result]);
+  }, [reportData, reportFields, result, waitingMessage]);
 
   const hasReportContent = sections.some(
     (section) =>
-      section.content && section.content !== "Bu bölüm için AI çıktısı bekleniyor."
+      section.content && section.content !== waitingMessage
   );
 
   useEffect(() => {
@@ -1957,6 +2042,7 @@ export default function Planner({
 
   async function askForClarification(submittedPrompt: string) {
     const conversationId = activeConversationId;
+    const responseLanguage = detectResponseLanguage(submittedPrompt);
     const shouldUpdateTitle = shouldAutoTitleConversation(
       activeConversation?.title || "New conversation"
     );
@@ -1972,7 +2058,10 @@ export default function Planner({
       await persistConversationTitle(conversationId, title);
     }
 
-    const clarification = createClarificationQuestion(activeMode);
+    const clarification = createClarificationQuestionForLanguage(
+      activeMode,
+      responseLanguage
+    );
     const assistantMessageId = addAssistantMessage(
       activeMode,
       clarification,
@@ -2183,6 +2272,9 @@ export default function Planner({
     setActiveMode("plan");
     setWorkflowCompletedSteps(0);
     setLastRequest({ mode: "plan", prompt: submittedPrompt });
+    const responseLanguage = detectResponseLanguage(submittedPrompt);
+    const copy = getLanguageCopy(responseLanguage);
+    const outputFields = localizeReportFields(planReportFields, responseLanguage);
     const conversationId = activeConversationId;
     const shouldUpdateTitle = shouldAutoTitleConversation(
       activeConversation?.title || "New conversation"
@@ -2203,7 +2295,7 @@ export default function Planner({
     }
     const assistantMessageId = addAssistantMessage(
       "plan",
-      "## Business Plan Report\n\nPreparing the first sections...",
+      copy.preparingPlan,
       "streaming",
       conversationId
     );
@@ -2211,7 +2303,7 @@ export default function Planner({
       id: assistantMessageId,
       role: "assistant",
       mode: "plan",
-      content: "## Business Plan Report\n\nPreparing the first sections...",
+      content: copy.preparingPlan,
       status: "streaming",
       createdAt: Date.now(),
     });
@@ -2228,7 +2320,7 @@ export default function Planner({
       setPlanReport({ ...reportOutput });
       updateAssistantMessage(
         assistantMessageId,
-        getReportMarkdown("Business Plan Report", reportOutput, planReportFields),
+        getReportMarkdown(copy.planTitle, reportOutput, outputFields),
         "streaming",
         conversationId
       );
@@ -2252,7 +2344,7 @@ export default function Planner({
       const res = await fetch("/api/plan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: submittedPrompt, field }),
+        body: JSON.stringify({ prompt: submittedPrompt, field, language: responseLanguage }),
       });
 
       const fieldIndex = planReportFields.findIndex((item) => item.field === field);
@@ -2272,7 +2364,7 @@ export default function Planner({
           reportOutput[field] += chunk;
           scheduleReportRender();
         },
-        "Bu bölüm için AI çıktısı alınamadı.",
+        copy.sectionFallback,
         onFirstChunk,
         field
       );
@@ -2289,7 +2381,7 @@ export default function Planner({
           .slice(1)
           .map(({ field }) =>
             streamField(field).catch(() => {
-              reportOutput[field] = "Bu bölüm için AI çıktısı alınamadı.";
+              reportOutput[field] = copy.sectionFallback;
               scheduleReportRender();
             })
           )
@@ -2309,33 +2401,33 @@ export default function Planner({
       setWorkflowCompletedSteps(workflowSteps.length);
       updateAssistantMessage(
         assistantMessageId,
-        getReportMarkdown("Business Plan Report", reportOutput, planReportFields),
+        getReportMarkdown(copy.planTitle, reportOutput, outputFields),
         "complete",
         conversationId
       );
       await updatePersistedMessage(
         assistantMessageId,
-        getReportMarkdown("Business Plan Report", reportOutput, planReportFields),
+        getReportMarkdown(copy.planTitle, reportOutput, outputFields),
         "complete"
       );
       await saveGeneratedReport({
-        title: "Business Plan Report",
+        title: copy.planTitle,
         promptText: submittedPrompt,
         reportType: "business_plan",
-        sections: serializeReportSections(reportOutput, planReportFields),
+        sections: serializeReportSections(reportOutput, outputFields),
       });
     } catch {
-      setResult("Bir hata oluştu.");
+      setResult(copy.genericError);
       setPlanReport(null);
       updateAssistantMessage(
         assistantMessageId,
-        "Bir hata oluştu. Lütfen tekrar deneyin.",
+        copy.retryError,
         "complete",
         conversationId
       );
       await updatePersistedMessage(
         assistantMessageId,
-        "Bir hata oluştu. Lütfen tekrar deneyin.",
+        copy.retryError,
         "complete"
       );
     } finally {
@@ -2354,6 +2446,9 @@ export default function Planner({
     setActiveMode("market");
     setWorkflowCompletedSteps(0);
     setLastRequest({ mode: "market", prompt: submittedPrompt });
+    const responseLanguage = detectResponseLanguage(submittedPrompt);
+    const copy = getLanguageCopy(responseLanguage);
+    const outputFields = localizeReportFields(reportFields, responseLanguage);
     const conversationId = activeConversationId;
     const shouldUpdateTitle = shouldAutoTitleConversation(
       activeConversation?.title || "New conversation"
@@ -2374,7 +2469,7 @@ export default function Planner({
     }
     const assistantMessageId = addAssistantMessage(
       "market",
-      "## Business Intelligence Report\n\nPreparing live market research...",
+      copy.preparingMarket,
       "streaming",
       conversationId
     );
@@ -2382,7 +2477,7 @@ export default function Planner({
       id: assistantMessageId,
       role: "assistant",
       mode: "market",
-      content: "## Business Intelligence Report\n\nPreparing live market research...",
+      content: copy.preparingMarket,
       status: "streaming",
       createdAt: Date.now(),
     });
@@ -2399,7 +2494,7 @@ export default function Planner({
       setMarketReport({ ...reportOutput });
       updateAssistantMessage(
         assistantMessageId,
-        getReportMarkdown("Business Intelligence Report", reportOutput, reportFields),
+        getReportMarkdown(copy.marketTitle, reportOutput, outputFields),
         "streaming",
         conversationId
       );
@@ -2423,7 +2518,7 @@ export default function Planner({
       const res = await fetch("/api/market-analysis", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: submittedPrompt, field }),
+        body: JSON.stringify({ prompt: submittedPrompt, field, language: responseLanguage }),
       });
 
       const fieldIndex = reportFields.findIndex((item) => item.field === field);
@@ -2443,7 +2538,7 @@ export default function Planner({
           reportOutput[field] += chunk;
           scheduleReportRender();
         },
-        "Bu bölüm için AI çıktısı alınamadı.",
+        copy.sectionFallback,
         onFirstChunk,
         field
       );
@@ -2460,7 +2555,7 @@ export default function Planner({
           .slice(1)
           .map(({ field }) =>
             streamField(field).catch(() => {
-              reportOutput[field] = "Bu bölüm için AI çıktısı alınamadı.";
+              reportOutput[field] = copy.sectionFallback;
               scheduleReportRender();
             })
           )
@@ -2480,33 +2575,33 @@ export default function Planner({
       setWorkflowCompletedSteps(workflowSteps.length);
       updateAssistantMessage(
         assistantMessageId,
-        getReportMarkdown("Business Intelligence Report", reportOutput, reportFields),
+        getReportMarkdown(copy.marketTitle, reportOutput, outputFields),
         "complete",
         conversationId
       );
       await updatePersistedMessage(
         assistantMessageId,
-        getReportMarkdown("Business Intelligence Report", reportOutput, reportFields),
+        getReportMarkdown(copy.marketTitle, reportOutput, outputFields),
         "complete"
       );
       await saveGeneratedReport({
-        title: "Business Intelligence Report",
+        title: copy.marketTitle,
         promptText: submittedPrompt,
         reportType: "market_analysis",
-        sections: serializeReportSections(reportOutput, reportFields),
+        sections: serializeReportSections(reportOutput, outputFields),
       });
     } catch {
-      setResult("Pazar analizi sırasında bir hata oluştu.");
+      setResult(copy.marketError);
       setMarketReport(null);
       updateAssistantMessage(
         assistantMessageId,
-        "Pazar analizi sırasında bir hata oluştu. Lütfen tekrar deneyin.",
+        copy.marketRetryError,
         "complete",
         conversationId
       );
       await updatePersistedMessage(
         assistantMessageId,
-        "Pazar analizi sırasında bir hata oluştu. Lütfen tekrar deneyin.",
+        copy.marketRetryError,
         "complete"
       );
     } finally {
@@ -2514,16 +2609,20 @@ export default function Planner({
     }
   }
 
+  const currentResponseLanguage = lastRequest
+    ? detectResponseLanguage(lastRequest.prompt)
+    : "English";
+  const currentLanguageCopy = getLanguageCopy(currentResponseLanguage);
   const activeReportFields = planReport
-    ? planReportFields
-    : (reportFields as Array<{
+    ? localizeReportFields(planReportFields, currentResponseLanguage)
+    : localizeReportFields(reportFields, currentResponseLanguage) as Array<{
         field: keyof (MarketReport & PlanReport);
         title: string;
         icon: LucideIcon;
-      }>);
+      }>;
   const currentReportTitle = planReport
-    ? "Business Plan Report"
-    : "Business Intelligence Report";
+    ? currentLanguageCopy.planTitle
+    : currentLanguageCopy.marketTitle;
 
   return (
     <main
@@ -2647,6 +2746,7 @@ export default function Planner({
                 reportData={planReport || marketReport}
                 reportFields={activeReportFields}
                 reportTitle={currentReportTitle}
+                waitingMessage={currentLanguageCopy.waitingSection}
                 result={result}
               />
             ) : null}

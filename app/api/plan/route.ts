@@ -8,47 +8,47 @@ const client = new OpenAI({
 const planPrompts = {
   executiveSummary: {
     prompt:
-      "2-3 cümlelik premium yönetici özeti yaz. İş fikrinin fırsatını, hedefini ve ilk stratejik odağını belirt.",
+      "Write a premium 2-3 sentence executive summary. Cover the opportunity, objective, and first strategic focus.",
     maxTokens: 700,
   },
   businessModel: {
     prompt:
-      "İş modelini net açıkla: değer önerisi, temel faaliyetler, dağıtım kanalları ve farklılaşma.",
+      "Explain the business model clearly: value proposition, core activities, distribution channels, and differentiation.",
     maxTokens: 850,
   },
   targetCustomer: {
     prompt:
-      "Hedef müşteri profilini, erken benimseyen segmenti, satın alma motivasyonunu ve temel problemi açıkla.",
+      "Describe the target customer profile, early adopter segment, buying motivation, and core problem.",
     maxTokens: 750,
   },
   revenueModel: {
     prompt:
-      "Gelir modelini öner: fiyatlandırma yaklaşımı, paketleme, tekrar eden gelir ve upsell fırsatları.",
+      "Recommend the revenue model: pricing approach, packaging, recurring revenue, and upsell opportunities.",
     maxTokens: 750,
   },
   roadmap90Days: {
     prompt:
-      "İlk 90 gün için uygulanabilir yol haritası yaz: 0-30, 31-60, 61-90 gün.",
+      "Write an actionable roadmap for the first 90 days: days 0-30, 31-60, and 61-90.",
     maxTokens: 850,
   },
   risks: {
     prompt:
-      "Ana iş risklerini ve her risk için azaltma aksiyonlarını yaz.",
+      "List the main business risks and mitigation actions for each risk.",
     maxTokens: 700,
   },
   firstCustomerStrategy: {
     prompt:
-      "İlk müşterileri bulmak için pratik strateji yaz: kanal, teklif, mesaj, satış hareketi ve doğrulama yöntemi.",
+      "Write a practical strategy for finding first customers: channel, offer, message, sales motion, and validation method.",
     maxTokens: 800,
   },
   kpiMetrics: {
     prompt:
-      "Takip edilmesi gereken KPI metriklerini yaz: acquisition, activation, revenue, retention ve operasyon metrikleri.",
+      "List the KPI metrics to track: acquisition, activation, revenue, retention, and operational metrics.",
     maxTokens: 700,
   },
   successScore: {
     prompt:
-      "0-100 arası AI başarı skoru ver ve 2 kısa gerekçe yaz.",
+      "Give an AI success score from 0-100 and write 2 short reasons.",
     maxTokens: 500,
   },
 } as const;
@@ -58,6 +58,22 @@ type PlanReportField = keyof typeof planPrompts;
 type PlanReportChunk = Record<PlanReportField, string>;
 
 const planFields = Object.keys(planPrompts) as PlanReportField[];
+
+type ResponseLanguage = "English" | "Turkish";
+
+function detectLanguage(value: string): ResponseLanguage {
+  const normalized = value.toLocaleLowerCase("tr-TR");
+  const turkishSignals = [
+    /[çğıöşü]/i,
+    /\b(ve|bir|için|ile|ama|fakat|iş|hedef|müşteri|pazar|gelir|risk|strateji|plan|istiyorum|yap|kurmak|deneme|merhaba|selam|evet|hayır|lutfen|lütfen)\b/i,
+  ];
+
+  return turkishSignals.some((signal) => signal.test(normalized)) ? "Turkish" : "English";
+}
+
+function normalizeLanguage(value: unknown, prompt: string): ResponseLanguage {
+  return value === "Turkish" || value === "English" ? value : detectLanguage(prompt);
+}
 
 function isPlanReportField(value: string | undefined): value is PlanReportField {
   return planFields.includes(value as PlanReportField);
@@ -83,12 +99,14 @@ function serializePlanChunk(field: PlanReportField, content: string) {
 
 export async function POST(req: Request) {
   try {
-    const { prompt, field } = await req.json();
+    const { prompt, field, language } = await req.json();
+    const promptText = typeof prompt === "string" ? prompt : "";
+    const responseLanguage = normalizeLanguage(language, promptText);
     const reportField = typeof field === "string" ? field : "executiveSummary";
 
     if (!isPlanReportField(reportField)) {
       return NextResponse.json(
-        { error: "Geçersiz plan alanı." },
+        { error: "Invalid plan field." },
         { status: 400 }
       );
     }
@@ -98,12 +116,13 @@ export async function POST(req: Request) {
     const stream = await client.responses.create(
       {
         model: "gpt-5-mini",
-        input: `Sen ZERINIX için çalışan üst düzey AI business planner'sın.
-İş fikri / hedef: ${prompt}
+        input: `You are a senior AI business planner working for ZERINIX.
+Business idea / goal: ${promptText}
 
-Görev: ${fieldConfig.prompt}
-Sadece bu bölümün içerik metnini yaz. JSON nesnesi, alan adı, markdown kod bloğu veya başka rapor bölümü yazma.
-Türkçe, premium, net ve uygulanabilir yaz. Gerçek bir girişimcinin karar alabileceği yoğunlukta ol.`,
+Response language: ${responseLanguage}
+Task: ${fieldConfig.prompt}
+Write only the content for this section. Do not write a JSON object, field name, markdown code block, or any other report section.
+Write in ${responseLanguage} only. Keep it premium, clear, actionable, and dense enough for a real entrepreneur to make decisions.`,
         max_output_tokens: fieldConfig.maxTokens,
         stream: true,
         reasoning: {
@@ -147,7 +166,7 @@ Türkçe, premium, net ve uygulanabilir yaz. Gerçek bir girişimcinin karar ala
     console.error(error);
 
     return NextResponse.json(
-      { error: "Bir hata oluştu." },
+      { error: "Something went wrong." },
       { status: 500 }
     );
   }

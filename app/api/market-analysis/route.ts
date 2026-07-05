@@ -8,42 +8,42 @@ const client = new OpenAI({
 const fieldPrompts: Record<string, { prompt: string; maxTokens: number }> = {
   executiveSummary: {
     prompt:
-      "Güncel web araştırmasına dayanarak 2-3 cümlelik yönetici özeti yaz. Pazar fırsatı, kime satıldığı ve ilk odak noktasını belirt. Başlık yazma. En fazla 90 kelime.",
+      "Based on current web research, write a 2-3 sentence executive summary. Cover the market opportunity, who it sells to, and the first strategic focus. Do not write a heading. Max 90 words.",
     maxTokens: 1000,
   },
   marketAnalysis: {
     prompt:
-      "Güncel kaynaklardan pazar büyüklüğü, rakip şirketler, sektör trendleri ve son haberleri kısa analiz et. Başlık yazma. En fazla 170 kelime.",
+      "Briefly analyze market size, competitor companies, industry trends, and recent news from current sources. Do not write a heading. Max 170 words.",
     maxTokens: 1800,
   },
   targetAudience: {
     prompt:
-      "Güncel pazar sinyallerine göre hedef müşteri segmentlerini, erken benimseyenleri ve satın alma motivasyonlarını belirt. Başlık yazma. En fazla 130 kelime.",
+      "Describe target customer segments, early adopters, and buying motivations based on current market signals. Do not write a heading. Max 130 words.",
     maxTokens: 1000,
   },
   revenueModel: {
     prompt:
-      "Rakip fiyatlandırma modellerini ve gelir potansiyelini kullanarak uygun gelir modelini öner. Başlık yazma. En fazla 130 kelime.",
+      "Recommend a suitable revenue model using competitor pricing models and revenue potential. Do not write a heading. Max 130 words.",
     maxTokens: 1000,
   },
   risks: {
     prompt:
-      "SWOT için kullanılabilecek güncel verilerle ana riskleri ve azaltma aksiyonlarını yaz. Başlık yazma. En fazla 130 kelime.",
+      "Write the main risks and mitigation actions using current data that could support SWOT analysis. Do not write a heading. Max 130 words.",
     maxTokens: 1000,
   },
   roadmap90Days: {
     prompt:
-      "Web araştırmasından çıkan pazar gerçeklerine göre ilk 90 gün için uygulanabilir yol haritası yaz: 0-30, 31-60, 61-90 gün. Başlık yazma. En fazla 150 kelime.",
+      "Write an actionable first 90-day roadmap based on the market realities found in web research: days 0-30, 31-60, and 61-90. Do not write a heading. Max 150 words.",
     maxTokens: 1400,
   },
   successScore: {
     prompt:
-      "Güncel rekabet, pazar büyüklüğü, trendler ve risklere göre 0-100 arası başarı skoru ver; 2 kısa gerekçe yaz. Başlık yazma. En fazla 80 kelime.",
+      "Give a success score from 0-100 based on current competition, market size, trends, and risks; write 2 short reasons. Do not write a heading. Max 80 words.",
     maxTokens: 800,
   },
   sources: {
     prompt:
-      "Web araştırmasında kullandığın en güvenilir 4-6 kaynağı listele. Her satırda kaynak adı, kısa kullanım nedeni ve URL olsun. Başlık yazma.",
+      "List the 4-6 most reliable sources used in the web research. Each line should include source name, short reason for use, and URL. Do not write a heading.",
     maxTokens: 1200,
   },
 };
@@ -84,6 +84,22 @@ const legacySectionToField: Record<string, string> = {
   "AI Success Score (0-100)": "successScore",
   Sources: "sources",
 };
+
+type ResponseLanguage = "English" | "Turkish";
+
+function detectLanguage(value: string): ResponseLanguage {
+  const normalized = value.toLocaleLowerCase("tr-TR");
+  const turkishSignals = [
+    /[çğıöşü]/i,
+    /\b(ve|bir|için|ile|ama|fakat|iş|hedef|müşteri|pazar|gelir|risk|strateji|plan|istiyorum|yap|kurmak|deneme|merhaba|selam|evet|hayır|lutfen|lütfen)\b/i,
+  ];
+
+  return turkishSignals.some((signal) => signal.test(normalized)) ? "Turkish" : "English";
+}
+
+function normalizeLanguage(value: unknown, prompt: string): ResponseLanguage {
+  return value === "Turkish" || value === "English" ? value : detectLanguage(prompt);
+}
 
 function isMarketReportField(value: string | undefined): value is MarketReportField {
   return reportFields.includes(value as MarketReportField);
@@ -139,7 +155,9 @@ function extractResponseText(response: unknown) {
 
 export async function POST(req: Request) {
   try {
-    const { prompt, field, section } = await req.json();
+    const { prompt, field, section, language } = await req.json();
+    const promptText = typeof prompt === "string" ? prompt : "";
+    const responseLanguage = normalizeLanguage(language, promptText);
     const reportField =
       typeof field === "string"
         ? field
@@ -151,7 +169,7 @@ export async function POST(req: Request) {
 
     if (!fieldConfig || !isMarketReportField(reportField)) {
       return NextResponse.json(
-        { error: "Geçersiz rapor alanı." },
+        { error: "Invalid report field." },
         { status: 400 }
       );
     }
@@ -159,15 +177,16 @@ export async function POST(req: Request) {
     const stream = await client.responses.create(
       {
         model: "gpt-5-mini",
-        input: `Sen ZERINIX için çalışan profesyonel bir pazar analistisin.
-İş fikri: ${prompt}
+        input: `You are a professional market analyst working for ZERINIX.
+Business idea: ${promptText}
 
-Üretilecek rapor bölümü: ${fieldLabels[reportField]}
-Analiz görevi: ${fieldConfig.prompt}
-Önce güncel web araştırması yap. Güvenilir kaynaklardan pazar büyüklüğü, rakip şirketler, sektör trendleri, hedef müşteri, son haberler, fiyatlandırma modelleri ve SWOT verilerini dikkate al.
-Soru sorma ve açıklama isteme; mevcut bilgilerle raporu yaz.
-Sadece bu bölümün içerik metnini yaz. JSON nesnesi, alan adı, süslü parantez, markdown kod bloğu, başlık veya başka rapor bölümü yazma.
-Türkçe, net, uygulanabilir yaz. Ürün için web adresi, alan adı, marka adı veya site önerisi verme; yalnızca Sources bölümünde kaynak URL'si yaz.`,
+Response language: ${responseLanguage}
+Report section to generate: ${fieldLabels[reportField]}
+Analysis task: ${fieldConfig.prompt}
+First perform current web research. Use reliable sources for market size, competitor companies, industry trends, target customers, recent news, pricing models, and SWOT inputs.
+Do not ask questions or request clarification; write the report from the available information.
+Write only the content for this section. Do not write a JSON object, field name, braces, markdown code block, heading, or any other report section.
+Write in ${responseLanguage} only. Be clear and actionable. Do not suggest website URLs, domain names, brand names, or site ideas for the product; write source URLs only in the Sources section.`,
         max_output_tokens: fieldConfig.maxTokens,
         stream: true,
         reasoning: {
@@ -240,7 +259,7 @@ Türkçe, net, uygulanabilir yaz. Ürün için web adresi, alan adı, marka adı
     console.error(error);
 
     return NextResponse.json(
-      { error: "Pazar analizi oluşturulamadı." },
+      { error: "Market analysis could not be generated." },
       { status: 500 }
     );
   }
