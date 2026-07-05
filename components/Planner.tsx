@@ -1541,6 +1541,7 @@ export default function Planner({
     if (!userId) {
       console.error("[ai_conversations insert skipped] No authenticated user");
       setConversationError("No authenticated user was available for conversation persistence.");
+      window.location.assign("/login?next=/plan");
       return false;
     }
 
@@ -1682,6 +1683,7 @@ export default function Planner({
 
     if (!user) {
       console.error("[ai_conversations client auth missing user]");
+      window.location.assign("/login?next=/plan");
       return;
     }
 
