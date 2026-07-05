@@ -1,24 +1,32 @@
 "use client";
 
-import { memo, useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState, type ReactNode } from "react";
 import { jsPDF } from "jspdf";
 import type { LucideIcon } from "lucide-react";
 import {
   BarChart3,
   BriefcaseBusiness,
   CalendarDays,
+  Check,
+  Clipboard,
+  ClipboardCheck,
   Download,
+  Edit3,
   FileText,
   Gauge,
   Goal,
   Landmark,
   ListChecks,
+  Paperclip,
   Palette,
   PieChart,
+  RefreshCcw,
   Search,
+  Send,
   ShieldAlert,
   Sparkles,
   Users,
+  X,
 } from "lucide-react";
 import { createClient } from "@/app/lib/supabase/client";
 
@@ -63,6 +71,31 @@ type ReportFieldDefinition = {
   title: string;
   icon: LucideIcon;
 };
+
+type ChatMode = "plan" | "market";
+
+type ChatAttachment = {
+  id: string;
+  name: string;
+  size: number;
+};
+
+type ChatMessage = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  mode?: ChatMode;
+  attachments?: ChatAttachment[];
+};
+
+const workflowSteps = [
+  "Analyzing business model...",
+  "Researching market...",
+  "Analyzing competitors...",
+  "Calculating financial estimates...",
+  "Building strategy...",
+  "Writing final report...",
+];
 
 let pdfFontPromise: Promise<string> | null = null;
 
@@ -181,6 +214,434 @@ function serializeReportSections(
     title,
     content: sanitizeReportContent(reportData[field] || ""),
   }));
+}
+
+function formatFileSize(size: number) {
+  if (size < 1024) {
+    return `${size} B`;
+  }
+
+  if (size < 1024 * 1024) {
+    return `${Math.round(size / 1024)} KB`;
+  }
+
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function CodeBlock({ code, language }: { code: string; language: string }) {
+  const [copied, setCopied] = useState(false);
+
+  async function copyCode() {
+    await navigator.clipboard.writeText(code);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1400);
+  }
+
+  return (
+    <div className="my-4 overflow-hidden rounded-2xl border border-white/10 bg-black/70">
+      <div className="flex items-center justify-between border-b border-white/10 bg-white/[0.03] px-4 py-2">
+        <span className="text-xs font-medium text-zinc-500">
+          {language || "code"}
+        </span>
+        <button
+          type="button"
+          onClick={copyCode}
+          className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-2.5 py-1 text-xs text-zinc-300 transition hover:bg-white/10 hover:text-white"
+        >
+          {copied ? (
+            <ClipboardCheck className="h-3.5 w-3.5 text-teal-200" />
+          ) : (
+            <Clipboard className="h-3.5 w-3.5 text-teal-200" />
+          )}
+          {copied ? "Copied" : "Copy"}
+        </button>
+      </div>
+      <pre className="overflow-x-auto p-4 text-sm leading-6 text-zinc-200">
+        <code>{code}</code>
+      </pre>
+    </div>
+  );
+}
+
+function InlineMarkdown({ text }: { text: string }) {
+  const parts = text.split(/(`[^`]+`|\*\*[^*]+\*\*)/g);
+
+  return (
+    <>
+      {parts.map((part, index) => {
+        if (part.startsWith("`") && part.endsWith("`")) {
+          return (
+            <code
+              key={`${part}-${index}`}
+              className="rounded-md border border-white/10 bg-white/5 px-1.5 py-0.5 text-[0.92em] text-teal-100"
+            >
+              {part.slice(1, -1)}
+            </code>
+          );
+        }
+
+        if (part.startsWith("**") && part.endsWith("**")) {
+          return (
+            <strong key={`${part}-${index}`} className="font-semibold text-white">
+              {part.slice(2, -2)}
+            </strong>
+          );
+        }
+
+        return <span key={`${part}-${index}`}>{part}</span>;
+      })}
+    </>
+  );
+}
+
+function MarkdownTable({ lines }: { lines: string[] }) {
+  const rows = lines
+    .filter((line) => line.includes("|"))
+    .map((line) =>
+      line
+        .trim()
+        .replace(/^\||\|$/g, "")
+        .split("|")
+        .map((cell) => cell.trim())
+    );
+  const [header, separator, ...body] = rows;
+  const bodyRows = separator?.every((cell) => /^:?-{3,}:?$/.test(cell))
+    ? body
+    : rows.slice(1);
+
+  if (!header) {
+    return null;
+  }
+
+  return (
+    <div className="my-4 overflow-x-auto rounded-2xl border border-white/10">
+      <table className="w-full min-w-[520px] border-collapse text-left text-sm">
+        <thead className="bg-white/[0.04] text-zinc-200">
+          <tr>
+            {header.map((cell) => (
+              <th key={cell} className="border-b border-white/10 px-4 py-3 font-semibold">
+                <InlineMarkdown text={cell} />
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-white/10 text-zinc-300">
+          {bodyRows.map((row, rowIndex) => (
+            <tr key={row.join("-") || rowIndex}>
+              {row.map((cell, cellIndex) => (
+                <td key={`${cell}-${cellIndex}`} className="px-4 py-3 align-top">
+                  <InlineMarkdown text={cell} />
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function MarkdownRenderer({ content }: { content: string }) {
+  const blocks = content.split(/```/g);
+
+  return (
+    <div className="space-y-3 text-sm leading-7 text-zinc-300">
+      {blocks.map((block, blockIndex) => {
+        if (blockIndex % 2 === 1) {
+          const [language = "", ...codeLines] = block.replace(/^\n/, "").split("\n");
+          return (
+            <CodeBlock
+              key={`code-${blockIndex}`}
+              language={language.trim()}
+              code={codeLines.join("\n").trimEnd()}
+            />
+          );
+        }
+
+        const lines = block.split("\n");
+        const elements: ReactNode[] = [];
+        let paragraph: string[] = [];
+        let table: string[] = [];
+        let list: string[] = [];
+
+        const flushParagraph = () => {
+          if (paragraph.length === 0) {
+            return;
+          }
+
+          elements.push(
+            <p key={`p-${blockIndex}-${elements.length}`} className="whitespace-pre-wrap">
+              <InlineMarkdown text={paragraph.join("\n")} />
+            </p>
+          );
+          paragraph = [];
+        };
+
+        const flushTable = () => {
+          if (table.length === 0) {
+            return;
+          }
+
+          elements.push(
+            <MarkdownTable key={`table-${blockIndex}-${elements.length}`} lines={table} />
+          );
+          table = [];
+        };
+
+        const flushList = () => {
+          if (list.length === 0) {
+            return;
+          }
+
+          elements.push(
+            <ul
+              key={`list-${blockIndex}-${elements.length}`}
+              className="space-y-2 pl-5 text-zinc-300"
+            >
+              {list.map((item) => (
+                <li key={item} className="list-disc">
+                  <InlineMarkdown text={item.replace(/^[-*]\s+/, "")} />
+                </li>
+              ))}
+            </ul>
+          );
+          list = [];
+        };
+
+        lines.forEach((line) => {
+          if (!line.trim()) {
+            flushParagraph();
+            flushTable();
+            flushList();
+            return;
+          }
+
+          if (line.startsWith("### ")) {
+            flushParagraph();
+            flushTable();
+            flushList();
+            elements.push(
+              <h4 key={`h4-${blockIndex}-${elements.length}`} className="pt-2 text-base font-semibold text-white">
+                <InlineMarkdown text={line.slice(4)} />
+              </h4>
+            );
+            return;
+          }
+
+          if (line.startsWith("## ")) {
+            flushParagraph();
+            flushTable();
+            flushList();
+            elements.push(
+              <h3 key={`h3-${blockIndex}-${elements.length}`} className="pt-2 text-lg font-semibold text-white">
+                <InlineMarkdown text={line.slice(3)} />
+              </h3>
+            );
+            return;
+          }
+
+          if (/^[-*]\s+/.test(line)) {
+            flushParagraph();
+            flushTable();
+            list.push(line);
+            return;
+          }
+
+          if (line.includes("|") && line.trim().startsWith("|")) {
+            flushParagraph();
+            flushList();
+            table.push(line);
+            return;
+          }
+
+          flushTable();
+          flushList();
+          paragraph.push(line);
+        });
+
+        flushParagraph();
+        flushTable();
+        flushList();
+
+        return elements;
+      })}
+    </div>
+  );
+}
+
+function SourceCards() {
+  const sources = [
+    "Live market research",
+    "Competitive signals",
+    "Financial assumptions",
+  ];
+
+  return (
+    <div className="grid gap-3 sm:grid-cols-3">
+      {sources.map((source) => (
+        <div
+          key={source}
+          className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-zinc-300"
+        >
+          <p className="font-medium text-white">{source}</p>
+          <p className="mt-2 text-xs leading-5 text-zinc-500">
+            Used to ground this response.
+          </p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function WorkflowPanel({
+  active,
+  completedSteps,
+}: {
+  active: boolean;
+  completedSteps: number;
+}) {
+  if (!active && completedSteps === 0) {
+    return null;
+  }
+
+  return (
+    <div className="rounded-3xl border border-white/10 bg-zinc-950/80 p-5 shadow-2xl shadow-black/30">
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <p className="text-xs font-semibold tracking-[0.28em] text-teal-300/70">
+            LIVE AI WORKFLOW
+          </p>
+          <p className="mt-2 text-sm text-zinc-500">
+            ZERINIX is building the answer step by step.
+          </p>
+        </div>
+        <div className="rounded-full border border-teal-300/20 bg-teal-300/10 px-3 py-1 text-xs font-medium text-teal-100">
+          {completedSteps >= workflowSteps.length ? "Complete" : "Working"}
+        </div>
+      </div>
+
+      <div className="mt-5 grid gap-3 md:grid-cols-2">
+        {workflowSteps.map((step, index) => {
+          const done = index < completedSteps;
+          const current = active && index === completedSteps;
+
+          return (
+            <div
+              key={step}
+              className={`flex items-center gap-3 rounded-2xl border px-4 py-3 text-sm transition ${
+                done
+                  ? "border-emerald-300/20 bg-emerald-300/10 text-emerald-100"
+                  : current
+                    ? "border-teal-300/30 bg-teal-300/10 text-teal-100"
+                    : "border-white/10 bg-white/[0.03] text-zinc-500"
+              }`}
+            >
+              <span
+                className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border ${
+                  done
+                    ? "border-emerald-300/30 bg-emerald-300/20"
+                    : "border-white/10 bg-black/40"
+                }`}
+              >
+                {done ? (
+                  <Check className="h-3.5 w-3.5 text-emerald-200" />
+                ) : (
+                  <span className={current ? "h-2 w-2 animate-pulse rounded-full bg-teal-200" : "h-2 w-2 rounded-full bg-zinc-600"} />
+                )}
+              </span>
+              {step}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function ConversationSidebar({ messages }: { messages: ChatMessage[] }) {
+  const userMessages = messages.filter((message) => message.role === "user");
+
+  return (
+    <aside className="flex min-h-0 border-b border-white/10 bg-zinc-950/95 p-4 lg:h-screen lg:w-80 lg:flex-col lg:border-b-0 lg:border-r">
+      <div className="hidden lg:block">
+        <p className="text-2xl font-bold tracking-[0.12em] text-white">ZERINIX</p>
+        <p className="mt-2 text-sm text-zinc-500">AI business workspace</p>
+      </div>
+
+      <div className="flex flex-1 gap-3 overflow-x-auto lg:mt-8 lg:block lg:space-y-3 lg:overflow-y-auto">
+        {userMessages.length === 0 ? (
+          <div className="min-w-64 rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-zinc-500">
+            Conversation history will appear here.
+          </div>
+        ) : null}
+
+        {userMessages.map((message, index) => (
+          <button
+            key={message.id}
+            type="button"
+            className="min-w-64 rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-left text-sm transition hover:border-teal-300/30 hover:bg-teal-300/10 lg:w-full"
+          >
+            <p className="font-medium text-white">Conversation {index + 1}</p>
+            <p className="mt-2 line-clamp-2 text-zinc-500">{message.content}</p>
+          </button>
+        ))}
+      </div>
+    </aside>
+  );
+}
+
+function ChatMessageBubble({
+  message,
+  onEdit,
+}: {
+  message: ChatMessage;
+  onEdit: (message: ChatMessage) => void;
+}) {
+  const isUser = message.role === "user";
+
+  return (
+    <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
+      <div
+        className={`max-w-3xl rounded-3xl border p-5 shadow-xl shadow-black/20 transition ${
+          isUser
+            ? "border-teal-300/20 bg-teal-300/10"
+            : "border-white/10 bg-zinc-950/80"
+        }`}
+      >
+        <div className="mb-3 flex items-center justify-between gap-4">
+          <p className="text-xs font-semibold tracking-[0.2em] text-zinc-500">
+            {isUser ? "YOU" : "ZERINIX"}
+          </p>
+          {isUser ? (
+            <button
+              type="button"
+              onClick={() => onEdit(message)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-2 py-1 text-xs text-zinc-300 transition hover:bg-white/10 hover:text-white"
+            >
+              <Edit3 className="h-3.5 w-3.5 text-teal-200" />
+              Edit
+            </button>
+          ) : null}
+        </div>
+
+        <MarkdownRenderer content={message.content} />
+
+        {message.attachments && message.attachments.length > 0 ? (
+          <div className="mt-4 flex flex-wrap gap-2">
+            {message.attachments.map((attachment) => (
+              <span
+                key={attachment.id}
+                className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/30 px-3 py-1 text-xs text-zinc-300"
+              >
+                <Paperclip className="h-3.5 w-3.5 text-teal-200" />
+                {attachment.name}
+              </span>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
 }
 
 const ReportPanel = memo(function ReportPanel({
@@ -457,13 +918,13 @@ const ReportPanel = memo(function ReportPanel({
                 <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/5">
                   <Icon className="h-5 w-5 text-teal-200" />
                 </div>
-                <div>
+                <div className="min-w-0 flex-1">
                   <h3 className="text-lg font-semibold text-white">
                     {section.title}
                   </h3>
-                  <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-zinc-300">
-                    {section.content}
-                  </p>
+                  <div className="mt-3">
+                    <MarkdownRenderer content={section.content} />
+                  </div>
                 </div>
               </div>
             </article>
@@ -506,6 +967,12 @@ const ReportPanel = memo(function ReportPanel({
           </>
         ) : null}
       </div>
+
+      {hasReportContent ? (
+        <div className="mt-5">
+          <SourceCards />
+        </div>
+      ) : null}
     </section>
   );
 });
@@ -517,6 +984,85 @@ export default function Planner() {
   const [planReport, setPlanReport] = useState<PlanReport | null>(null);
   const [loading, setLoading] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
+  const [activeMode, setActiveMode] = useState<ChatMode>("plan");
+  const [workflowCompletedSteps, setWorkflowCompletedSteps] = useState(0);
+  const [lastRequest, setLastRequest] = useState<{
+    mode: ChatMode;
+    prompt: string;
+  } | null>(null);
+
+  const isWorking = loading || analyzing;
+
+  function createMessageId() {
+    return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  }
+
+  function handleFiles(files: FileList | null) {
+    if (!files) {
+      return;
+    }
+
+    const uploadedFiles = Array.from(files).map((file) => ({
+      id: createMessageId(),
+      name: file.name,
+      size: file.size,
+    }));
+
+    setAttachments((current) => [...current, ...uploadedFiles]);
+  }
+
+  function removeAttachment(id: string) {
+    setAttachments((current) => current.filter((attachment) => attachment.id !== id));
+  }
+
+  function addUserMessage(mode: ChatMode, content: string) {
+    const attachedFiles = attachments;
+
+    setMessages((current) => [
+      ...current,
+      {
+        id: createMessageId(),
+        role: "user",
+        mode,
+        content,
+        attachments: attachedFiles,
+      },
+    ]);
+    setAttachments([]);
+  }
+
+  function addAssistantMessage(mode: ChatMode, title: string) {
+    setMessages((current) => [
+      ...current,
+      {
+        id: createMessageId(),
+        role: "assistant",
+        mode,
+        content: `## ${title}\n\nThe final report is ready. Review the structured cards below for the complete strategy, roadmap, risks, score, source cards, and export actions.`,
+      },
+    ]);
+  }
+
+  function editMessage(message: ChatMessage) {
+    setPrompt(message.content);
+    setActiveMode(message.mode || "plan");
+  }
+
+  function regenerateResponse() {
+    if (!lastRequest || isWorking) {
+      return;
+    }
+
+    setPrompt(lastRequest.prompt);
+
+    if (lastRequest.mode === "plan") {
+      void generatePlan(lastRequest.prompt, false);
+    } else {
+      void analyzeMarket(lastRequest.prompt, false);
+    }
+  }
 
   async function getGeneralWorkspaceId(
     supabase: ReturnType<typeof createClient>,
@@ -558,10 +1104,12 @@ export default function Planner() {
 
   async function saveGeneratedReport({
     title,
+    promptText,
     reportType,
     sections,
   }: {
     title: string;
+    promptText: string;
     reportType: string;
     sections: Array<{ title: string; content: string }>;
   }) {
@@ -588,7 +1136,7 @@ export default function Planner() {
         user_id: user.id,
         workspace_id: workspaceId,
         title,
-        prompt,
+        prompt: promptText,
         report_type: reportType,
         status: "completed",
         sections,
@@ -721,8 +1269,20 @@ export default function Planner() {
     }
   }
 
-  async function generatePlan() {
+  async function generatePlan(promptOverride = prompt, addToHistory = true) {
+    const submittedPrompt = promptOverride.trim();
+
+    if (!submittedPrompt || loading) {
+      return;
+    }
+
     setLoading(true);
+    setActiveMode("plan");
+    setWorkflowCompletedSteps(0);
+    setLastRequest({ mode: "plan", prompt: submittedPrompt });
+    if (addToHistory) {
+      addUserMessage("plan", submittedPrompt);
+    }
     setResult("");
     setMarketReport(null);
     setPlanReport(emptyPlanReport);
@@ -754,8 +1314,13 @@ export default function Planner() {
       const res = await fetch("/api/plan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt, field }),
+        body: JSON.stringify({ prompt: submittedPrompt, field }),
       });
+
+      const fieldIndex = planReportFields.findIndex((item) => item.field === field);
+      setWorkflowCompletedSteps((current) =>
+        Math.max(current, Math.min(workflowSteps.length - 1, fieldIndex + 1))
+      );
 
       await readStreamingSectionJson(
         res,
@@ -803,11 +1368,14 @@ export default function Planner() {
       }
 
       renderReport();
+      setWorkflowCompletedSteps(workflowSteps.length);
       await saveGeneratedReport({
         title: "Business Plan Report",
+        promptText: submittedPrompt,
         reportType: "business_plan",
         sections: serializeReportSections(reportOutput, planReportFields),
       });
+      addAssistantMessage("plan", "Business Plan Report");
     } catch {
       setResult("Bir hata oluştu.");
       setPlanReport(null);
@@ -816,8 +1384,20 @@ export default function Planner() {
     }
   }
 
-  async function analyzeMarket() {
+  async function analyzeMarket(promptOverride = prompt, addToHistory = true) {
+    const submittedPrompt = promptOverride.trim();
+
+    if (!submittedPrompt || analyzing) {
+      return;
+    }
+
     setAnalyzing(true);
+    setActiveMode("market");
+    setWorkflowCompletedSteps(0);
+    setLastRequest({ mode: "market", prompt: submittedPrompt });
+    if (addToHistory) {
+      addUserMessage("market", submittedPrompt);
+    }
     setResult("");
     setPlanReport(null);
     setMarketReport(emptyMarketReport);
@@ -849,8 +1429,13 @@ export default function Planner() {
       const res = await fetch("/api/market-analysis", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt, field }),
+        body: JSON.stringify({ prompt: submittedPrompt, field }),
       });
+
+      const fieldIndex = reportFields.findIndex((item) => item.field === field);
+      setWorkflowCompletedSteps((current) =>
+        Math.max(current, Math.min(workflowSteps.length - 1, fieldIndex + 1))
+      );
 
       await readStreamingSectionJson(
         res,
@@ -898,11 +1483,14 @@ export default function Planner() {
       }
 
       renderReport();
+      setWorkflowCompletedSteps(workflowSteps.length);
       await saveGeneratedReport({
         title: "Business Intelligence Report",
+        promptText: submittedPrompt,
         reportType: "market_analysis",
         sections: serializeReportSections(reportOutput, reportFields),
       });
+      addAssistantMessage("market", "Business Intelligence Report");
     } catch {
       setResult("Pazar analizi sırasında bir hata oluştu.");
       setMarketReport(null);
@@ -911,63 +1499,188 @@ export default function Planner() {
     }
   }
 
+  const activeReportFields = planReport
+    ? planReportFields
+    : (reportFields as Array<{
+        field: keyof (MarketReport & PlanReport);
+        title: string;
+        icon: LucideIcon;
+      }>);
+  const currentReportTitle = planReport
+    ? "Business Plan Report"
+    : "Business Intelligence Report";
+
   return (
-    <main className="min-h-screen bg-black text-white p-10">
-      <div className="grid md:grid-cols-2 gap-8 mt-8">
-        <div className="bg-zinc-900 rounded-3xl p-8">
-          <p className="text-sm tracking-[6px] text-zinc-500 mb-6">
-            ZERINIX PLANLAYICI
-          </p>
+    <main className="flex h-screen overflow-hidden bg-black text-white">
+      <ConversationSidebar messages={messages} />
 
-          <h1 className="text-5xl font-bold leading-tight mb-8">
-            Hedefini anlat,
-            <br />
-            ZERINIX yol haritanı hazırlasın.
-          </h1>
+      <section className="relative flex min-w-0 flex-1 flex-col">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(45,212,191,0.16),transparent_32%),radial-gradient(circle_at_bottom_left,rgba(255,255,255,0.08),transparent_28%)]" />
 
-          <p className="text-zinc-400 mb-6">
-            İş fikrini, hedefini ve bütçeni yaz.
-          </p>
-
-          <textarea
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            className="w-full h-56 mt-8 rounded-2xl bg-zinc-800 p-5 outline-none resize-none"
-            placeholder="Örneğin: ABD'de yapay zeka şirketi kurmak istiyorum."
-          />
-
+        <header className="relative z-10 flex items-center justify-between border-b border-white/10 bg-black/70 px-5 py-4 backdrop-blur-xl lg:px-8">
+          <div>
+            <p className="text-xs font-semibold tracking-[0.35em] text-teal-300/70">
+              ZERINIX AI
+            </p>
+            <h1 className="mt-1 text-xl font-semibold text-white md:text-2xl">
+              Entrepreneur Operating Chat
+            </h1>
+          </div>
           <button
-            onClick={generatePlan}
-            disabled={loading}
-            className="mt-6 w-full bg-white text-black py-4 rounded-2xl font-semibold disabled:opacity-60"
+            type="button"
+            onClick={regenerateResponse}
+            disabled={!lastRequest || isWorking}
+            className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-medium text-zinc-200 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            {loading ? "AI düşünüyor..." : "AI Plan Oluştur"}
+            <RefreshCcw className="h-4 w-4 text-teal-200" />
+            Regenerate response
           </button>
+        </header>
 
-          <button
-            onClick={analyzeMarket}
-            disabled={analyzing}
-            className="mt-4 w-full bg-zinc-700 text-white py-4 rounded-2xl font-semibold disabled:opacity-60"
-          >
-            {analyzing ? "Pazar analizi yapılıyor..." : "Pazar Analizi Yap"}
-          </button>
+        <div className="relative z-10 flex-1 overflow-y-auto px-5 py-6 lg:px-8">
+          <div className="mx-auto flex max-w-6xl flex-col gap-6 pb-44">
+            {messages.length === 0 ? (
+              <div className="flex min-h-[45vh] items-center justify-center text-center">
+                <div>
+                  <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-3xl border border-white/10 bg-white/5 shadow-2xl shadow-black/40">
+                    <Sparkles className="h-6 w-6 text-teal-200" />
+                  </div>
+                  <h2 className="mt-6 text-4xl font-semibold tracking-tight text-white">
+                    What are we building today?
+                  </h2>
+                  <p className="mx-auto mt-3 max-w-2xl text-sm leading-6 text-zinc-500">
+                    Upload context, describe your goal, and ZERINIX will stream a
+                    premium business plan or market intelligence report.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              messages.map((message) => (
+                <ChatMessageBubble
+                  key={message.id}
+                  message={message}
+                  onEdit={editMessage}
+                />
+              ))
+            )}
+
+            <WorkflowPanel active={isWorking} completedSteps={workflowCompletedSteps} />
+
+            {(planReport || marketReport || result) ? (
+              <ReportPanel
+                reportData={planReport || marketReport}
+                reportFields={activeReportFields}
+                reportTitle={currentReportTitle}
+                result={result}
+              />
+            ) : null}
+          </div>
         </div>
 
-        <ReportPanel
-          reportData={planReport || marketReport}
-          reportFields={
-            planReport
-              ? planReportFields
-              : (reportFields as Array<{
-                  field: keyof (MarketReport & PlanReport);
-                  title: string;
-                  icon: LucideIcon;
-                }>)
-          }
-          reportTitle={planReport ? "Business Plan Report" : "Business Intelligence Report"}
-          result={result}
-        />
-      </div>
+        <div className="relative z-20 border-t border-white/10 bg-black/80 px-5 py-4 backdrop-blur-2xl lg:px-8">
+          <div className="mx-auto max-w-6xl">
+            {attachments.length > 0 ? (
+              <div className="mb-3 flex flex-wrap gap-2">
+                {attachments.map((attachment) => (
+                  <span
+                    key={attachment.id}
+                    className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-zinc-950 px-3 py-1.5 text-xs text-zinc-300"
+                  >
+                    <Paperclip className="h-3.5 w-3.5 text-teal-200" />
+                    {attachment.name}
+                    <span className="text-zinc-600">{formatFileSize(attachment.size)}</span>
+                    <button
+                      type="button"
+                      onClick={() => removeAttachment(attachment.id)}
+                      className="rounded-full p-0.5 transition hover:bg-white/10"
+                      aria-label="Remove attachment"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            ) : null}
+
+            <div className="rounded-3xl border border-white/10 bg-zinc-950/90 p-3 shadow-2xl shadow-black/50">
+              <textarea
+                value={prompt}
+                onChange={(event) => setPrompt(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+                    event.preventDefault();
+                    if (activeMode === "plan") {
+                      void generatePlan();
+                    } else {
+                      void analyzeMarket();
+                    }
+                  }
+                }}
+                className="min-h-28 w-full resize-none rounded-2xl bg-transparent p-3 text-base leading-7 text-white outline-none placeholder:text-zinc-600"
+                placeholder="Describe your business idea, market, budget, constraints, or upload supporting files..."
+              />
+
+              <div className="flex flex-col gap-3 border-t border-white/10 pt-3 md:flex-row md:items-center md:justify-between">
+                <div className="flex flex-wrap items-center gap-2">
+                  <label className="inline-flex cursor-pointer items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-medium text-zinc-200 transition hover:bg-white/10">
+                    <Paperclip className="h-4 w-4 text-teal-200" />
+                    Upload files
+                    <input
+                      type="file"
+                      multiple
+                      className="hidden"
+                      onChange={(event) => handleFiles(event.target.files)}
+                    />
+                  </label>
+
+                  <button
+                    type="button"
+                    onClick={() => setActiveMode("plan")}
+                    className={`rounded-2xl px-4 py-2 text-sm font-medium transition ${
+                      activeMode === "plan"
+                        ? "bg-white text-black"
+                        : "border border-white/10 bg-white/[0.04] text-zinc-300 hover:bg-white/10"
+                    }`}
+                  >
+                    AI Plan
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveMode("market")}
+                    className={`rounded-2xl px-4 py-2 text-sm font-medium transition ${
+                      activeMode === "market"
+                        ? "bg-white text-black"
+                        : "border border-white/10 bg-white/[0.04] text-zinc-300 hover:bg-white/10"
+                    }`}
+                  >
+                    Market Analysis
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  disabled={!prompt.trim() || isWorking}
+                  onClick={() => {
+                    if (activeMode === "plan") {
+                      void generatePlan();
+                    } else {
+                      void analyzeMarket();
+                    }
+                  }}
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-teal-300 px-5 py-3 text-sm font-semibold text-black shadow-lg shadow-teal-950/40 transition hover:bg-teal-200 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {isWorking ? "Streaming..." : "Send"}
+                  <Send className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+
+            <p className="mt-3 text-center text-xs text-zinc-600">
+              Press Cmd/Ctrl + Enter to send. ZERINIX can make mistakes; verify critical decisions.
+            </p>
+          </div>
+        </div>
+      </section>
     </main>
   );
 }
