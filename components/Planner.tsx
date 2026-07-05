@@ -326,7 +326,7 @@ function needsClarification(value: string) {
 }
 
 function detectResponseLanguage(value: string): ResponseLanguage {
-  const normalized = value.toLocaleLowerCase("tr-TR");
+  const normalized = value.toLowerCase();
   const turkishSignals = [
     /[çğıöşü]/i,
     /\b(ve|bir|için|ile|ama|fakat|iş|hedef|müşteri|pazar|gelir|strateji|istiyorum|yap|kurmak|deneme|merhaba|selam|evet|hayır|lutfen|lütfen)\b/i,

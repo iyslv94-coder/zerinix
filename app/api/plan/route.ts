@@ -61,8 +61,36 @@ const planFields = Object.keys(planPrompts) as PlanReportField[];
 
 type ResponseLanguage = "English" | "Turkish";
 
+const planFieldLabels: Record<
+  ResponseLanguage,
+  Record<PlanReportField, string>
+> = {
+  English: {
+    executiveSummary: "Executive Summary",
+    businessModel: "Business Model",
+    targetCustomer: "Target Customer",
+    revenueModel: "Revenue Model",
+    roadmap90Days: "90-Day Roadmap",
+    risks: "Risks",
+    firstCustomerStrategy: "Go-to-Market Strategy",
+    kpiMetrics: "KPI Metrics",
+    successScore: "AI Success Score",
+  },
+  Turkish: {
+    executiveSummary: "Yönetici Özeti",
+    businessModel: "İş Modeli",
+    targetCustomer: "Hedef Müşteri",
+    revenueModel: "Gelir Modeli",
+    roadmap90Days: "90 Günlük Yol Haritası",
+    risks: "Riskler",
+    firstCustomerStrategy: "Pazara Giriş Stratejisi",
+    kpiMetrics: "KPI Metrikleri",
+    successScore: "AI Başarı Skoru",
+  },
+};
+
 function detectLanguage(value: string): ResponseLanguage {
-  const normalized = value.toLocaleLowerCase("tr-TR");
+  const normalized = value.toLowerCase();
   const turkishSignals = [
     /[çğıöşü]/i,
     /\b(ve|bir|için|ile|ama|fakat|iş|hedef|müşteri|pazar|gelir|strateji|istiyorum|yap|kurmak|deneme|merhaba|selam|evet|hayır|lutfen|lütfen)\b/i,
@@ -97,6 +125,17 @@ function serializePlanChunk(field: PlanReportField, content: string) {
   return `${JSON.stringify(createPlanChunk(field, content))}\n`;
 }
 
+function buildLanguageInstructions(language: ResponseLanguage) {
+  return [
+    "You are a senior AI business planner working for ZERINIX.",
+    `Respond entirely in ${language}.`,
+    `Every heading, paragraph, bullet point, table label, markdown label, and sentence must be in ${language}.`,
+    `If the user prompt includes another language, still write the final answer only in ${language}.`,
+    "Do not switch languages. Do not translate the user's business name unless needed for grammar.",
+    "Write premium, clear, actionable analysis dense enough for a real entrepreneur to make decisions.",
+  ].join("\n");
+}
+
 export async function POST(req: Request) {
   try {
     const { prompt, field, language } = await req.json();
@@ -112,17 +151,19 @@ export async function POST(req: Request) {
     }
 
     const fieldConfig = planPrompts[reportField];
+    const instructions = buildLanguageInstructions(responseLanguage);
+    const input = `Business idea / goal: ${promptText}
+
+Section to generate: ${planFieldLabels[responseLanguage][reportField]}
+Task: ${fieldConfig.prompt}
+
+Write only the content for this section. Do not write a JSON object, field name, markdown code block, or any other report section.`;
 
     const stream = await client.responses.create(
       {
         model: "gpt-5-mini",
-        input: `You are a senior AI business planner working for ZERINIX.
-Business idea / goal: ${promptText}
-
-Response language: ${responseLanguage}
-Task: ${fieldConfig.prompt}
-Write only the content for this section. Do not write a JSON object, field name, markdown code block, or any other report section.
-Write in ${responseLanguage} only. Keep it premium, clear, actionable, and dense enough for a real entrepreneur to make decisions.`,
+        instructions,
+        input,
         max_output_tokens: fieldConfig.maxTokens,
         stream: true,
         reasoning: {

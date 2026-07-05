@@ -87,8 +87,25 @@ const legacySectionToField: Record<string, string> = {
 
 type ResponseLanguage = "English" | "Turkish";
 
+const fieldLabelsByLanguage: Record<
+  ResponseLanguage,
+  Record<MarketReportField, string>
+> = {
+  English: fieldLabels,
+  Turkish: {
+    executiveSummary: "Yönetici Özeti",
+    marketAnalysis: "Pazar Analizi",
+    targetAudience: "Hedef Kitle",
+    revenueModel: "Gelir Modeli",
+    risks: "Riskler",
+    roadmap90Days: "90 Günlük Yol Haritası",
+    successScore: "AI Başarı Skoru",
+    sources: "Kaynaklar",
+  },
+};
+
 function detectLanguage(value: string): ResponseLanguage {
-  const normalized = value.toLocaleLowerCase("tr-TR");
+  const normalized = value.toLowerCase();
   const turkishSignals = [
     /[çğıöşü]/i,
     /\b(ve|bir|için|ile|ama|fakat|iş|hedef|müşteri|pazar|gelir|strateji|istiyorum|yap|kurmak|deneme|merhaba|selam|evet|hayır|lutfen|lütfen)\b/i,
@@ -153,6 +170,17 @@ function extractResponseText(response: unknown) {
     .join("");
 }
 
+function buildLanguageInstructions(language: ResponseLanguage) {
+  return [
+    "You are a professional market analyst working for ZERINIX.",
+    `Respond entirely in ${language}.`,
+    `Every heading, paragraph, bullet point, table label, markdown label, source note, and sentence must be in ${language}.`,
+    `If source material is in another language, summarize it only in ${language}.`,
+    "Do not switch languages. Do not ask questions or request clarification.",
+    "Be clear, current, and actionable.",
+  ].join("\n");
+}
+
 export async function POST(req: Request) {
   try {
     const { prompt, field, section, language } = await req.json();
@@ -177,16 +205,15 @@ export async function POST(req: Request) {
     const stream = await client.responses.create(
       {
         model: "gpt-5-mini",
-        input: `You are a professional market analyst working for ZERINIX.
-Business idea: ${promptText}
+        instructions: buildLanguageInstructions(responseLanguage),
+        input: `Business idea: ${promptText}
 
-Response language: ${responseLanguage}
-Report section to generate: ${fieldLabels[reportField]}
+Report section to generate: ${fieldLabelsByLanguage[responseLanguage][reportField]}
 Analysis task: ${fieldConfig.prompt}
 First perform current web research. Use reliable sources for market size, competitor companies, industry trends, target customers, recent news, pricing models, and SWOT inputs.
-Do not ask questions or request clarification; write the report from the available information.
+Write the report from the available information.
 Write only the content for this section. Do not write a JSON object, field name, braces, markdown code block, heading, or any other report section.
-Write in ${responseLanguage} only. Be clear and actionable. Do not suggest website URLs, domain names, brand names, or site ideas for the product; write source URLs only in the Sources section.`,
+Do not suggest website URLs, domain names, brand names, or site ideas for the product; write source URLs only in the Sources section.`,
         max_output_tokens: fieldConfig.maxTokens,
         stream: true,
         reasoning: {
