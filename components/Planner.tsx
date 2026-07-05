@@ -686,7 +686,7 @@ function ConversationSidebar({
   conversations: Conversation[];
   activeConversationId: string;
   onSelectConversation: (id: string) => void;
-  onCreateConversation: () => void;
+  onCreateConversation: () => void | Promise<void>;
   onRenameConversation: (id: string, title: string) => void;
   onDeleteConversation: (id: string) => void;
 }) {
@@ -721,7 +721,7 @@ function ConversationSidebar({
         </div>
         <button
           type="button"
-          onClick={onCreateConversation}
+          onClick={() => void onCreateConversation()}
           className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-zinc-200 transition hover:bg-white/10 lg:mt-5 lg:w-full lg:gap-2 lg:px-4 lg:text-sm"
           aria-label="New conversation"
           title="New conversation"
@@ -1368,7 +1368,7 @@ export default function Planner({ initialConversations = [] }: PlannerProps) {
 
       if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.key.toLowerCase() === "n") {
         event.preventDefault();
-        createNewConversation();
+        void createNewConversation();
       }
     }
 
@@ -1398,15 +1398,18 @@ export default function Planner({ initialConversations = [] }: PlannerProps) {
     updateConversation(activeConversationId, updater);
   }
 
-  function createNewConversation() {
+  async function createNewConversation() {
     const id = createMessageId();
-    setConversations((current) => [createConversation(id), ...current]);
+    const conversation = createConversation(id);
+
+    setConversations((current) => [conversation, ...current]);
     setActiveConversationId(id);
     setPrompt("");
     setResult("");
     setMarketReport(null);
     setPlanReport(null);
     setWorkflowCompletedSteps(0);
+    await ensurePersistedConversation(id, conversation.title);
   }
 
   function renameConversation(id: string, title: string) {
@@ -1444,6 +1447,7 @@ export default function Planner({ initialConversations = [] }: PlannerProps) {
         if (remaining.length === 0) {
           const newConversation = createConversation(createMessageId());
           setActiveConversationId(newConversation.id);
+          void ensurePersistedConversation(newConversation.id, newConversation.title);
           return [newConversation];
         }
 
@@ -1575,6 +1579,47 @@ export default function Planner({ initialConversations = [] }: PlannerProps) {
     }
   }
 
+  async function loadPersistedMessages(conversationId: string) {
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from("ai_messages")
+      .select("id,role,content,mode,status,attachments,created_at")
+      .eq("conversation_id", conversationId)
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      console.error(error);
+      return;
+    }
+
+    const messages = (data || []).map((message) => ({
+      id: message.id as string,
+      role: message.role as "user" | "assistant",
+      content: message.content as string,
+      mode: (message.mode as ChatMode | null) || undefined,
+      status: message.status as ChatMessage["status"],
+      attachments: Array.isArray(message.attachments)
+        ? (message.attachments as ChatAttachment[])
+        : [],
+      createdAt: new Date(message.created_at as string).getTime(),
+    }));
+
+    updateConversation(conversationId, (conversation) => ({
+      ...conversation,
+      messages,
+    }));
+  }
+
+  function selectConversation(conversationId: string) {
+    setActiveConversationId(conversationId);
+    setPrompt("");
+    setResult("");
+    setMarketReport(null);
+    setPlanReport(null);
+    setWorkflowCompletedSteps(0);
+    void loadPersistedMessages(conversationId);
+  }
+
   function handleFiles(files: FileList | null) {
     if (!files) {
       return;
@@ -1610,11 +1655,6 @@ export default function Planner({ initialConversations = [] }: PlannerProps) {
       status: "complete",
       createdAt: Date.now(),
     };
-    const nextTitle =
-      activeConversation?.title === "New conversation"
-        ? generateConversationTitle(content)
-        : activeConversation?.title || generateConversationTitle(content);
-
     updateConversation(conversationId, (conversation) => ({
       ...conversation,
       title:
@@ -1624,12 +1664,9 @@ export default function Planner({ initialConversations = [] }: PlannerProps) {
       messages: [...conversation.messages, message],
       updatedAt: Date.now(),
     }));
-    void ensurePersistedConversation(conversationId, nextTitle).then((persisted) => {
-      if (persisted) {
-        void persistMessage(conversationId, message);
-      }
-    });
     setAttachments([]);
+
+    return message;
   }
 
   function addAssistantMessage(
@@ -1884,7 +1921,8 @@ export default function Planner({ initialConversations = [] }: PlannerProps) {
         : activeConversation?.title || generateConversationTitle(submittedPrompt)
     );
     if (addToHistory) {
-      addUserMessage("plan", submittedPrompt, conversationId);
+      const userMessage = addUserMessage("plan", submittedPrompt, conversationId);
+      await persistMessage(conversationId, userMessage);
     }
     const assistantMessageId = addAssistantMessage(
       "plan",
@@ -2047,7 +2085,8 @@ export default function Planner({ initialConversations = [] }: PlannerProps) {
         : activeConversation?.title || generateConversationTitle(submittedPrompt)
     );
     if (addToHistory) {
-      addUserMessage("market", submittedPrompt, conversationId);
+      const userMessage = addUserMessage("market", submittedPrompt, conversationId);
+      await persistMessage(conversationId, userMessage);
     }
     const assistantMessageId = addAssistantMessage(
       "market",
@@ -2223,7 +2262,7 @@ export default function Planner({ initialConversations = [] }: PlannerProps) {
       <ConversationSidebar
         conversations={conversations}
         activeConversationId={activeConversationId}
-        onSelectConversation={setActiveConversationId}
+        onSelectConversation={selectConversation}
         onCreateConversation={createNewConversation}
         onRenameConversation={renameConversation}
         onDeleteConversation={deleteConversation}
@@ -2259,7 +2298,7 @@ export default function Planner({ initialConversations = [] }: PlannerProps) {
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={createNewConversation}
+              onClick={() => void createNewConversation()}
               className="hidden items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-medium text-zinc-200 transition hover:bg-white/10 md:inline-flex"
             >
               <Plus className="h-4 w-4 text-teal-200" />

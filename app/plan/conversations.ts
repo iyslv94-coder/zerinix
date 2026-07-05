@@ -5,7 +5,6 @@ type ConversationRow = {
   title: string;
   created_at: string;
   updated_at: string;
-  ai_messages?: MessageRow[];
 };
 
 type MessageRow = {
@@ -28,26 +27,40 @@ export async function loadPlanConversations(
 ) {
   const { data, error } = await supabase
     .from("ai_conversations")
-    .select(
-      "id,title,created_at,updated_at,ai_messages(id,role,content,mode,status,attachments,created_at)"
-    )
+    .select("id,title,created_at,updated_at")
     .eq("user_id", user.id)
-    .order("updated_at", { ascending: false })
-    .order("created_at", {
-      ascending: true,
-      referencedTable: "ai_messages",
-    });
+    .order("updated_at", { ascending: false });
 
   if (error) {
     return [];
   }
 
-  return ((data || []) as ConversationRow[]).map((conversation) => ({
+  const conversations = (data || []) as ConversationRow[];
+  const conversationIds = conversations.map((conversation) => conversation.id);
+  const { data: messages } = conversationIds.length
+    ? await supabase
+        .from("ai_messages")
+        .select("id,conversation_id,role,content,mode,status,attachments,created_at")
+        .eq("user_id", user.id)
+        .in("conversation_id", conversationIds)
+        .order("created_at", { ascending: true })
+    : { data: [] };
+  const messagesByConversation = new Map<string, MessageRow[]>();
+
+  ((messages || []) as Array<MessageRow & { conversation_id: string }>).forEach(
+    (message) => {
+      const existing = messagesByConversation.get(message.conversation_id) || [];
+      existing.push(message);
+      messagesByConversation.set(message.conversation_id, existing);
+    }
+  );
+
+  return conversations.map((conversation) => ({
     id: conversation.id,
     title: conversation.title,
     createdAt: new Date(conversation.created_at).getTime(),
     updatedAt: new Date(conversation.updated_at).getTime(),
-    messages: (conversation.ai_messages || []).map((message) => ({
+    messages: (messagesByConversation.get(conversation.id) || []).map((message) => ({
       id: message.id,
       role: message.role,
       content: message.content,
