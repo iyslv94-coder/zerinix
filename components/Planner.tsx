@@ -1,30 +1,48 @@
 "use client";
 
-import { memo, useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  memo,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type DragEvent,
+  type ReactNode,
+} from "react";
 import { jsPDF } from "jspdf";
 import type { LucideIcon } from "lucide-react";
 import {
   BarChart3,
+  Bot,
   BriefcaseBusiness,
   CalendarDays,
   Check,
+  CheckCircle2,
   Clipboard,
   ClipboardCheck,
+  CornerDownLeft,
   Download,
   Edit3,
+  FileUp,
   FileText,
   Gauge,
   Goal,
   Landmark,
   ListChecks,
+  Loader2,
+  MessageSquare,
+  MoreHorizontal,
   Paperclip,
   Palette,
   PieChart,
+  Plus,
   RefreshCcw,
   Search,
   Send,
   ShieldAlert,
   Sparkles,
+  Trash2,
+  User,
   Users,
   X,
 } from "lucide-react";
@@ -86,6 +104,16 @@ type ChatMessage = {
   content: string;
   mode?: ChatMode;
   attachments?: ChatAttachment[];
+  status?: "streaming" | "complete";
+  createdAt: number;
+};
+
+type Conversation = {
+  id: string;
+  title: string;
+  messages: ChatMessage[];
+  createdAt: number;
+  updatedAt: number;
 };
 
 const workflowSteps = [
@@ -228,6 +256,63 @@ function formatFileSize(size: number) {
   return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function generateConversationTitle(content: string) {
+  const cleanTitle = content
+    .replace(/\s+/g, " ")
+    .replace(/[^\p{L}\p{N}\s.,:!?-]/gu, "")
+    .trim();
+
+  if (!cleanTitle) {
+    return "New ZERINIX conversation";
+  }
+
+  return cleanTitle.length > 54 ? `${cleanTitle.slice(0, 54).trim()}...` : cleanTitle;
+}
+
+function createConversation(id: string): Conversation {
+  const now = Date.now();
+
+  return {
+    id,
+    title: "New conversation",
+    messages: [],
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+function getReportMarkdown(
+  title: string,
+  reportData: Partial<MarketReport & PlanReport>,
+  fields: ReportFieldDefinition[]
+) {
+  const sections = fields
+    .map(({ field, title: sectionTitle }) => {
+      const content = sanitizeReportContent(reportData[field] || "");
+
+      return content ? `### ${sectionTitle}\n${content}` : "";
+    })
+    .filter(Boolean)
+    .join("\n\n");
+
+  return `## ${title}\n\n${sections || "Preparing the first sections..."}`;
+}
+
+function highlightCode(code: string) {
+  const escaped = code
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+
+  return escaped
+    .replace(
+      /\b(const|let|var|function|return|async|await|if|else|for|while|type|interface|import|from|export|default|class|new|try|catch)\b/g,
+      '<span class="text-teal-200">$1</span>'
+    )
+    .replace(/("[^"]*"|'[^']*'|`[^`]*`)/g, '<span class="text-amber-200">$1</span>')
+    .replace(/\b(\d+(?:\.\d+)?)\b/g, '<span class="text-violet-200">$1</span>');
+}
+
 function CodeBlock({ code, language }: { code: string; language: string }) {
   const [copied, setCopied] = useState(false);
 
@@ -235,6 +320,36 @@ function CodeBlock({ code, language }: { code: string; language: string }) {
     await navigator.clipboard.writeText(code);
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1400);
+  }
+
+  if (language.toLowerCase() === "mermaid") {
+    return (
+      <div className="my-4 overflow-hidden rounded-2xl border border-teal-300/20 bg-teal-300/[0.04]">
+        <div className="flex items-center justify-between border-b border-teal-300/10 px-4 py-2">
+          <span className="text-xs font-semibold tracking-[0.2em] text-teal-200">
+            MERMAID
+          </span>
+          <button
+            type="button"
+            onClick={copyCode}
+            className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-2.5 py-1 text-xs text-zinc-300 transition hover:bg-white/10 hover:text-white"
+          >
+            {copied ? <ClipboardCheck className="h-3.5 w-3.5" /> : <Clipboard className="h-3.5 w-3.5" />}
+            {copied ? "Copied" : "Copy"}
+          </button>
+        </div>
+        <div className="p-4">
+          <div className="rounded-2xl border border-white/10 bg-black/40 p-4 font-mono text-xs leading-6 text-teal-50">
+            {code.split("\n").map((line, index) => (
+              <div key={`${line}-${index}`} className="flex gap-3">
+                <span className="select-none text-zinc-600">{index + 1}</span>
+                <span>{line}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -257,7 +372,7 @@ function CodeBlock({ code, language }: { code: string; language: string }) {
         </button>
       </div>
       <pre className="overflow-x-auto p-4 text-sm leading-6 text-zinc-200">
-        <code>{code}</code>
+        <code dangerouslySetInnerHTML={{ __html: highlightCode(code) }} />
       </pre>
     </div>
   );
@@ -558,31 +673,156 @@ function WorkflowPanel({
   );
 }
 
-function ConversationSidebar({ messages }: { messages: ChatMessage[] }) {
-  const userMessages = messages.filter((message) => message.role === "user");
+function ConversationSidebar({
+  conversations,
+  activeConversationId,
+  onSelectConversation,
+  onCreateConversation,
+  onRenameConversation,
+  onDeleteConversation,
+}: {
+  conversations: Conversation[];
+  activeConversationId: string;
+  onSelectConversation: (id: string) => void;
+  onCreateConversation: () => void;
+  onRenameConversation: (id: string, title: string) => void;
+  onDeleteConversation: (id: string) => void;
+}) {
+  const [editingId, setEditingId] = useState("");
+  const [draftTitle, setDraftTitle] = useState("");
+
+  const sortedConversations = [...conversations].sort(
+    (a, b) => b.updatedAt - a.updatedAt
+  );
+
+  function startRename(conversation: Conversation) {
+    setEditingId(conversation.id);
+    setDraftTitle(conversation.title);
+  }
+
+  function submitRename() {
+    if (!editingId) {
+      return;
+    }
+
+    onRenameConversation(editingId, draftTitle);
+    setEditingId("");
+    setDraftTitle("");
+  }
 
   return (
-    <aside className="flex min-h-0 border-b border-white/10 bg-zinc-950/95 p-4 lg:h-screen lg:w-80 lg:flex-col lg:border-b-0 lg:border-r">
-      <div className="hidden lg:block">
-        <p className="text-2xl font-bold tracking-[0.12em] text-white">ZERINIX</p>
-        <p className="mt-2 text-sm text-zinc-500">AI business workspace</p>
+    <aside className="flex min-h-0 border-b border-white/10 bg-zinc-950/95 p-4 backdrop-blur-xl lg:h-screen lg:w-[20.5rem] lg:flex-col lg:border-b-0 lg:border-r">
+      <div className="flex w-full items-center justify-between gap-3 lg:block">
+        <div>
+          <p className="text-2xl font-bold tracking-[0.12em] text-white">ZERINIX</p>
+          <p className="mt-1 text-sm text-zinc-500">AI business workspace</p>
+        </div>
+        <button
+          type="button"
+          onClick={onCreateConversation}
+          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-zinc-200 transition hover:bg-white/10 lg:mt-5 lg:w-full lg:gap-2 lg:px-4 lg:text-sm"
+          aria-label="New conversation"
+          title="New conversation"
+        >
+          <Plus className="h-4 w-4 text-teal-200" />
+          <span className="hidden lg:inline">New chat</span>
+        </button>
       </div>
 
-      <div className="flex flex-1 gap-3 overflow-x-auto lg:mt-8 lg:block lg:space-y-3 lg:overflow-y-auto">
-        {userMessages.length === 0 ? (
+      <div className="flex flex-1 gap-3 overflow-x-auto pl-3 lg:mt-6 lg:block lg:space-y-3 lg:overflow-y-auto lg:pl-0">
+        {sortedConversations.length === 0 ? (
           <div className="min-w-64 rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-zinc-500">
             Conversation history will appear here.
           </div>
         ) : null}
 
-        {userMessages.map((message, index) => (
+        {sortedConversations.map((conversation) => (
           <button
-            key={message.id}
+            key={conversation.id}
             type="button"
-            className="min-w-64 rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-left text-sm transition hover:border-teal-300/30 hover:bg-teal-300/10 lg:w-full"
+            onClick={() => onSelectConversation(conversation.id)}
+            className={`group min-w-72 rounded-2xl border p-4 text-left text-sm transition lg:w-full ${
+              conversation.id === activeConversationId
+                ? "border-teal-300/30 bg-teal-300/10"
+                : "border-white/10 bg-white/[0.03] hover:border-teal-300/30 hover:bg-teal-300/10"
+            }`}
           >
-            <p className="font-medium text-white">Conversation {index + 1}</p>
-            <p className="mt-2 line-clamp-2 text-zinc-500">{message.content}</p>
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0 flex-1">
+                {editingId === conversation.id ? (
+                  <input
+                    value={draftTitle}
+                    onChange={(event) => setDraftTitle(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        submitRename();
+                      }
+                      if (event.key === "Escape") {
+                        setEditingId("");
+                      }
+                    }}
+                    onBlur={submitRename}
+                    autoFocus
+                    className="w-full rounded-lg border border-white/10 bg-black/50 px-2 py-1 font-medium text-white outline-none focus:border-teal-300/40"
+                    onClick={(event) => event.stopPropagation()}
+                  />
+                ) : (
+                  <p className="line-clamp-1 font-medium text-white">
+                    {conversation.title}
+                  </p>
+                )}
+                <p className="mt-2 line-clamp-2 text-zinc-500">
+                  {conversation.messages.at(-1)?.content || "Ready for a new strategy session."}
+                </p>
+              </div>
+              <div className="flex shrink-0 items-center gap-1 opacity-100 lg:opacity-0 lg:transition lg:group-hover:opacity-100">
+                <span className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/10 bg-black/30">
+                  <MoreHorizontal className="h-3.5 w-3.5 text-zinc-400" />
+                </span>
+              </div>
+            </div>
+
+            <div className="mt-3 flex items-center gap-2">
+              <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-black/30 px-2 py-1 text-[11px] text-zinc-400">
+                <MessageSquare className="h-3 w-3 text-teal-200" />
+                {conversation.messages.length}
+              </span>
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  startRename(conversation);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.stopPropagation();
+                    startRename(conversation);
+                  }
+                }}
+                className="rounded-full border border-white/10 bg-black/30 px-2 py-1 text-[11px] text-zinc-400 transition hover:text-white"
+              >
+                Rename
+              </span>
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onDeleteConversation(conversation.id);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.stopPropagation();
+                    onDeleteConversation(conversation.id);
+                  }
+                }}
+                className="rounded-full border border-red-300/10 bg-red-300/5 px-2 py-1 text-[11px] text-red-200 transition hover:bg-red-300/10"
+              >
+                Delete
+              </span>
+            </div>
           </button>
         ))}
       </div>
@@ -593,14 +833,43 @@ function ConversationSidebar({ messages }: { messages: ChatMessage[] }) {
 function ChatMessageBubble({
   message,
   onEdit,
+  onSaveEdit,
+  onRegenerate,
 }: {
   message: ChatMessage;
   onEdit: (message: ChatMessage) => void;
+  onSaveEdit: (messageId: string, content: string) => void;
+  onRegenerate: () => void;
 }) {
   const isUser = message.role === "user";
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(message.content);
+  const [copied, setCopied] = useState(false);
+
+  async function copyMessage() {
+    await navigator.clipboard.writeText(message.content);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1400);
+  }
+
+  function saveEdit() {
+    const cleanDraft = draft.trim();
+
+    if (!cleanDraft) {
+      return;
+    }
+
+    onSaveEdit(message.id, cleanDraft);
+    setEditing(false);
+  }
 
   return (
-    <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
+    <div className={`flex gap-3 ${isUser ? "justify-end" : "justify-start"}`}>
+      {!isUser ? (
+        <div className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-teal-300/20 bg-teal-300/10">
+          <Bot className="h-5 w-5 text-teal-100" />
+        </div>
+      ) : null}
       <div
         className={`max-w-3xl rounded-3xl border p-5 shadow-xl shadow-black/20 transition ${
           isUser
@@ -612,19 +881,78 @@ function ChatMessageBubble({
           <p className="text-xs font-semibold tracking-[0.2em] text-zinc-500">
             {isUser ? "YOU" : "ZERINIX"}
           </p>
-          {isUser ? (
+          <div className="flex items-center gap-2">
+            {message.status === "streaming" ? (
+              <span className="inline-flex items-center gap-1.5 rounded-lg border border-teal-300/20 px-2 py-1 text-xs text-teal-100">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                Streaming
+              </span>
+            ) : null}
             <button
               type="button"
-              onClick={() => onEdit(message)}
+              onClick={copyMessage}
               className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-2 py-1 text-xs text-zinc-300 transition hover:bg-white/10 hover:text-white"
             >
-              <Edit3 className="h-3.5 w-3.5 text-teal-200" />
-              Edit
+              {copied ? (
+                <ClipboardCheck className="h-3.5 w-3.5 text-teal-200" />
+              ) : (
+                <Clipboard className="h-3.5 w-3.5 text-teal-200" />
+              )}
+              {copied ? "Copied" : "Copy"}
             </button>
-          ) : null}
+            {isUser ? (
+              <button
+                type="button"
+                onClick={() => {
+                  onEdit(message);
+                  setDraft(message.content);
+                  setEditing(true);
+                }}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-2 py-1 text-xs text-zinc-300 transition hover:bg-white/10 hover:text-white"
+              >
+                <Edit3 className="h-3.5 w-3.5 text-teal-200" />
+                Edit
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={onRegenerate}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-2 py-1 text-xs text-zinc-300 transition hover:bg-white/10 hover:text-white"
+              >
+                <RefreshCcw className="h-3.5 w-3.5 text-teal-200" />
+                Regenerate
+              </button>
+            )}
+          </div>
         </div>
 
-        <MarkdownRenderer content={message.content} />
+        {editing ? (
+          <div className="space-y-3">
+            <textarea
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              className="min-h-28 w-full resize-none rounded-2xl border border-white/10 bg-black/40 p-3 text-sm leading-6 text-white outline-none focus:border-teal-300/40"
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setEditing(false)}
+                className="rounded-xl border border-white/10 px-3 py-2 text-xs text-zinc-300 transition hover:bg-white/10"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={saveEdit}
+                className="rounded-xl bg-teal-300 px-3 py-2 text-xs font-semibold text-black transition hover:bg-teal-200"
+              >
+                Save edit
+              </button>
+            </div>
+          </div>
+        ) : (
+          <MarkdownRenderer content={message.content} />
+        )}
 
         {message.attachments && message.attachments.length > 0 ? (
           <div className="mt-4 flex flex-wrap gap-2">
@@ -640,6 +968,11 @@ function ChatMessageBubble({
           </div>
         ) : null}
       </div>
+      {isUser ? (
+        <div className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.06]">
+          <User className="h-5 w-5 text-zinc-100" />
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -984,19 +1317,109 @@ export default function Planner() {
   const [planReport, setPlanReport] = useState<PlanReport | null>(null);
   const [loading, setLoading] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const initialConversationId = useMemo(() => createMessageId(), []);
+  const [activeConversationId, setActiveConversationId] = useState(initialConversationId);
+  const [conversations, setConversations] = useState<Conversation[]>(() => [
+    createConversation(initialConversationId),
+  ]);
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
   const [activeMode, setActiveMode] = useState<ChatMode>("plan");
   const [workflowCompletedSteps, setWorkflowCompletedSteps] = useState(0);
+  const [isDraggingFiles, setIsDraggingFiles] = useState(false);
   const [lastRequest, setLastRequest] = useState<{
     mode: ChatMode;
     prompt: string;
   } | null>(null);
+  const chatScrollerRef = useRef<HTMLDivElement | null>(null);
+  const composerRef = useRef<HTMLTextAreaElement | null>(null);
 
   const isWorking = loading || analyzing;
+  const activeConversation = useMemo(
+    () =>
+      conversations.find((conversation) => conversation.id === activeConversationId) ||
+      conversations[0],
+    [activeConversationId, conversations]
+  );
+  const messages = activeConversation?.messages || [];
+
+  useEffect(() => {
+    chatScrollerRef.current?.scrollTo({
+      top: chatScrollerRef.current.scrollHeight,
+      behavior: "smooth",
+    });
+  }, [messages.length, planReport, marketReport, result, workflowCompletedSteps]);
+
+  useEffect(() => {
+    function handleShortcut(event: KeyboardEvent) {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        composerRef.current?.focus();
+      }
+
+      if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.key.toLowerCase() === "n") {
+        event.preventDefault();
+        createNewConversation();
+      }
+    }
+
+    window.addEventListener("keydown", handleShortcut);
+
+    return () => window.removeEventListener("keydown", handleShortcut);
+  });
 
   function createMessageId() {
     return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  }
+
+  function updateActiveConversation(
+    updater: (conversation: Conversation) => Conversation
+  ) {
+    setConversations((current) =>
+      current.map((conversation) =>
+        conversation.id === activeConversationId ? updater(conversation) : conversation
+      )
+    );
+  }
+
+  function createNewConversation() {
+    const id = createMessageId();
+    setConversations((current) => [createConversation(id), ...current]);
+    setActiveConversationId(id);
+    setPrompt("");
+    setResult("");
+    setMarketReport(null);
+    setPlanReport(null);
+    setWorkflowCompletedSteps(0);
+  }
+
+  function renameConversation(id: string, title: string) {
+    const cleanTitle = title.trim() || "Untitled conversation";
+
+    setConversations((current) =>
+      current.map((conversation) =>
+        conversation.id === id
+          ? { ...conversation, title: cleanTitle, updatedAt: Date.now() }
+          : conversation
+      )
+    );
+  }
+
+  function deleteConversation(id: string) {
+    setConversations((current) => {
+      const remaining = current.filter((conversation) => conversation.id !== id);
+
+      if (remaining.length === 0) {
+        const newConversation = createConversation(createMessageId());
+        setActiveConversationId(newConversation.id);
+        return [newConversation];
+      }
+
+      if (id === activeConversationId) {
+        setActiveConversationId(remaining[0].id);
+      }
+
+      return remaining;
+    });
   }
 
   function handleFiles(files: FileList | null) {
@@ -1013,41 +1436,90 @@ export default function Planner() {
     setAttachments((current) => [...current, ...uploadedFiles]);
   }
 
+  function handleDropFiles(event: DragEvent<HTMLElement>) {
+    event.preventDefault();
+    setIsDraggingFiles(false);
+    handleFiles(event.dataTransfer.files);
+  }
+
   function removeAttachment(id: string) {
     setAttachments((current) => current.filter((attachment) => attachment.id !== id));
   }
 
   function addUserMessage(mode: ChatMode, content: string) {
     const attachedFiles = attachments;
+    const message: ChatMessage = {
+      id: createMessageId(),
+      role: "user",
+      mode,
+      content,
+      attachments: attachedFiles,
+      status: "complete",
+      createdAt: Date.now(),
+    };
 
-    setMessages((current) => [
-      ...current,
-      {
-        id: createMessageId(),
-        role: "user",
-        mode,
-        content,
-        attachments: attachedFiles,
-      },
-    ]);
+    updateActiveConversation((conversation) => ({
+      ...conversation,
+      title:
+        conversation.title === "New conversation"
+          ? generateConversationTitle(content)
+          : conversation.title,
+      messages: [...conversation.messages, message],
+      updatedAt: Date.now(),
+    }));
     setAttachments([]);
   }
 
-  function addAssistantMessage(mode: ChatMode, title: string) {
-    setMessages((current) => [
-      ...current,
-      {
-        id: createMessageId(),
-        role: "assistant",
-        mode,
-        content: `## ${title}\n\nThe final report is ready. Review the structured cards below for the complete strategy, roadmap, risks, score, source cards, and export actions.`,
-      },
-    ]);
+  function addAssistantMessage(mode: ChatMode, content: string, status: ChatMessage["status"] = "streaming") {
+    const id = createMessageId();
+
+    updateActiveConversation((conversation) => ({
+      ...conversation,
+      messages: [
+        ...conversation.messages,
+        {
+          id,
+          role: "assistant",
+          mode,
+          content,
+          status,
+          createdAt: Date.now(),
+        },
+      ],
+      updatedAt: Date.now(),
+    }));
+
+    return id;
+  }
+
+  function updateAssistantMessage(id: string, content: string, status: ChatMessage["status"] = "streaming") {
+    updateActiveConversation((conversation) => ({
+      ...conversation,
+      messages: conversation.messages.map((message) =>
+        message.id === id ? { ...message, content, status } : message
+      ),
+      updatedAt: Date.now(),
+    }));
   }
 
   function editMessage(message: ChatMessage) {
     setPrompt(message.content);
     setActiveMode(message.mode || "plan");
+    composerRef.current?.focus();
+  }
+
+  function saveEditedMessage(messageId: string, content: string) {
+    updateActiveConversation((conversation) => ({
+      ...conversation,
+      messages: conversation.messages.map((message) =>
+        message.id === messageId ? { ...message, content } : message
+      ),
+      title:
+        conversation.messages[0]?.id === messageId
+          ? generateConversationTitle(content)
+          : conversation.title,
+      updatedAt: Date.now(),
+    }));
   }
 
   function regenerateResponse() {
@@ -1283,6 +1755,11 @@ export default function Planner() {
     if (addToHistory) {
       addUserMessage("plan", submittedPrompt);
     }
+    const assistantMessageId = addAssistantMessage(
+      "plan",
+      "## Business Plan Report\n\nPreparing the first sections...",
+      "streaming"
+    );
     setResult("");
     setMarketReport(null);
     setPlanReport(emptyPlanReport);
@@ -1294,6 +1771,11 @@ export default function Planner() {
 
     const renderReport = () => {
       setPlanReport({ ...reportOutput });
+      updateAssistantMessage(
+        assistantMessageId,
+        getReportMarkdown("Business Plan Report", reportOutput, planReportFields),
+        "streaming"
+      );
     };
 
     const scheduleReportRender = () => {
@@ -1369,16 +1851,25 @@ export default function Planner() {
 
       renderReport();
       setWorkflowCompletedSteps(workflowSteps.length);
+      updateAssistantMessage(
+        assistantMessageId,
+        getReportMarkdown("Business Plan Report", reportOutput, planReportFields),
+        "complete"
+      );
       await saveGeneratedReport({
         title: "Business Plan Report",
         promptText: submittedPrompt,
         reportType: "business_plan",
         sections: serializeReportSections(reportOutput, planReportFields),
       });
-      addAssistantMessage("plan", "Business Plan Report");
     } catch {
       setResult("Bir hata oluştu.");
       setPlanReport(null);
+      updateAssistantMessage(
+        assistantMessageId,
+        "Bir hata oluştu. Lütfen tekrar deneyin.",
+        "complete"
+      );
     } finally {
       setLoading(false);
     }
@@ -1398,6 +1889,11 @@ export default function Planner() {
     if (addToHistory) {
       addUserMessage("market", submittedPrompt);
     }
+    const assistantMessageId = addAssistantMessage(
+      "market",
+      "## Business Intelligence Report\n\nPreparing live market research...",
+      "streaming"
+    );
     setResult("");
     setPlanReport(null);
     setMarketReport(emptyMarketReport);
@@ -1409,6 +1905,11 @@ export default function Planner() {
 
     const renderReport = () => {
       setMarketReport({ ...reportOutput });
+      updateAssistantMessage(
+        assistantMessageId,
+        getReportMarkdown("Business Intelligence Report", reportOutput, reportFields),
+        "streaming"
+      );
     };
 
     const scheduleReportRender = () => {
@@ -1484,16 +1985,25 @@ export default function Planner() {
 
       renderReport();
       setWorkflowCompletedSteps(workflowSteps.length);
+      updateAssistantMessage(
+        assistantMessageId,
+        getReportMarkdown("Business Intelligence Report", reportOutput, reportFields),
+        "complete"
+      );
       await saveGeneratedReport({
         title: "Business Intelligence Report",
         promptText: submittedPrompt,
         reportType: "market_analysis",
         sections: serializeReportSections(reportOutput, reportFields),
       });
-      addAssistantMessage("market", "Business Intelligence Report");
     } catch {
       setResult("Pazar analizi sırasında bir hata oluştu.");
       setMarketReport(null);
+      updateAssistantMessage(
+        assistantMessageId,
+        "Pazar analizi sırasında bir hata oluştu. Lütfen tekrar deneyin.",
+        "complete"
+      );
     } finally {
       setAnalyzing(false);
     }
@@ -1511,11 +2021,49 @@ export default function Planner() {
     : "Business Intelligence Report";
 
   return (
-    <main className="flex h-screen overflow-hidden bg-black text-white">
-      <ConversationSidebar messages={messages} />
+    <main
+      className="flex h-screen overflow-hidden bg-black text-white"
+      onDragEnter={(event) => {
+        event.preventDefault();
+        setIsDraggingFiles(true);
+      }}
+      onDragOver={(event) => {
+        event.preventDefault();
+        setIsDraggingFiles(true);
+      }}
+      onDragLeave={(event) => {
+        if (event.currentTarget === event.target) {
+          setIsDraggingFiles(false);
+        }
+      }}
+      onDrop={handleDropFiles}
+    >
+      <ConversationSidebar
+        conversations={conversations}
+        activeConversationId={activeConversationId}
+        onSelectConversation={setActiveConversationId}
+        onCreateConversation={createNewConversation}
+        onRenameConversation={renameConversation}
+        onDeleteConversation={deleteConversation}
+      />
 
       <section className="relative flex min-w-0 flex-1 flex-col">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(45,212,191,0.16),transparent_32%),radial-gradient(circle_at_bottom_left,rgba(255,255,255,0.08),transparent_28%)]" />
+        {isDraggingFiles ? (
+          <div className="pointer-events-none absolute inset-4 z-40 flex items-center justify-center rounded-[2rem] border border-dashed border-teal-300/50 bg-black/70 backdrop-blur-xl">
+            <div className="text-center">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-3xl border border-teal-300/30 bg-teal-300/10">
+                <FileUp className="h-6 w-6 text-teal-100" />
+              </div>
+              <p className="mt-4 text-lg font-semibold text-white">
+                Drop files into ZERINIX
+              </p>
+              <p className="mt-2 text-sm text-zinc-500">
+                They will attach to your next message.
+              </p>
+            </div>
+          </div>
+        ) : null}
 
         <header className="relative z-10 flex items-center justify-between border-b border-white/10 bg-black/70 px-5 py-4 backdrop-blur-xl lg:px-8">
           <div>
@@ -1523,21 +2071,31 @@ export default function Planner() {
               ZERINIX AI
             </p>
             <h1 className="mt-1 text-xl font-semibold text-white md:text-2xl">
-              Entrepreneur Operating Chat
+              {activeConversation?.title || "Entrepreneur Operating Chat"}
             </h1>
           </div>
-          <button
-            type="button"
-            onClick={regenerateResponse}
-            disabled={!lastRequest || isWorking}
-            className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-medium text-zinc-200 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            <RefreshCcw className="h-4 w-4 text-teal-200" />
-            Regenerate response
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={createNewConversation}
+              className="hidden items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-medium text-zinc-200 transition hover:bg-white/10 md:inline-flex"
+            >
+              <Plus className="h-4 w-4 text-teal-200" />
+              New chat
+            </button>
+            <button
+              type="button"
+              onClick={regenerateResponse}
+              disabled={!lastRequest || isWorking}
+              className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-medium text-zinc-200 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <RefreshCcw className="h-4 w-4 text-teal-200" />
+              <span className="hidden sm:inline">Regenerate response</span>
+            </button>
+          </div>
         </header>
 
-        <div className="relative z-10 flex-1 overflow-y-auto px-5 py-6 lg:px-8">
+        <div ref={chatScrollerRef} className="relative z-10 flex-1 overflow-y-auto px-5 py-6 lg:px-8">
           <div className="mx-auto flex max-w-6xl flex-col gap-6 pb-44">
             {messages.length === 0 ? (
               <div className="flex min-h-[45vh] items-center justify-center text-center">
@@ -1560,6 +2118,8 @@ export default function Planner() {
                   key={message.id}
                   message={message}
                   onEdit={editMessage}
+                  onSaveEdit={saveEditedMessage}
+                  onRegenerate={regenerateResponse}
                 />
               ))
             )}
@@ -1604,6 +2164,7 @@ export default function Planner() {
 
             <div className="rounded-3xl border border-white/10 bg-zinc-950/90 p-3 shadow-2xl shadow-black/50">
               <textarea
+                ref={composerRef}
                 value={prompt}
                 onChange={(event) => setPrompt(event.target.value)}
                 onKeyDown={(event) => {
@@ -1675,9 +2236,17 @@ export default function Planner() {
               </div>
             </div>
 
-            <p className="mt-3 text-center text-xs text-zinc-600">
-              Press Cmd/Ctrl + Enter to send. ZERINIX can make mistakes; verify critical decisions.
-            </p>
+            <div className="mt-3 flex flex-wrap items-center justify-center gap-3 text-center text-xs text-zinc-600">
+              <span className="inline-flex items-center gap-1">
+                <CornerDownLeft className="h-3.5 w-3.5" />
+                Cmd/Ctrl + Enter to send
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <Search className="h-3.5 w-3.5" />
+                Cmd/Ctrl + K to focus
+              </span>
+              <span>ZERINIX can make mistakes; verify critical decisions.</span>
+            </div>
           </div>
         </div>
       </section>
