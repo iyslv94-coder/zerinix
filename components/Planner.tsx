@@ -1337,6 +1337,7 @@ export default function Planner({
   const [activeMode, setActiveMode] = useState<ChatMode>("plan");
   const [workflowCompletedSteps, setWorkflowCompletedSteps] = useState(0);
   const [isDraggingFiles, setIsDraggingFiles] = useState(false);
+  const [conversationError, setConversationError] = useState(conversationLoadError);
   const [lastRequest, setLastRequest] = useState<{
     mode: ChatMode;
     prompt: string;
@@ -1361,6 +1362,10 @@ export default function Planner({
       console.error("[ai_conversations load failed]", conversationLoadError);
     }
   }, [conversationLoadError]);
+
+  useEffect(() => {
+    void loadPersistedConversations();
+  }, []);
 
   useEffect(() => {
     chatScrollerRef.current?.scrollTo({
@@ -1494,6 +1499,8 @@ export default function Planner({
     const userId = await getCurrentUserId();
 
     if (!userId) {
+      console.error("[ai_conversations insert skipped] No authenticated user");
+      setConversationError("No authenticated user was available for conversation persistence.");
       return false;
     }
 
@@ -1506,9 +1513,11 @@ export default function Planner({
 
     if (error) {
       console.error("[ai_conversations insert failed]", error);
+      setConversationError(error.message);
       return false;
     }
 
+    setConversationError("");
     persistedConversationIdsRef.current.add(conversationId);
     return true;
   }
@@ -1526,6 +1535,26 @@ export default function Planner({
 
     if (error) {
       console.error("[ai_conversations update failed]", error);
+      setConversationError(error.message);
+    } else {
+      setConversationError("");
+    }
+  }
+
+  async function touchPersistedConversation(conversationId: string) {
+    if (!persistedConversationIdsRef.current.has(conversationId)) {
+      return;
+    }
+
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("ai_conversations")
+      .update({ updated_at: new Date().toISOString() })
+      .eq("id", conversationId);
+
+    if (error) {
+      console.error("[ai_conversations touch failed]", error);
+      setConversationError(error.message);
     }
   }
 
@@ -1542,10 +1571,12 @@ export default function Planner({
 
     if (error) {
       console.error("[ai_conversations delete failed]", error);
+      setConversationError(error.message);
       window.alert("Conversation could not be deleted. Please try again.");
       return false;
     }
 
+    setConversationError("");
     return true;
   }
 
@@ -1570,7 +1601,11 @@ export default function Planner({
 
     if (error) {
       console.error("[ai_messages insert failed]", error);
+      setConversationError(error.message);
+      return;
     }
+
+    await touchPersistedConversation(conversationId);
   }
 
   async function updatePersistedMessage(
@@ -1586,7 +1621,102 @@ export default function Planner({
 
     if (error) {
       console.error("[ai_messages update failed]", error);
+      setConversationError(error.message);
+    } else {
+      setConversationError("");
     }
+  }
+
+  async function loadPersistedConversations() {
+    const supabase = createClient();
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError) {
+      console.error("[ai_conversations client auth failed]", userError);
+      setConversationError(userError.message);
+      return;
+    }
+
+    if (!user) {
+      console.error("[ai_conversations client auth missing user]");
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("ai_conversations")
+      .select("id,title,created_at,updated_at")
+      .eq("user_id", user.id)
+      .order("updated_at", { ascending: false });
+
+    if (error) {
+      console.error("[ai_conversations client select failed]", error);
+      setConversationError(error.message);
+      return;
+    }
+
+    const loadedConversations = data || [];
+    const conversationIds = loadedConversations.map((conversation) => conversation.id as string);
+    const { data: messages, error: messagesError } = conversationIds.length
+      ? await supabase
+          .from("ai_messages")
+          .select("id,conversation_id,role,content,mode,status,attachments,created_at")
+          .eq("user_id", user.id)
+          .in("conversation_id", conversationIds)
+          .order("created_at", { ascending: true })
+      : { data: [], error: null };
+
+    if (messagesError) {
+      console.error("[ai_messages client select failed]", messagesError);
+      setConversationError(messagesError.message);
+      return;
+    }
+
+    const messagesByConversation = new Map<string, ChatMessage[]>();
+
+    (messages || []).forEach((message) => {
+      const conversationId = message.conversation_id as string;
+      const existingMessages = messagesByConversation.get(conversationId) || [];
+
+      existingMessages.push({
+        id: message.id as string,
+        role: message.role as "user" | "assistant",
+        content: message.content as string,
+        mode: (message.mode as ChatMode | null) || undefined,
+        status: message.status as ChatMessage["status"],
+        attachments: Array.isArray(message.attachments)
+          ? (message.attachments as ChatAttachment[])
+          : [],
+        createdAt: new Date(message.created_at as string).getTime(),
+      });
+      messagesByConversation.set(conversationId, existingMessages);
+    });
+
+    const nextConversations = loadedConversations.map((conversation) => ({
+      id: conversation.id as string,
+      title: conversation.title as string,
+      createdAt: new Date(conversation.created_at as string).getTime(),
+      updatedAt: new Date(conversation.updated_at as string).getTime(),
+      messages: messagesByConversation.get(conversation.id as string) || [],
+    }));
+
+    persistedConversationIdsRef.current = new Set(
+      nextConversations.map((conversation) => conversation.id)
+    );
+    setConversationError("");
+
+    if (nextConversations.length === 0) {
+      return;
+    }
+
+    setConversations(nextConversations);
+    setActiveConversationId((currentId) =>
+      nextConversations.some((conversation) => conversation.id === currentId)
+        ? currentId
+        : nextConversations[0].id
+    );
   }
 
   async function loadPersistedMessages(conversationId: string) {
@@ -2328,6 +2458,17 @@ export default function Planner({
 
         <div ref={chatScrollerRef} className="relative z-10 flex-1 overflow-y-auto px-5 py-6 lg:px-8">
           <div className="mx-auto flex max-w-6xl flex-col gap-6 pb-44">
+            {conversationError ? (
+              <div className="rounded-3xl border border-red-300/20 bg-red-950/30 p-4 text-sm leading-6 text-red-100 shadow-2xl shadow-black/30">
+                <p className="font-semibold text-red-50">
+                  Conversation history could not be loaded or saved.
+                </p>
+                <p className="mt-1 break-words text-red-100/80">
+                  {conversationError}
+                </p>
+              </div>
+            ) : null}
+
             {messages.length === 0 ? (
               <div className="flex min-h-[45vh] items-center justify-center text-center">
                 <div>
