@@ -201,7 +201,7 @@ const planReportFields: Array<{
   { field: "revenueModel", title: "Revenue Model", icon: Landmark },
   { field: "roadmap90Days", title: "90-Day Roadmap", icon: CalendarDays },
   { field: "risks", title: "Risks", icon: ShieldAlert },
-  { field: "firstCustomerStrategy", title: "First Customer Strategy", icon: Goal },
+  { field: "firstCustomerStrategy", title: "Go-to-Market Strategy", icon: Goal },
   { field: "kpiMetrics", title: "KPI Metrics", icon: ListChecks },
   { field: "successScore", title: "AI Success Score", icon: Gauge },
 ];
@@ -217,7 +217,7 @@ const turkishReportSectionTitles: Partial<
   revenueModel: "Gelir Modeli",
   roadmap90Days: "90 Günlük Yol Haritası",
   risks: "Riskler",
-  firstCustomerStrategy: "İlk Müşteri Stratejisi",
+  firstCustomerStrategy: "Pazara Giriş Stratejisi",
   kpiMetrics: "KPI Metrikleri",
   successScore: "AI Başarı Skoru",
 };
@@ -329,7 +329,7 @@ function detectResponseLanguage(value: string): ResponseLanguage {
   const normalized = value.toLocaleLowerCase("tr-TR");
   const turkishSignals = [
     /[çğıöşü]/i,
-    /\b(ve|bir|için|ile|ama|fakat|iş|hedef|müşteri|pazar|gelir|risk|strateji|plan|istiyorum|yap|kurmak|deneme|merhaba|selam|evet|hayır|lutfen|lütfen)\b/i,
+    /\b(ve|bir|için|ile|ama|fakat|iş|hedef|müşteri|pazar|gelir|strateji|istiyorum|yap|kurmak|deneme|merhaba|selam|evet|hayır|lutfen|lütfen)\b/i,
   ];
 
   return turkishSignals.some((signal) => signal.test(normalized)) ? "Turkish" : "English";
@@ -1486,6 +1486,8 @@ export default function Planner({
     mode: ChatMode;
     prompt: string;
   } | null>(null);
+  const [activeReportLanguage, setActiveReportLanguage] =
+    useState<ResponseLanguage>("English");
   const chatScrollerRef = useRef<HTMLDivElement | null>(null);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
   const persistedConversationIdsRef = useRef(
@@ -2275,6 +2277,7 @@ export default function Planner({
     const responseLanguage = detectResponseLanguage(submittedPrompt);
     const copy = getLanguageCopy(responseLanguage);
     const outputFields = localizeReportFields(planReportFields, responseLanguage);
+    setActiveReportLanguage(responseLanguage);
     const conversationId = activeConversationId;
     const shouldUpdateTitle = shouldAutoTitleConversation(
       activeConversation?.title || "New conversation"
@@ -2449,6 +2452,7 @@ export default function Planner({
     const responseLanguage = detectResponseLanguage(submittedPrompt);
     const copy = getLanguageCopy(responseLanguage);
     const outputFields = localizeReportFields(reportFields, responseLanguage);
+    setActiveReportLanguage(responseLanguage);
     const conversationId = activeConversationId;
     const shouldUpdateTitle = shouldAutoTitleConversation(
       activeConversation?.title || "New conversation"
@@ -2609,9 +2613,7 @@ export default function Planner({
     }
   }
 
-  const currentResponseLanguage = lastRequest
-    ? detectResponseLanguage(lastRequest.prompt)
-    : "English";
+  const currentResponseLanguage = activeReportLanguage;
   const currentLanguageCopy = getLanguageCopy(currentResponseLanguage);
   const activeReportFields = planReport
     ? localizeReportFields(planReportFields, currentResponseLanguage)

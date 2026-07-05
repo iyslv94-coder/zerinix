@@ -1,7 +1,18 @@
 import { ceoAgent } from "./agents/ceo";
 
-export function buildZerinixPrompt(prompt: string) {
-  return `ZERINIX CEO Agent olarak Türkçe, net ve uygulanabilir plan yaz.
+type ResponseLanguage = "English" | "Turkish";
+
+export function buildZerinixPrompt(
+  prompt: string,
+  language: ResponseLanguage = "English"
+) {
+  if (language === "Turkish") {
+    return `ZERINIX CEO Agent olarak net ve uygulanabilir plan yaz.
 Hedef: ${prompt}
-${ceoAgent(prompt)}`;
+${ceoAgent(prompt, language)}`;
+  }
+
+  return `Write a clear and actionable plan as the ZERINIX CEO Agent.
+Goal: ${prompt}
+${ceoAgent(prompt, language)}`;
 }

@@ -91,7 +91,7 @@ function detectLanguage(value: string): ResponseLanguage {
   const normalized = value.toLocaleLowerCase("tr-TR");
   const turkishSignals = [
     /[çğıöşü]/i,
-    /\b(ve|bir|için|ile|ama|fakat|iş|hedef|müşteri|pazar|gelir|risk|strateji|plan|istiyorum|yap|kurmak|deneme|merhaba|selam|evet|hayır|lutfen|lütfen)\b/i,
+    /\b(ve|bir|için|ile|ama|fakat|iş|hedef|müşteri|pazar|gelir|strateji|istiyorum|yap|kurmak|deneme|merhaba|selam|evet|hayır|lutfen|lütfen)\b/i,
   ];
 
   return turkishSignals.some((signal) => signal.test(normalized)) ? "Turkish" : "English";
