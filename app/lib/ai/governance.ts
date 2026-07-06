@@ -53,18 +53,21 @@ type CacheInput = {
   estimatedCostUsd: number;
 };
 
+export const dailyAiLimitMessage =
+  "Daily AI usage limit reached. Please try again tomorrow or upgrade your plan.";
+
 const usageLimits: Record<PlanTier, UsageLimit> = {
   free: {
-    dailyRequests: 25,
-    monthlyRequests: 300,
+    dailyRequests: 10,
+    monthlyRequests: 310,
   },
   pro: {
-    dailyRequests: 250,
-    monthlyRequests: 5_000,
+    dailyRequests: 100,
+    monthlyRequests: 3_100,
   },
   business: {
-    dailyRequests: 1_500,
-    monthlyRequests: 50_000,
+    dailyRequests: 500,
+    monthlyRequests: 15_500,
   },
 };
 
@@ -217,7 +220,7 @@ export async function checkUsageAllowance(
       dailyUsed,
       monthlyUsed,
       ...limit,
-      reason: "Daily AI request limit exceeded.",
+      reason: dailyAiLimitMessage,
     };
   }
 
@@ -228,7 +231,7 @@ export async function checkUsageAllowance(
       dailyUsed,
       monthlyUsed,
       ...limit,
-      reason: "Monthly AI request limit exceeded.",
+      reason: dailyAiLimitMessage,
     };
   }
 

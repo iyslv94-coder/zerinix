@@ -9,18 +9,15 @@ import {
 } from "@/app/lib/security/rate-limit";
 import { logServerError } from "@/app/lib/security/errors";
 import {
-  checkUsageAllowance,
   createAiCacheKey,
   estimateAiCostUsd,
   extractTokenUsage,
   getCachedAiResponse,
-  getUserPlanTier,
-  hashAiPayload,
   recordAiUsage,
-  selectAiModel,
   storeCachedAiResponse,
   type TokenUsage,
 } from "@/app/lib/ai/governance";
+import { checkAiProductionRateLimit } from "@/app/lib/ai/rate-limit";
 import { createAiJobDescriptor } from "@/app/lib/ai/queue";
 
 const client = new OpenAI({
@@ -213,7 +210,10 @@ export async function POST(req: Request) {
 
     if (!ipRateLimit.allowed) {
       return NextResponse.json(
-        { error: "Too many requests." },
+        {
+          error:
+            "Daily AI usage limit reached. Please try again tomorrow or upgrade your plan.",
+        },
         {
           status: 429,
           headers: getRateLimitHeaders(ipRateLimit),
@@ -245,7 +245,10 @@ export async function POST(req: Request) {
 
     if (!rateLimit.allowed) {
       return NextResponse.json(
-        { error: "Too many requests." },
+        {
+          error:
+            "Daily AI usage limit reached. Please try again tomorrow or upgrade your plan.",
+        },
         {
           status: 429,
           headers: getRateLimitHeaders(rateLimit),
@@ -273,7 +276,6 @@ export async function POST(req: Request) {
     }
 
     const instructions = buildLanguageInstructions(responseLanguage);
-    const model = selectAiModel("market_analysis");
     const input = `Business idea: ${promptText}
 
 Report section to generate: ${fieldLabelsByLanguage[responseLanguage][reportField]}
@@ -282,7 +284,24 @@ First perform current web research. Use reliable sources for market size, compet
 Write the report from the available information.
 Write only the content for this section. Do not write a JSON object, field name, braces, markdown code block, heading, or any other report section.
 Do not suggest website URLs, domain names, brand names, or site ideas for the product; write source URLs only in the Sources section.`;
-    const promptHash = hashAiPayload(promptText);
+    const productionLimit = await checkAiProductionRateLimit({
+      supabase,
+      userId: user.id,
+      endpoint: "/api/market-analysis",
+      requestKind: "market_analysis",
+      promptText,
+      reportField,
+      ip,
+    });
+    const { model, planTier, promptHash } = productionLimit;
+
+    if (!productionLimit.allowed) {
+      return NextResponse.json(
+        { error: productionLimit.reason },
+        { status: 429 }
+      );
+    }
+
     const cacheKey = createAiCacheKey({
       endpoint: "/api/market-analysis",
       reportField,
@@ -291,34 +310,6 @@ Do not suggest website URLs, domain names, brand names, or site ideas for the pr
       instructions,
       input,
     });
-    const planTier = await getUserPlanTier(supabase, user.id);
-    const allowance = await checkUsageAllowance(supabase, user.id, planTier);
-
-    if (!allowance.allowed) {
-      await recordAiUsage(supabase, {
-        userId: user.id,
-        endpoint: "/api/market-analysis",
-        reportField,
-        promptHash,
-        model,
-        planTier,
-        tokenUsage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-        estimatedCostUsd: 0,
-        cacheHit: false,
-        status: "rate_limited",
-        responseTimeMs: 0,
-        metadata: {
-          reason: allowance.reason,
-          dailyUsed: allowance.dailyUsed,
-          monthlyUsed: allowance.monthlyUsed,
-        },
-      });
-
-      return NextResponse.json(
-        { error: allowance.reason },
-        { status: 429 }
-      );
-    }
 
     const cachedResponse = await getCachedAiResponse(supabase, user.id, cacheKey);
     const encoder = new TextEncoder();
