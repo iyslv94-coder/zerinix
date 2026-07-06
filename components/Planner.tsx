@@ -24,11 +24,14 @@ import {
   Edit3,
   FileUp,
   FileText,
+  FolderKanban,
   Gauge,
   Goal,
+  LayoutDashboard,
   Landmark,
   ListChecks,
   Loader2,
+  LogOut,
   MessageSquare,
   MoreHorizontal,
   Paperclip,
@@ -44,6 +47,7 @@ import {
   Users,
   X,
 } from "lucide-react";
+import Link from "next/link";
 import { createClient } from "@/app/lib/supabase/client";
 
 type ReportSection = {
@@ -765,7 +769,7 @@ function WorkflowPanel({
   }
 
   return (
-    <div className="rounded-3xl border border-white/10 bg-zinc-950/80 p-5 shadow-2xl shadow-black/30">
+    <div className="rounded-[2rem] border border-teal-200/15 bg-white/[0.045] p-5 shadow-2xl shadow-black/30 backdrop-blur-2xl">
       <div className="flex items-center justify-between gap-4">
         <div>
           <p className="text-xs font-semibold tracking-[0.28em] text-teal-300/70">
@@ -780,7 +784,7 @@ function WorkflowPanel({
         </div>
       </div>
 
-      <div className="mt-5 grid gap-3 md:grid-cols-2">
+      <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {workflowSteps.map((step, index) => {
           const done = index < completedSteps;
           const current = active && index === completedSteps;
@@ -821,6 +825,7 @@ function WorkflowPanel({
 function ConversationSidebar({
   conversations,
   activeConversationId,
+  activeMode,
   onSelectConversation,
   onCreateConversation,
   onRenameConversation,
@@ -828,6 +833,7 @@ function ConversationSidebar({
 }: {
   conversations: Conversation[];
   activeConversationId: string;
+  activeMode: ChatMode;
   onSelectConversation: (id: string) => void;
   onCreateConversation: () => void | Promise<void>;
   onRenameConversation: (id: string, title: string) => void;
@@ -855,29 +861,89 @@ function ConversationSidebar({
     setDraftTitle("");
   }
 
+  const reportCount = conversations.reduce(
+    (count, conversation) =>
+      count +
+      conversation.messages.filter((message) => message.role === "assistant").length,
+    0
+  );
+
   return (
-    <aside className="flex min-h-0 border-b border-white/10 bg-zinc-950/95 p-4 backdrop-blur-xl md:h-screen md:w-[20.5rem] md:flex-col md:border-b-0 md:border-r">
+    <aside className="flex min-h-0 border-b border-white/10 bg-black/80 p-4 backdrop-blur-2xl md:h-screen md:w-[21.5rem] md:flex-col md:border-b-0 md:border-r md:bg-black/70">
       <div className="flex w-full items-center justify-between gap-3 md:block">
         <div>
-          <p className="text-2xl font-bold tracking-[0.12em] text-white">ZERINIX</p>
-          <p className="mt-1 text-sm text-zinc-500">AI business workspace</p>
+          <div className="flex items-center gap-3">
+            <span className="flex h-10 w-10 items-center justify-center rounded-2xl border border-teal-200/20 bg-teal-200/10 shadow-lg shadow-teal-950/20">
+              <Sparkles className="h-5 w-5 text-teal-200" />
+            </span>
+            <div>
+              <p className="text-lg font-semibold tracking-[0.28em] text-white">
+                ZERINIX
+              </p>
+              <p className="mt-0.5 text-xs text-zinc-500">Founder workspace</p>
+            </div>
+          </div>
+          <div className="mt-5 hidden grid-cols-2 gap-2 md:grid">
+            <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-3">
+              <p className="text-lg font-semibold text-white">{conversations.length}</p>
+              <p className="mt-1 text-[11px] text-zinc-500">Conversations</p>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-3">
+              <p className="text-lg font-semibold text-white">{reportCount}</p>
+              <p className="mt-1 text-[11px] text-zinc-500">AI outputs</p>
+            </div>
+          </div>
         </div>
         <button
           type="button"
           onClick={() => void onCreateConversation()}
-          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-zinc-200 transition hover:bg-white/10 md:mt-5 md:w-full md:gap-2 md:px-4 md:text-sm"
+          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-teal-200/20 bg-teal-200/10 text-teal-100 transition hover:border-teal-200/40 hover:bg-teal-200/15 md:mt-5 md:w-full md:gap-2 md:px-4 md:text-sm md:font-semibold"
           aria-label="New conversation"
           title="New conversation"
         >
           <Plus className="h-4 w-4 text-teal-200" />
-          <span className="hidden md:inline">New chat</span>
+          <span className="hidden md:inline">Create new report</span>
         </button>
       </div>
 
-      <div className="flex flex-1 gap-3 overflow-x-auto pl-3 md:mt-6 md:block md:space-y-3 md:overflow-y-auto md:pl-0">
+      <nav className="mt-5 hidden space-y-2 rounded-3xl border border-white/10 bg-white/[0.025] p-2 md:block">
+        <Link
+          href="/plan"
+          className="flex items-center justify-between rounded-2xl bg-white/[0.06] px-3 py-2.5 text-sm font-medium text-white"
+        >
+          <span className="inline-flex items-center gap-2">
+            <MessageSquare className="h-4 w-4 text-teal-200" />
+            AI Workspace
+          </span>
+          <span className="rounded-full border border-teal-200/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.16em] text-teal-100">
+            {activeMode === "plan" ? "Plan" : "Market"}
+          </span>
+        </Link>
+        <Link
+          href="/dashboard"
+          className="flex items-center gap-2 rounded-2xl px-3 py-2.5 text-sm font-medium text-zinc-400 transition hover:bg-white/[0.05] hover:text-white"
+        >
+          <LayoutDashboard className="h-4 w-4 text-zinc-500" />
+          Reports
+        </Link>
+        <Link
+          href="/dashboard"
+          className="flex items-center gap-2 rounded-2xl px-3 py-2.5 text-sm font-medium text-zinc-400 transition hover:bg-white/[0.05] hover:text-white"
+        >
+          <FolderKanban className="h-4 w-4 text-zinc-500" />
+          Workspaces
+        </Link>
+      </nav>
+
+      <div className="mt-4 hidden items-center justify-between px-1 text-xs font-semibold uppercase tracking-[0.22em] text-zinc-600 md:flex">
+        <span>Conversations</span>
+        <span>{sortedConversations.length}</span>
+      </div>
+
+      <div className="flex flex-1 gap-3 overflow-x-auto pl-3 md:mt-3 md:block md:space-y-3 md:overflow-y-auto md:pl-0">
         {sortedConversations.length === 0 ? (
-          <div className="min-w-64 rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-zinc-500">
-            Conversation history will appear here.
+          <div className="min-w-64 rounded-3xl border border-white/10 bg-white/[0.035] p-4 text-sm leading-6 text-zinc-500">
+            Your saved strategy conversations will appear here after your first prompt.
           </div>
         ) : null}
 
@@ -886,10 +952,10 @@ function ConversationSidebar({
             key={conversation.id}
             type="button"
             onClick={() => onSelectConversation(conversation.id)}
-            className={`group min-w-72 rounded-2xl border p-4 text-left text-sm transition md:w-full ${
+            className={`group min-w-72 rounded-3xl border p-4 text-left text-sm transition md:w-full ${
               conversation.id === activeConversationId
-                ? "border-teal-300/30 bg-teal-300/10"
-                : "border-white/10 bg-white/[0.03] hover:border-teal-300/30 hover:bg-teal-300/10"
+                ? "border-teal-300/30 bg-teal-300/10 shadow-lg shadow-teal-950/10"
+                : "border-white/10 bg-white/[0.03] hover:border-teal-300/30 hover:bg-white/[0.055]"
             }`}
           >
             <div className="flex items-start justify-between gap-2">
@@ -970,6 +1036,19 @@ function ConversationSidebar({
             </div>
           </button>
         ))}
+      </div>
+
+      <div className="mt-4 hidden rounded-3xl border border-white/10 bg-white/[0.03] p-3 md:block">
+        <Link
+          href="/login"
+          className="flex items-center justify-between rounded-2xl px-3 py-2 text-sm text-zinc-400 transition hover:bg-white/[0.05] hover:text-white"
+        >
+          <span className="inline-flex items-center gap-2">
+            <LogOut className="h-4 w-4 text-zinc-500" />
+            Account
+          </span>
+          <span className="text-xs text-zinc-600">Secure</span>
+        </Link>
       </div>
     </aside>
   );
@@ -1353,16 +1432,16 @@ const ReportPanel = memo(function ReportPanel({
 
   if (!reportData && !result) {
     return (
-      <div className="flex min-h-[520px] items-center justify-center rounded-3xl border border-white/10 bg-zinc-950/70 p-8 text-center shadow-2xl shadow-black/40">
+      <div className="flex min-h-[420px] items-center justify-center rounded-[2rem] border border-white/10 bg-white/[0.04] p-8 text-center shadow-2xl shadow-black/40 backdrop-blur-2xl">
         <div>
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/5">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl border border-teal-200/20 bg-teal-200/10">
             <FileText className="h-5 w-5 text-teal-200" />
           </div>
           <p className="mt-5 text-lg font-semibold text-white">
-            AI raporu burada hazırlanacak.
+            Your AI report will appear here.
           </p>
           <p className="mt-2 text-sm leading-6 text-zinc-500">
-            İş fikrini yaz ve ZERINIX rapor panelini oluştur.
+            Send a business prompt to generate a structured ZERINIX report.
           </p>
         </div>
       </div>
@@ -1370,8 +1449,8 @@ const ReportPanel = memo(function ReportPanel({
   }
 
   return (
-    <section className="max-h-[80vh] overflow-y-auto pr-1">
-      <div className="mb-5 flex items-end justify-between gap-4">
+    <section className="rounded-[2rem] border border-white/10 bg-white/[0.04] p-4 shadow-2xl shadow-black/40 backdrop-blur-2xl sm:p-5">
+      <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-xs font-semibold tracking-[0.35em] text-teal-300/70">
             ZERINIX REPORT
@@ -1380,8 +1459,8 @@ const ReportPanel = memo(function ReportPanel({
             {reportTitle}
           </h2>
         </div>
-        <div className="rounded-full border border-teal-300/20 bg-teal-300/10 px-4 py-2 text-sm text-teal-100">
-          AI Ready
+        <div className="w-fit rounded-full border border-teal-300/20 bg-teal-300/10 px-4 py-2 text-sm text-teal-100">
+          {hasReportContent ? "AI Ready" : "Streaming"}
         </div>
       </div>
 
@@ -1392,7 +1471,7 @@ const ReportPanel = memo(function ReportPanel({
           return (
             <article
               key={section.title}
-              className="rounded-3xl border border-white/10 bg-zinc-950/80 p-5 shadow-xl shadow-black/30"
+              className="rounded-3xl border border-white/10 bg-black/45 p-5 shadow-xl shadow-black/30"
             >
               <div className="flex items-start gap-4">
                 <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/5">
@@ -1482,6 +1561,7 @@ export default function Planner({
   const [workflowCompletedSteps, setWorkflowCompletedSteps] = useState(0);
   const [isDraggingFiles, setIsDraggingFiles] = useState(false);
   const [conversationError, setConversationError] = useState(conversationLoadError);
+  const [userEmail, setUserEmail] = useState("");
   const [lastRequest, setLastRequest] = useState<{
     mode: ChatMode;
     prompt: string;
@@ -1792,6 +1872,8 @@ export default function Planner({
       window.location.assign("/login?next=/plan");
       return;
     }
+
+    setUserEmail(user.email || "");
 
     const { data, error } = await supabase
       .from("ai_conversations")
@@ -2647,14 +2729,16 @@ export default function Planner({
       <ConversationSidebar
         conversations={conversations}
         activeConversationId={activeConversationId}
+        activeMode={activeMode}
         onSelectConversation={selectConversation}
         onCreateConversation={createNewConversation}
         onRenameConversation={renameConversation}
         onDeleteConversation={deleteConversation}
       />
 
-      <section className="relative flex min-w-0 flex-1 flex-col">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(45,212,191,0.16),transparent_32%),radial-gradient(circle_at_bottom_left,rgba(255,255,255,0.08),transparent_28%)]" />
+      <section className="relative flex min-w-0 flex-1 flex-col bg-black">
+        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.045)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.035)_1px,transparent_1px)] bg-[size:54px_54px] opacity-35" />
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(45,212,191,0.17),transparent_34%),radial-gradient(circle_at_bottom_left,rgba(255,255,255,0.08),transparent_30%),linear-gradient(180deg,rgba(0,0,0,0.1),#000_94%)]" />
         {isDraggingFiles ? (
           <div className="pointer-events-none absolute inset-4 z-40 flex items-center justify-center rounded-[2rem] border border-dashed border-teal-300/50 bg-black/70 backdrop-blur-xl">
             <div className="text-center">
@@ -2671,16 +2755,21 @@ export default function Planner({
           </div>
         ) : null}
 
-        <header className="relative z-10 flex items-center justify-between border-b border-white/10 bg-black/70 px-5 py-4 backdrop-blur-xl lg:px-8">
-          <div>
-            <p className="text-xs font-semibold tracking-[0.35em] text-teal-300/70">
-              ZERINIX AI
-            </p>
-            <h1 className="mt-1 text-xl font-semibold text-white md:text-2xl">
+        <header className="relative z-10 flex items-center justify-between gap-4 border-b border-white/10 bg-black/55 px-5 py-4 backdrop-blur-2xl lg:px-8">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-xs font-semibold tracking-[0.35em] text-teal-300/70">
+                ZERINIX AI
+              </p>
+              <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] font-medium text-zinc-300">
+                {activeMode === "plan" ? "AI Plan mode" : "Market Analysis mode"}
+              </span>
+            </div>
+            <h1 className="mt-1 truncate text-xl font-semibold text-white md:text-2xl">
               {activeConversation?.title || "Entrepreneur Operating Chat"}
             </h1>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             <button
               type="button"
               onClick={() => void createNewConversation()}
@@ -2698,11 +2787,22 @@ export default function Planner({
               <RefreshCcw className="h-4 w-4 text-teal-200" />
               <span className="hidden sm:inline">Regenerate response</span>
             </button>
+            <div className="hidden items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-2 lg:flex">
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-white text-sm font-semibold text-black">
+                {(userEmail || "Z").slice(0, 1).toUpperCase()}
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-white">Account</p>
+                <p className="max-w-40 truncate text-[11px] text-zinc-500">
+                  {userEmail || "Authenticated user"}
+                </p>
+              </div>
+            </div>
           </div>
         </header>
 
-        <div ref={chatScrollerRef} className="relative z-10 flex-1 overflow-y-auto px-5 py-6 lg:px-8">
-          <div className="mx-auto flex max-w-6xl flex-col gap-6 pb-44">
+        <div ref={chatScrollerRef} className="relative z-10 flex-1 overflow-y-auto px-4 py-5 sm:px-5 lg:px-8">
+          <div className="mx-auto flex max-w-6xl flex-col gap-5 pb-48">
             {conversationError ? (
               <div className="rounded-3xl border border-red-300/20 bg-red-950/30 p-4 text-sm leading-6 text-red-100 shadow-2xl shadow-black/30">
                 <p className="font-semibold text-red-50">
@@ -2715,18 +2815,34 @@ export default function Planner({
             ) : null}
 
             {messages.length === 0 ? (
-              <div className="flex min-h-[45vh] items-center justify-center text-center">
-                <div>
-                  <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-3xl border border-white/10 bg-white/5 shadow-2xl shadow-black/40">
+              <div className="flex min-h-[52vh] items-center justify-center text-center">
+                <div className="w-full max-w-4xl rounded-[2rem] border border-white/10 bg-white/[0.045] p-6 shadow-2xl shadow-black/40 backdrop-blur-2xl sm:p-8">
+                  <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-3xl border border-teal-200/20 bg-teal-200/10 shadow-2xl shadow-teal-950/20">
                     <Sparkles className="h-6 w-6 text-teal-200" />
                   </div>
-                  <h2 className="mt-6 text-4xl font-semibold tracking-tight text-white">
-                    What are we building today?
+                  <h2 className="mt-6 text-3xl font-semibold tracking-tight text-white sm:text-5xl">
+                    Build the next decision with ZERINIX.
                   </h2>
                   <p className="mx-auto mt-3 max-w-2xl text-sm leading-6 text-zinc-500">
                     Upload context, describe your goal, and ZERINIX will stream a
                     premium business plan or market intelligence report.
                   </p>
+                  <div className="mt-6 grid gap-3 text-left md:grid-cols-3">
+                    {[
+                      "Create a business plan for an AI CRM for clinics.",
+                      "Analyze the market for premium online education in Germany.",
+                      "Build a 90-day launch plan for a B2B SaaS product.",
+                    ].map((suggestion) => (
+                      <button
+                        key={suggestion}
+                        type="button"
+                        onClick={() => setPrompt(suggestion)}
+                        className="rounded-2xl border border-white/10 bg-black/30 p-4 text-sm leading-6 text-zinc-300 transition hover:border-teal-200/30 hover:bg-teal-200/[0.06] hover:text-white"
+                      >
+                        {suggestion}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
             ) : (
@@ -2755,7 +2871,7 @@ export default function Planner({
           </div>
         </div>
 
-        <div className="relative z-20 border-t border-white/10 bg-black/80 px-5 py-4 backdrop-blur-2xl lg:px-8">
+        <div className="relative z-20 border-t border-white/10 bg-black/70 px-4 py-4 backdrop-blur-2xl sm:px-5 lg:px-8">
           <div className="mx-auto max-w-6xl">
             {attachments.length > 0 ? (
               <div className="mb-3 flex flex-wrap gap-2">
@@ -2780,7 +2896,15 @@ export default function Planner({
               </div>
             ) : null}
 
-            <div className="rounded-3xl border border-white/10 bg-zinc-950/90 p-3 shadow-2xl shadow-black/50">
+            <div className="rounded-[2rem] border border-white/10 bg-white/[0.055] p-3 shadow-2xl shadow-black/50 backdrop-blur-2xl">
+              <div className="mb-2 flex flex-wrap items-center gap-2 px-2 pt-1">
+                <span className="rounded-full border border-teal-200/20 bg-teal-200/10 px-3 py-1 text-xs font-medium text-teal-100">
+                  {activeMode === "plan" ? "AI Plan" : "Market Analysis"}
+                </span>
+                <span className="text-xs text-zinc-600">
+                  Attach files, ask follow-ups, or generate a full report.
+                </span>
+              </div>
               <textarea
                 ref={composerRef}
                 value={prompt}
@@ -2791,11 +2915,11 @@ export default function Planner({
                     void submitPrompt();
                   }
                 }}
-                className="min-h-28 w-full resize-none rounded-2xl bg-transparent p-3 text-base leading-7 text-white outline-none placeholder:text-zinc-600"
+                className="min-h-28 w-full resize-none rounded-2xl bg-black/30 p-3 text-base leading-7 text-white outline-none ring-1 ring-white/5 transition placeholder:text-zinc-600 focus:ring-teal-200/25"
                 placeholder="Describe your business idea, market, budget, constraints, or upload supporting files..."
               />
 
-              <div className="flex flex-col gap-3 border-t border-white/10 pt-3 md:flex-row md:items-center md:justify-between">
+              <div className="flex flex-col gap-3 pt-3 md:flex-row md:items-center md:justify-between">
                 <div className="flex flex-wrap items-center gap-2">
                   <label className="inline-flex cursor-pointer items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-medium text-zinc-200 transition hover:bg-white/10">
                     <Paperclip className="h-4 w-4 text-teal-200" />
