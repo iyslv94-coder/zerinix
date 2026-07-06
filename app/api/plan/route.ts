@@ -186,7 +186,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Authentication required." }, { status: 401 });
     }
 
-    if (!isPrivateBetaAllowed(user.email)) {
+    if (!isPrivateBetaAllowed(user)) {
       return NextResponse.json(
         { error: "Private beta access only." },
         { status: 403 }

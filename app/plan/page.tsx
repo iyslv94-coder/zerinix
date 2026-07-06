@@ -20,7 +20,7 @@ export default async function PlanPage() {
     redirect("/login?next=/plan");
   }
 
-  if (!isPrivateBetaAllowed(user.email)) {
+  if (!isPrivateBetaAllowed(user)) {
     return <PrivateBetaAccessOnly />;
   }
 
