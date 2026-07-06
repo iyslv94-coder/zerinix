@@ -8,14 +8,29 @@ const allowedBetaEmails = new Set([primaryAllowedEmail]);
 const allowedDeveloperHandles = new Set([primaryDeveloperHandle]);
 
 type BetaAccessIdentity = {
+  provider?: string | null;
   identity_data?: Record<string, unknown> | null;
 };
 
 type BetaAccessAccount = {
+  id?: string | null;
   email?: string | null;
   user_metadata?: Record<string, unknown> | null;
   app_metadata?: Record<string, unknown> | null;
   identities?: BetaAccessIdentity[] | null;
+};
+
+export type PrivateBetaAccessDiagnostics = {
+  userId: string;
+  userEmail: string;
+  provider: string;
+  appMetadataProvider: string;
+  userMetadataEmail: string;
+  userMetadataFullName: string;
+  checks: Array<{
+    label: string;
+    passed: boolean;
+  }>;
 };
 
 function readString(value: unknown) {
@@ -86,6 +101,79 @@ function collectAccountHandles(account: BetaAccessAccount) {
   });
 
   return handles;
+}
+
+export function getPrivateBetaAccessDiagnostics(
+  account: BetaAccessAccount
+): PrivateBetaAccessDiagnostics {
+  const accountEmails = collectAccountEmails(account);
+  const accountHandles = collectAccountHandles(account);
+  const appMetadataProvider = readString(account.app_metadata?.provider);
+  const identityProvider = readString(account.identities?.[0]?.provider);
+  const provider = appMetadataProvider || identityProvider || "unknown";
+  const primaryEmail = normalizeEmail(primaryAllowedEmail);
+  const primaryGmailEmail = normalizeGmailAddress(primaryAllowedEmail);
+  const userEmail = readString(account.email);
+  const userMetadataEmail = readString(account.user_metadata?.email);
+  const identityEmailExactPassed =
+    account.identities?.some((identity) => {
+      const email = readString(identity.identity_data?.email);
+
+      return email ? normalizeEmail(email) === primaryEmail : false;
+    }) ?? false;
+  const identityEmailGmailPassed =
+    account.identities?.some((identity) => {
+      const email = readString(identity.identity_data?.email);
+
+      return email ? normalizeGmailAddress(email) === primaryGmailEmail : false;
+    }) ?? false;
+
+  return {
+    userId: readString(account.id),
+    userEmail,
+    provider,
+    appMetadataProvider: appMetadataProvider || "unknown",
+    userMetadataEmail,
+    userMetadataFullName: readString(account.user_metadata?.full_name),
+    checks: [
+      {
+        label: "user.email exact owner match",
+        passed: normalizeEmail(userEmail) === primaryEmail,
+      },
+      {
+        label: "user.email Gmail-normalized owner match",
+        passed: normalizeGmailAddress(userEmail) === primaryGmailEmail,
+      },
+      {
+        label: "user_metadata.email owner match",
+        passed:
+          normalizeEmail(userMetadataEmail) === primaryEmail ||
+          normalizeGmailAddress(userMetadataEmail) === primaryGmailEmail,
+      },
+      {
+        label: "identity email exact owner match",
+        passed: identityEmailExactPassed,
+      },
+      {
+        label: "identity email Gmail-normalized owner match",
+        passed: identityEmailGmailPassed,
+      },
+      {
+        label: "developer handle metadata match",
+        passed: [...allowedDeveloperHandles].some((handle) =>
+          accountHandles.has(normalizeHandle(handle))
+        ),
+      },
+      {
+        label: "collected email allowlist match",
+        passed: [...allowedBetaEmails].some(
+          (email) =>
+            accountEmails.has(normalizeEmail(email)) ||
+            accountEmails.has(normalizeGmailAddress(email))
+        ),
+      },
+    ],
+  };
 }
 
 export function isPrivateBetaAllowed(account?: BetaAccessAccount | string | null) {
