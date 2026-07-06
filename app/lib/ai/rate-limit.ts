@@ -1,9 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   checkUsageAllowance,
+  createAiPromptHash,
   dailyAiLimitMessage,
   getUserPlanTier,
-  hashAiPayload,
+  normalizeAiPrompt,
   recordAiUsage,
   selectAiModel,
   type AiRequestKind,
@@ -30,7 +31,8 @@ export async function checkAiProductionRateLimit({
 }: AiProductionRateLimitInput) {
   const planTier = await getUserPlanTier(supabase, userId);
   const model = selectAiModel(requestKind);
-  const promptHash = hashAiPayload(promptText);
+  const normalizedPrompt = normalizeAiPrompt(promptText);
+  const promptHash = createAiPromptHash(promptText);
   const allowance = await checkUsageAllowance(supabase, userId, planTier);
 
   if (!allowance.allowed) {
@@ -63,5 +65,6 @@ export async function checkAiProductionRateLimit({
     model,
     planTier,
     promptHash,
+    normalizedPrompt,
   };
 }

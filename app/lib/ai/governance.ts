@@ -51,6 +51,7 @@ type CacheInput = {
   responseText: string;
   tokenUsage: TokenUsage;
   estimatedCostUsd: number;
+  expiresInDays?: number;
 };
 
 export const dailyAiLimitMessage =
@@ -144,13 +145,20 @@ export function hashAiPayload(value: string) {
   return crypto.createHash("sha256").update(value).digest("hex");
 }
 
+export function normalizeAiPrompt(value: string) {
+  return value.trim().replace(/\s+/g, " ").toLocaleLowerCase("en-US");
+}
+
+export function createAiPromptHash(prompt: string) {
+  return hashAiPayload(normalizeAiPrompt(prompt));
+}
+
 export function createAiCacheKey(parts: {
   endpoint: string;
-  reportField?: string;
+  normalizedPrompt: string;
+  mode: string;
   language: string;
   model: string;
-  instructions: string;
-  input: string;
 }) {
   return hashAiPayload(JSON.stringify(parts));
 }
@@ -250,6 +258,30 @@ export async function getCachedAiResponse(
   userId: string,
   cacheKey: string
 ): Promise<CachedAiResponse | null> {
+  const { data: globalData, error: globalError } = await supabase.rpc(
+    "get_global_ai_response_cache_entry",
+    {
+      request_cache_key: cacheKey,
+    }
+  );
+
+  if (!globalError) {
+    const row = Array.isArray(globalData) ? globalData[0] : globalData;
+
+    if (row?.response_text) {
+      return {
+        responseText: String(row.response_text),
+        promptTokens: safeNumber(row.prompt_tokens),
+        completionTokens: safeNumber(row.completion_tokens),
+        totalTokens: safeNumber(row.total_tokens),
+        estimatedCostUsd: safeNumber(row.estimated_cost_usd),
+        model: typeof row.model === "string" ? row.model : "",
+      };
+    }
+  } else {
+    logServerError("ai-governance:global-cache-read", globalError);
+  }
+
   const { data, error } = await supabase
     .from("ai_response_cache")
     .select(
@@ -294,6 +326,33 @@ export async function storeCachedAiResponse(
   supabase: SupabaseClient,
   input: CacheInput
 ) {
+  const expiresAt = new Date(
+    Date.now() + (input.expiresInDays ?? 7) * 24 * 60 * 60 * 1_000
+  ).toISOString();
+  const { error: globalError } = await supabase.rpc(
+    "upsert_global_ai_response_cache_entry",
+    {
+      request_cache_key: input.cacheKey,
+      request_prompt_hash: input.promptHash,
+      request_endpoint: input.endpoint,
+      request_report_field: input.reportField ?? null,
+      request_language: input.language,
+      request_model: input.model,
+      request_response_text: input.responseText,
+      request_prompt_tokens: input.tokenUsage.promptTokens,
+      request_completion_tokens: input.tokenUsage.completionTokens,
+      request_total_tokens: input.tokenUsage.totalTokens,
+      request_estimated_cost_usd: input.estimatedCostUsd,
+      request_expires_at: expiresAt,
+    }
+  );
+
+  if (!globalError) {
+    return;
+  }
+
+  logServerError("ai-governance:global-cache-write", globalError);
+
   const { error } = await supabase.from("ai_response_cache").upsert(
     {
       user_id: input.userId,
@@ -308,7 +367,7 @@ export async function storeCachedAiResponse(
       completion_tokens: input.tokenUsage.completionTokens,
       total_tokens: input.tokenUsage.totalTokens,
       estimated_cost_usd: input.estimatedCostUsd,
-      expires_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1_000).toISOString(),
+      expires_at: expiresAt,
     },
     { onConflict: "user_id,cache_key" }
   );

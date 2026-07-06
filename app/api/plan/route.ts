@@ -251,11 +251,10 @@ Write only the content for this section. Do not write a JSON object, field name,
 
     const cacheKey = createAiCacheKey({
       endpoint: "/api/plan",
-      reportField,
+      normalizedPrompt: productionLimit.normalizedPrompt,
+      mode: `business_plan:${reportField}`,
       language: responseLanguage,
       model,
-      instructions,
-      input,
     });
 
     const cachedResponse = await getCachedAiResponse(supabase, user.id, cacheKey);
@@ -386,6 +385,7 @@ Write only the content for this section. Do not write a JSON object, field name,
                 responseText: streamedText,
                 tokenUsage,
                 estimatedCostUsd,
+                expiresInDays: 7,
               });
             }
 

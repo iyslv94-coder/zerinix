@@ -304,11 +304,10 @@ Do not suggest website URLs, domain names, brand names, or site ideas for the pr
 
     const cacheKey = createAiCacheKey({
       endpoint: "/api/market-analysis",
-      reportField,
+      normalizedPrompt: productionLimit.normalizedPrompt,
+      mode: `market_analysis:${reportField}`,
       language: responseLanguage,
       model,
-      instructions,
-      input,
     });
 
     const cachedResponse = await getCachedAiResponse(supabase, user.id, cacheKey);
@@ -455,6 +454,7 @@ Do not suggest website URLs, domain names, brand names, or site ideas for the pr
                 responseText: streamedText,
                 tokenUsage,
                 estimatedCostUsd,
+                expiresInDays: 3,
               });
             }
 
