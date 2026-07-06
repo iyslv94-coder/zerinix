@@ -2,9 +2,13 @@ const primaryAllowedEmail = [
   "yesilovaibrahim38",
   ["gmail", "com"].join("."),
 ].join("@");
+const ownerAllowedEmail = [
+  "yesilova_ibrahim",
+  ["hotmail", "com"].join("."),
+].join("@");
 const primaryDeveloperHandle = ["iyslv94", "coder"].join("-");
 
-const allowedBetaEmails = new Set([primaryAllowedEmail]);
+const allowedBetaEmails = new Set([primaryAllowedEmail, ownerAllowedEmail]);
 const allowedDeveloperHandles = new Set([primaryDeveloperHandle]);
 
 type BetaAccessIdentity = {
@@ -54,6 +58,21 @@ function normalizeGmailAddress(value: string) {
 
 function normalizeHandle(value: string) {
   return value.trim().toLowerCase();
+}
+
+function emailMatchesAllowedOwner(value: string) {
+  if (!value) {
+    return false;
+  }
+
+  const normalizedEmail = normalizeEmail(value);
+  const normalizedGmailEmail = normalizeGmailAddress(value);
+
+  return [...allowedBetaEmails].some(
+    (email) =>
+      normalizedEmail === normalizeEmail(email) ||
+      normalizedGmailEmail === normalizeGmailAddress(email)
+  );
 }
 
 function collectAccountEmails(account: BetaAccessAccount) {
@@ -111,21 +130,28 @@ export function getPrivateBetaAccessDiagnostics(
   const appMetadataProvider = readString(account.app_metadata?.provider);
   const identityProvider = readString(account.identities?.[0]?.provider);
   const provider = appMetadataProvider || identityProvider || "unknown";
-  const primaryEmail = normalizeEmail(primaryAllowedEmail);
-  const primaryGmailEmail = normalizeGmailAddress(primaryAllowedEmail);
   const userEmail = readString(account.email);
   const userMetadataEmail = readString(account.user_metadata?.email);
   const identityEmailExactPassed =
     account.identities?.some((identity) => {
       const email = readString(identity.identity_data?.email);
 
-      return email ? normalizeEmail(email) === primaryEmail : false;
+      return email
+        ? [...allowedBetaEmails].some(
+            (allowedEmail) => normalizeEmail(email) === normalizeEmail(allowedEmail)
+          )
+        : false;
     }) ?? false;
   const identityEmailGmailPassed =
     account.identities?.some((identity) => {
       const email = readString(identity.identity_data?.email);
 
-      return email ? normalizeGmailAddress(email) === primaryGmailEmail : false;
+      return email
+        ? [...allowedBetaEmails].some(
+            (allowedEmail) =>
+              normalizeGmailAddress(email) === normalizeGmailAddress(allowedEmail)
+          )
+        : false;
     }) ?? false;
 
   return {
@@ -138,17 +164,19 @@ export function getPrivateBetaAccessDiagnostics(
     checks: [
       {
         label: "user.email exact owner match",
-        passed: normalizeEmail(userEmail) === primaryEmail,
+        passed: [...allowedBetaEmails].some(
+          (email) => normalizeEmail(userEmail) === normalizeEmail(email)
+        ),
       },
       {
         label: "user.email Gmail-normalized owner match",
-        passed: normalizeGmailAddress(userEmail) === primaryGmailEmail,
+        passed: [...allowedBetaEmails].some(
+          (email) => normalizeGmailAddress(userEmail) === normalizeGmailAddress(email)
+        ),
       },
       {
         label: "user_metadata.email owner match",
-        passed:
-          normalizeEmail(userMetadataEmail) === primaryEmail ||
-          normalizeGmailAddress(userMetadataEmail) === primaryGmailEmail,
+        passed: emailMatchesAllowedOwner(userMetadataEmail),
       },
       {
         label: "identity email exact owner match",
@@ -166,10 +194,11 @@ export function getPrivateBetaAccessDiagnostics(
       },
       {
         label: "collected email allowlist match",
-        passed: [...allowedBetaEmails].some(
-          (email) =>
-            accountEmails.has(normalizeEmail(email)) ||
-            accountEmails.has(normalizeGmailAddress(email))
+        passed: [...allowedBetaEmails].some((email) =>
+          emailMatchesAllowedOwner(email)
+            ? accountEmails.has(normalizeEmail(email)) ||
+              accountEmails.has(normalizeGmailAddress(email))
+            : false
         ),
       },
     ],
@@ -186,10 +215,7 @@ export function isPrivateBetaAllowed(account?: BetaAccessAccount | string | null
   const accountHandles = collectAccountHandles(betaAccount);
 
   for (const email of allowedBetaEmails) {
-    if (
-      accountEmails.has(normalizeEmail(email)) ||
-      accountEmails.has(normalizeGmailAddress(email))
-    ) {
+    if (accountEmails.has(normalizeEmail(email)) || accountEmails.has(normalizeGmailAddress(email))) {
       return true;
     }
   }
