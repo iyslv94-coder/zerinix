@@ -12,7 +12,7 @@ type MessageRow = {
   role: "user" | "assistant";
   content: string;
   mode: "plan" | "market" | null;
-  status: "streaming" | "complete";
+  status: "streaming" | "complete" | "failed";
   attachments: Array<{
     id: string;
     name: string;
