@@ -82,9 +82,7 @@ const financialDashboardMetrics = [
   { label: "Burn Rate", aliases: ["Burn Rate", "Burn"] },
   { label: "Runway", aliases: ["Runway"] },
   { label: "Payback", aliases: ["Payback", "Payback Period"] },
-  { label: "EBITDA", aliases: ["EBITDA"] },
   { label: "Break-even", aliases: ["Break-even Month", "Break even Month", "Breakeven"] },
-  { label: "Investment Needed", aliases: ["Investment Needed", "Investment"] },
 ];
 
 function extractMetricValue(content: string, label: string) {
@@ -230,25 +228,7 @@ function removeDuplicateVisualText(title: string, content: string) {
   }
 
   if (normalizedTitle.includes("financial dashboard")) {
-    const metricPattern =
-      /^(?:[-*]\s*)?(?:\*\*)?(arr|mrr|revenue|expenses|gross margin|cac|ltv|payback(?: period)?|burn(?: rate)?|runway|ebitda|break[- ]?even(?: month)?|investment(?: needed)?)(?:\*\*)?\s*[:\-–—]\s*/i;
-    const detailMarker =
-      /\b(?:formula|assumptions?|confidence|benchmark(?: source| comparison)?|explanation|justification|source)\b\s*[:\-–—]/i;
-
-    return lines
-      .map((line) => {
-        if (!metricPattern.test(line)) {
-          return line;
-        }
-
-        const markerMatch = line.match(detailMarker);
-
-        return markerMatch?.index !== undefined
-          ? line.slice(markerMatch.index).trim()
-          : "";
-      })
-      .filter(Boolean)
-      .join("\n");
+    return "";
   }
 
   if (normalizedTitle.includes("swot")) {

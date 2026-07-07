@@ -85,9 +85,7 @@ const financialDashboardMetrics = [
   { label: "Burn Rate", aliases: ["Burn Rate", "Burn"] },
   { label: "Runway", aliases: ["Runway"] },
   { label: "Payback", aliases: ["Payback", "Payback Period"] },
-  { label: "EBITDA", aliases: ["EBITDA"] },
   { label: "Break-even", aliases: ["Break-even Month", "Break even Month", "Breakeven"] },
-  { label: "Investment Needed", aliases: ["Investment Needed", "Investment"] },
 ];
 
 const founderScoreMetrics = [
@@ -153,73 +151,6 @@ function formatMetricCardValue(value: string) {
     .split(/\s+(?:based on|using|assuming|calculated from|derived from)\s+/i)[0]
     .split(/\s*[;|]\s*/)[0]
     .trim();
-}
-
-function removeDuplicateVisualText(title: string, content: string) {
-  const normalizedTitle = title.toLowerCase();
-  const lines = content
-    .replace(/\r\n/g, "\n")
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean);
-
-  if (normalizedTitle.includes("financial dashboard")) {
-    const metricPattern =
-      /^(?:[-*]\s*)?(?:\*\*)?(arr|mrr|revenue|expenses|gross margin|cac|ltv|payback(?: period)?|burn(?: rate)?|runway|ebitda|break[- ]?even(?: month)?|investment(?: needed)?)(?:\*\*)?\s*[:\-–—]\s*/i;
-    const detailMarker =
-      /\b(?:formula|assumptions?|confidence|benchmark(?: source| comparison)?|explanation|justification|source)\b\s*[:\-–—]/i;
-
-    return lines
-      .map((line) => {
-        if (!metricPattern.test(line)) {
-          return line;
-        }
-
-        const markerMatch = line.match(detailMarker);
-
-        return markerMatch?.index !== undefined
-          ? line.slice(markerMatch.index).trim()
-          : "";
-      })
-      .filter(Boolean)
-      .join("\n");
-  }
-
-  return content;
-}
-
-function getMetricDetailsContent(title: string, content: string) {
-  if (title.toLowerCase().includes("financial dashboard")) {
-    const metricPattern =
-      /^(?:[-*]\s*)?(?:\*\*)?(arr|mrr|revenue|expenses|gross margin|cac|ltv|payback(?: period)?|burn(?: rate)?|runway|ebitda|break[- ]?even(?: month)?|investment(?: needed)?)(?:\*\*)?\s*[:\-–—]\s*/i;
-    const detailMarker =
-      /\b(?:formula|assumptions?|confidence|benchmark(?: source| comparison)?|explanation|justification|source)\b\s*[:\-–—]/i;
-
-    return content
-      .replace(/\r\n/g, "\n")
-      .split("\n")
-      .map((line) => {
-        const trimmed = line.trim();
-
-        if (!trimmed) {
-          return "";
-        }
-
-        if (!metricPattern.test(trimmed)) {
-          return trimmed;
-        }
-
-        const markerMatch = trimmed.match(detailMarker);
-
-        return markerMatch?.index !== undefined
-          ? trimmed.slice(markerMatch.index).trim()
-          : "";
-      })
-      .filter(Boolean)
-      .join("\n");
-  }
-
-  return removeDuplicateVisualText(title, content);
 }
 
 function extractScore(content: string, label: string) {
@@ -821,9 +752,9 @@ function ReportSectionVisual({
             );
 
             return (
-              <div key={metric.label} className="flex min-h-36 min-w-0 flex-col justify-between rounded-3xl border border-white/10 bg-black/35 p-4 shadow-xl shadow-black/20">
+              <div key={metric.label} className="flex min-h-32 min-w-0 flex-col justify-between overflow-hidden rounded-3xl border border-white/10 bg-black/35 p-3.5 shadow-xl shadow-black/20">
                 <div className="flex items-start justify-between gap-3">
-                  <p className="min-w-0 break-words text-[11px] font-medium uppercase tracking-[0.18em] text-zinc-500">
+                  <p className="line-clamp-2 min-w-0 break-words text-[11px] font-medium uppercase tracking-[0.16em] text-zinc-500">
                     {metric.label}
                   </p>
                   <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold ${
@@ -837,7 +768,7 @@ function ReportSectionVisual({
                   </span>
                 </div>
                 <div className="mt-4 min-w-0">
-                  <p className="break-words text-[clamp(1.25rem,2.5vw,1.85rem)] font-semibold leading-tight tracking-tight text-white">
+                  <p className="line-clamp-2 break-words text-[clamp(1.15rem,2.2vw,1.65rem)] font-semibold leading-tight tracking-tight text-white">
                     {value || "TBD"}
                   </p>
                   <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-white/10">
@@ -1408,7 +1339,7 @@ export default async function ReportDetailPage({
                 .toLowerCase()
                 .includes("financial dashboard");
               const detailsContent = isFinancialDashboard
-                ? getMetricDetailsContent(section.title, section.content)
+                ? ""
                 : section.content;
 
               return (
