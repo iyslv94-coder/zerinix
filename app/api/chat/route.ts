@@ -109,6 +109,157 @@ function buildAttachmentContext(attachments: ChatAttachmentInput[]) {
     .join("\n\n---\n\n");
 }
 
+function detectResponseLanguage(value: string) {
+  return /[çğıöşü]/i.test(value) ||
+    /\b(ülke|bütçe|risk|yatırım|iş|fikir|pazar|hedef|deneyim|zaman|para|öneri|startup|girişim)\b/i.test(value)
+    ? "Turkish"
+    : "English";
+}
+
+function isBusinessAdvisorRequest(prompt: string) {
+  const normalized = prompt.toLowerCase();
+
+  return [
+    /\binvest\b/,
+    /\binvestment\b/,
+    /\bbusiness ideas?\b/,
+    /\bstartup ideas?\b/,
+    /\bstartup recommendations?\b/,
+    /\bmarket opportunities?\b/,
+    /\bwhere should i put\b/,
+    /\bwhat should i build\b/,
+    /\bhow (?:can|should) i invest\b/,
+    /\bmake money with\b/,
+    /\bi have\s+[$€£₺]?\s?\d+/,
+    /\bwith\s+[$€£₺]?\s?\d+/,
+    /\byatırım\b/i,
+    /\biş fik/i,
+    /\bgirişim fik/i,
+    /\bstartup öner/i,
+    /\bpazar fırsat/i,
+    /\bnereye yatırım/i,
+    /\bparam var/i,
+    /\bne iş kur/i,
+  ].some((pattern) => pattern.test(normalized));
+}
+
+function isBusinessAdvisorConversation(messages: ChatInputMessage[], prompt: string) {
+  if (isBusinessAdvisorRequest(prompt)) {
+    return true;
+  }
+
+  return messages.slice(-6).some((message) => {
+    const content = message.content.toLowerCase();
+
+    return (
+      isBusinessAdvisorRequest(content) ||
+      content.includes("rank the best options with reasoning") ||
+      content.includes("ranked recommendations") ||
+      content.includes("önerileri sıralayıp") ||
+      content.includes("yatırım tutarı")
+    );
+  });
+}
+
+function conversationText(messages: ChatInputMessage[], prompt: string) {
+  return [...messages.map((message) => message.content), prompt].join("\n").toLowerCase();
+}
+
+function getMissingAdvisorContext(messages: ChatInputMessage[], prompt: string) {
+  const text = conversationText(messages, prompt);
+  const missing: string[] = [];
+
+  if (
+    !/\b(country|location|market|geography|region|city|usa|us|uk|europe|turkey|türkiye|germany|uae|dubai|ülke|şehir|pazar|bölge)\b/i.test(text)
+  ) {
+    missing.push("country");
+  }
+
+  if (
+    !/[$€£₺]\s?\d+|\d+\s?(?:usd|eur|gbp|try|tl|dollar|euro|lira|k|m|bin|milyon|thousand|million|budget|capital|bütçe|sermaye)/i.test(text)
+  ) {
+    missing.push("budget");
+  }
+
+  if (!/\b(low|medium|high|conservative|moderate|aggressive|risk|risky|safe|düşük|orta|yüksek|riskli|güvenli)\b/i.test(text)) {
+    missing.push("risk tolerance");
+  }
+
+  if (!/\b(experience|experienced|beginner|first time|background|worked|built|operator|founder|deneyim|tecrübe|başlangıç|kurucu)\b/i.test(text)) {
+    missing.push("experience");
+  }
+
+  if (!/\b(full[-\s]?time|part[-\s]?time|hours?|weekends?|available time|time per week|tam zaman|yarı zaman|saat|hafta sonu|zaman)\b/i.test(text)) {
+    missing.push("available time");
+  }
+
+  if (!/\b(goal|goals|income|cash flow|growth|wealth|exit|passive|build|learn|hedef|gelir|nakit|büyüme|çıkış|pasif)\b/i.test(text)) {
+    missing.push("goals");
+  }
+
+  return missing;
+}
+
+function buildAdvisorClarification(prompt: string, missing: string[]) {
+  const language = detectResponseLanguage(prompt);
+  const requested = missing;
+
+  if (language === "Turkish") {
+    const labels: Record<string, string> = {
+      country: "ülke / hedef pazar",
+      budget: "bütçe",
+      "risk tolerance": "risk toleransı",
+      experience: "deneyim",
+      "available time": "ayırabileceğin zaman",
+      goals: "ana hedef",
+    };
+
+    return [
+      "Sana gerçekten uygulanabilir öneriler verebilmem için birkaç bilgiye ihtiyacım var:",
+      "",
+      ...requested.map((item, index) => `${index + 1}. ${labels[item] || item}?`),
+      "",
+      "Kısa cevap verebilirsin; sonra önerileri sıralayıp yatırım tutarı, zaman çizelgesi, riskler ve sonraki adımlarla çıkaracağım.",
+    ].join("\n");
+  }
+
+  const labels: Record<string, string> = {
+    country: "country / target market",
+    budget: "budget",
+    "risk tolerance": "risk tolerance",
+    experience: "experience level",
+    "available time": "available time per week",
+    goals: "primary goal",
+  };
+
+  return [
+    "To give you useful recommendations, I need a little context first:",
+    "",
+    ...requested.map((item, index) => `${index + 1}. What is your ${labels[item] || item}?`),
+    "",
+    "You can answer briefly. Then I’ll rank the best options with reasoning, estimated investment, timeline, risks, and next actions.",
+  ].join("\n");
+}
+
+function textStream(content: string) {
+  const encoder = new TextEncoder();
+
+  return new Response(
+    new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode(content));
+        controller.close();
+      },
+    }),
+    {
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Cache-Control": "no-store",
+      },
+    }
+  );
+}
+
 export async function POST(req: Request) {
   const startedAt = Date.now();
   const ip = getClientIpFromRequest(req);
@@ -168,6 +319,15 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Message is required." }, { status: 400 });
     }
 
+    const advisorRequest = isBusinessAdvisorConversation(messages, prompt);
+    const missingAdvisorContext = advisorRequest
+      ? getMissingAdvisorContext(messages, prompt)
+      : [];
+
+    if (advisorRequest && missingAdvisorContext.length > 0) {
+      return textStream(buildAdvisorClarification(prompt, missingAdvisorContext));
+    }
+
     const productionLimit = await checkAiProductionRateLimit({
       supabase,
       userId: user.id,
@@ -198,6 +358,8 @@ export async function POST(req: Request) {
         "Use the conversation history for context, but do not fabricate facts.",
         "When attached file text is provided, treat it as user-supplied context. If a file has no readable text, say so briefly when relevant.",
         "If the user asks for a structured investor report, suggest AI Plan or Market Analysis mode instead of generating the full report in Chat mode.",
+        "AI Business Advisor behavior: when the user asks for investment ideas, business ideas, startup recommendations, market opportunities, or how to invest money, first ask only the minimum missing clarification questions: country/market, budget, risk tolerance, experience, available time, and goals. If those details are already available in the conversation, do not ask again.",
+        "When enough advisor context exists, answer as a conversational advisory memo, not a PDF report. Include ranked recommendations, reasoning, estimated investment, expected timeline, key risks, and concrete next actions. Be practical, honest about assumptions, and avoid regulated financial-advice language that sounds like a guarantee.",
         "Use concise markdown when it improves readability. Match the user's language.",
       ].join("\n"),
       input: [
