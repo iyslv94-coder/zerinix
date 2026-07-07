@@ -1081,21 +1081,6 @@ function extractMetricValueFromAliases(
   return "";
 }
 
-function buildBenchmarkRows(content: string) {
-  return financialDashboardMetrics.slice(2, 8).map((metric, index) => ({
-    metric: metric.label,
-    benchmark:
-      extractMetricValueFromAliases(content, [
-        `${metric.label} Benchmark`,
-        `${metric.label} Benchmark Source`,
-        `${metric.label} Benchmark Comparison`,
-        `${metric.label} Confidence`,
-        `${metric.label} Assumption`,
-      ]) || "Model benchmark",
-    status: ["Quality", "Efficiency", "Resilience", "Velocity", "Sensitivity", "Validation"][index] || "Model",
-  }));
-}
-
 function extractScore(content: string, label: string) {
   const value = extractMetricValue(content, label);
   const scoreMatch = value.match(/\b(\d{1,3})\b/);
@@ -1188,6 +1173,16 @@ function removeDuplicateVisualText(title: string, content: string) {
   }
 
   return normalizePdfText(content);
+}
+
+function getMetricDetailsContent(title: string, content: string) {
+  const details = removeDuplicateVisualText(title, content);
+
+  if (details.trim()) {
+    return details;
+  }
+
+  return "";
 }
 
 function dedupePdfSections<T extends { title: string; content: string }>(sections: T[]) {
@@ -1711,8 +1706,6 @@ function PremiumSectionVisual({ section }: { section: ReportSection }) {
   }
 
   if (field === "financialDashboard") {
-    const benchmarkRows = buildBenchmarkRows(section.content);
-
     return (
       <div className="mb-5 overflow-hidden rounded-[2rem] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(94,234,212,0.12),transparent_32%),linear-gradient(180deg,rgba(255,255,255,0.055),rgba(255,255,255,0.015))]">
         <div className="flex flex-col gap-2 border-b border-white/10 p-5 sm:flex-row sm:items-end sm:justify-between">
@@ -1728,20 +1721,20 @@ function PremiumSectionVisual({ section }: { section: ReportSection }) {
             Live model
           </span>
         </div>
-        <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-3 p-4">
           {financialDashboardMetrics.map((metric, index) => {
             const value = extractMetricValueFromAliases(section.content, metric.aliases);
 
             return (
               <div
                 key={metric.label}
-                className="rounded-3xl border border-white/10 bg-black/35 p-4 shadow-xl shadow-black/20"
+                className="flex min-h-36 min-w-0 flex-col justify-between rounded-3xl border border-white/10 bg-black/35 p-4 shadow-xl shadow-black/20"
               >
-                <div className="flex items-center justify-between gap-3">
-                  <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-zinc-500">
+                <div className="flex items-start justify-between gap-3">
+                  <p className="min-w-0 break-words text-[11px] font-medium uppercase tracking-[0.18em] text-zinc-500">
                     {metric.label}
                   </p>
-                  <span className={`rounded-full px-2 py-1 text-[10px] font-semibold ${
+                  <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold ${
                     index % 3 === 0
                       ? "bg-teal-200 text-black"
                       : index % 3 === 1
@@ -1751,35 +1744,21 @@ function PremiumSectionVisual({ section }: { section: ReportSection }) {
                     {index % 3 === 0 ? "On track" : index % 3 === 1 ? "Watch" : "Model"}
                   </span>
                 </div>
-                <p className="mt-3 min-h-8 line-clamp-2 text-2xl font-semibold tracking-tight text-white">
-                  {value || "TBD"}
-                </p>
-                <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-white/10">
-                  <div
-                    className="h-full rounded-full bg-teal-200/80"
-                    style={{ width: `${[78, 64, 72, 58, 70, 50, 66, 62, 54, 60, 48][index] || 60}%` }}
-                  />
+                <div className="mt-4 min-w-0">
+                  <p className="break-words text-[clamp(1.25rem,2.5vw,1.85rem)] font-semibold leading-tight tracking-tight text-white">
+                    {value || "TBD"}
+                  </p>
+                  <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-white/10">
+                    <div
+                      className="h-full rounded-full bg-teal-200/80"
+                      style={{ width: `${[78, 64, 72, 58, 70, 50, 66, 62, 54, 60, 48][index] || 60}%` }}
+                    />
+                  </div>
                 </div>
                 <p className="mt-2 text-xs text-teal-200/70">Investor KPI</p>
               </div>
             );
           })}
-        </div>
-        <div className="m-4 mt-0 overflow-x-auto rounded-3xl border border-white/10 bg-black/35">
-          <div className="grid min-w-[680px] grid-cols-4 border-b border-white/10 px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
-            <span>Metric</span>
-            <span>Current</span>
-            <span>Benchmark</span>
-            <span>Status</span>
-          </div>
-          {benchmarkRows.map((row) => (
-            <div key={row.metric} className="grid min-w-[680px] grid-cols-4 gap-3 border-b border-white/10 px-4 py-3 text-sm last:border-b-0">
-              <span className="font-medium text-white">{row.metric}</span>
-              <span className="text-zinc-300">{extractMetricValue(section.content, row.metric) || "TBD"}</span>
-              <span className="text-teal-100/80">{row.benchmark}</span>
-              <span className="text-zinc-400">{row.status}</span>
-            </div>
-          ))}
         </div>
       </div>
     );
@@ -2093,9 +2072,11 @@ function getReportArticleClass(section: ReportSection) {
 function AnalysisNotes({
   children,
   compact,
+  label = "Full analysis notes",
 }: {
   children: ReactNode;
   compact: boolean;
+  label?: string;
 }) {
   if (!compact) {
     return <>{children}</>;
@@ -2104,7 +2085,7 @@ function AnalysisNotes({
   return (
     <details className="group rounded-2xl border border-white/10 bg-black/25 p-4">
       <summary className="cursor-pointer list-none text-xs font-semibold uppercase tracking-[0.22em] text-zinc-500 transition hover:text-zinc-300">
-        Full analysis notes
+        {label}
       </summary>
       <div className="mt-4 border-t border-white/10 pt-4">
         {children}
@@ -3429,6 +3410,10 @@ const ReportPanel = memo(function ReportPanel({
       <div className="space-y-5 p-4 sm:p-5">
         {visibleSections.map((section, index) => {
           const Icon = section.icon;
+          const isFinancialDashboard = section.field === "financialDashboard";
+          const detailsContent = isFinancialDashboard
+            ? getMetricDetailsContent(section.title, section.content)
+            : section.content;
 
           return (
             <article
@@ -3452,13 +3437,20 @@ const ReportPanel = memo(function ReportPanel({
                   </div>
                   <div className="mt-4 border-t border-white/10 pt-4">
                     <ExecutiveSummaryVisual section={section} />
-                    {hasPremiumSectionVisual(section) && section.field !== "executiveSummary" ? (
+                    {hasPremiumSectionVisual(section) &&
+                    section.field !== "executiveSummary" &&
+                    section.field !== "financialDashboard" ? (
                       <ExecutiveInsightBanner section={section} />
                     ) : null}
                     <PremiumSectionVisual section={section} />
-                    <AnalysisNotes compact={hasPremiumSectionVisual(section)}>
-                      <MarkdownRenderer content={section.content} />
-                    </AnalysisNotes>
+                    {detailsContent.trim() ? (
+                      <AnalysisNotes
+                        compact={hasPremiumSectionVisual(section)}
+                        label={isFinancialDashboard ? "Metric Details" : "Full analysis notes"}
+                      >
+                        <MarkdownRenderer content={detailsContent} />
+                      </AnalysisNotes>
+                    ) : null}
                   </div>
                 </div>
               </div>

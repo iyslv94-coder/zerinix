@@ -828,14 +828,14 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
                     : normalizedTitle.includes("unit economics")
                       ? ["Gross Margin", "CAC", "LTV", "Payback"]
                       : financialDashboardMetrics;
-          const columns = normalizedTitle.includes("financial dashboard") ? 3 : labels.length > 6 ? 4 : labels.length;
+          const columns = normalizedTitle.includes("financial dashboard") ? 2 : labels.length > 6 ? 4 : labels.length;
           const itemWidth = (bodyWidth - (columns - 1) * 3) / columns;
 
           labels.forEach((item, index) => {
             const label = typeof item === "string" ? item : item.label;
             const aliases = typeof item === "string" ? [item] : item.aliases;
             const x = bodyX + (index % columns) * (itemWidth + 3);
-            const itemHeight = normalizedTitle.includes("financial dashboard") ? 13 : 10;
+            const itemHeight = normalizedTitle.includes("financial dashboard") ? 16 : 10;
             const itemY = visualY + Math.floor(index / columns) * (itemHeight + 3);
             const score = extractScore(content, label) ?? [42, 62, 84, 56][index] ?? 60;
             const value = extractMetricValueFromAliases(content, aliases);
@@ -848,8 +848,11 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
             pdf.text(label, x + 2, itemY + 3.2, { maxWidth: itemWidth - 4 });
             if (normalizedTitle.includes("financial dashboard") && value) {
               pdf.setTextColor("#f4f4f5");
-              pdf.setFontSize(7.2);
-              pdf.text(value, x + 2, itemY + 8.4, { maxWidth: itemWidth - 4 });
+              pdf.setFontSize(8);
+              pdf.text(pdf.splitTextToSize(value, itemWidth - 4).slice(0, 2), x + 2, itemY + 8.1, {
+                lineHeightFactor: 1.12,
+                maxWidth: itemWidth - 4,
+              });
               return;
             }
             pdf.setFillColor("#27272a");
@@ -866,7 +869,7 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
             );
           });
 
-          return normalizedTitle.includes("financial dashboard") ? 52 : labels.length > 6 ? 38 : 22;
+          return normalizedTitle.includes("financial dashboard") ? 112 : labels.length > 6 ? 38 : 22;
         }
 
         return 0;
@@ -876,7 +879,7 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
         const normalizedTitle = title.toLowerCase();
 
         if (normalizedTitle.includes("financial dashboard")) {
-          return 52;
+          return 112;
         }
 
         if (normalizedTitle.includes("swot")) {
