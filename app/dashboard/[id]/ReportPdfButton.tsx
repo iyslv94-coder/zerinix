@@ -111,6 +111,20 @@ function extractMetricValueFromAliases(
   return "";
 }
 
+function formatMetricCardValue(value: string) {
+  const cleanValue = value.trim().replace(/\*\*/g, "");
+
+  if (!cleanValue) {
+    return "";
+  }
+
+  return cleanValue
+    .split(/\b(?:formula|assumptions?|confidence|benchmark(?: source| comparison)?|explanation|justification|source)\b\s*[:\-–—]/i)[0]
+    .split(/\s+(?:based on|using|assuming|calculated from|derived from)\s+/i)[0]
+    .split(/\s*[;|]\s*/)[0]
+    .trim();
+}
+
 function extractScore(content: string, label: string) {
   const value = extractMetricValue(content, label);
   const scoreMatch = value.match(/\b(\d{1,3})\b/);
@@ -217,11 +231,23 @@ function removeDuplicateVisualText(title: string, content: string) {
 
   if (normalizedTitle.includes("financial dashboard")) {
     const metricPattern =
-      /^(?:[-*]\s*)?(?:\*\*)?(arr|mrr|revenue|expenses|gross margin|cac|ltv|payback(?: period)?|burn(?: rate)?|runway|ebitda|break[- ]?even(?: month)?|investment(?: needed)?)(?:\*\*)?\s*[:\-–—]/i;
+      /^(?:[-*]\s*)?(?:\*\*)?(arr|mrr|revenue|expenses|gross margin|cac|ltv|payback(?: period)?|burn(?: rate)?|runway|ebitda|break[- ]?even(?: month)?|investment(?: needed)?)(?:\*\*)?\s*[:\-–—]\s*/i;
+    const detailMarker =
+      /\b(?:formula|assumptions?|confidence|benchmark(?: source| comparison)?|explanation|justification|source)\b\s*[:\-–—]/i;
 
     return lines
-      .filter((line) => !metricPattern.test(line))
-      .filter((line) => !/\b(arr|mrr|gross margin|cac|ltv|payback|burn rate|runway|ebitda|break[- ]?even|investment needed)\b\s*(?:is|=|:|\-|–|—)/i.test(line))
+      .map((line) => {
+        if (!metricPattern.test(line)) {
+          return line;
+        }
+
+        const markerMatch = line.match(detailMarker);
+
+        return markerMatch?.index !== undefined
+          ? line.slice(markerMatch.index).trim()
+          : "";
+      })
+      .filter(Boolean)
       .join("\n");
   }
 
@@ -838,7 +864,9 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
             const itemHeight = normalizedTitle.includes("financial dashboard") ? 16 : 10;
             const itemY = visualY + Math.floor(index / columns) * (itemHeight + 3);
             const score = extractScore(content, label) ?? [42, 62, 84, 56][index] ?? 60;
-            const value = extractMetricValueFromAliases(content, aliases);
+            const value = formatMetricCardValue(
+              extractMetricValueFromAliases(content, aliases)
+            );
 
             pdf.setFillColor("#18181b");
             pdf.setDrawColor("#27272a");

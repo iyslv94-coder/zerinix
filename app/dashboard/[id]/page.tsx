@@ -141,6 +141,20 @@ function extractMetricValueFromAliases(
   return "";
 }
 
+function formatMetricCardValue(value: string) {
+  const cleanValue = value.trim().replace(/\*\*/g, "");
+
+  if (!cleanValue) {
+    return "";
+  }
+
+  return cleanValue
+    .split(/\b(?:formula|assumptions?|confidence|benchmark(?: source| comparison)?|explanation|justification|source)\b\s*[:\-–—]/i)[0]
+    .split(/\s+(?:based on|using|assuming|calculated from|derived from)\s+/i)[0]
+    .split(/\s*[;|]\s*/)[0]
+    .trim();
+}
+
 function removeDuplicateVisualText(title: string, content: string) {
   const normalizedTitle = title.toLowerCase();
   const lines = content
@@ -151,15 +165,61 @@ function removeDuplicateVisualText(title: string, content: string) {
 
   if (normalizedTitle.includes("financial dashboard")) {
     const metricPattern =
-      /^(?:[-*]\s*)?(?:\*\*)?(arr|mrr|revenue|expenses|gross margin|cac|ltv|payback(?: period)?|burn(?: rate)?|runway|ebitda|break[- ]?even(?: month)?|investment(?: needed)?)(?:\*\*)?\s*[:\-–—]/i;
+      /^(?:[-*]\s*)?(?:\*\*)?(arr|mrr|revenue|expenses|gross margin|cac|ltv|payback(?: period)?|burn(?: rate)?|runway|ebitda|break[- ]?even(?: month)?|investment(?: needed)?)(?:\*\*)?\s*[:\-–—]\s*/i;
+    const detailMarker =
+      /\b(?:formula|assumptions?|confidence|benchmark(?: source| comparison)?|explanation|justification|source)\b\s*[:\-–—]/i;
 
     return lines
-      .filter((line) => !metricPattern.test(line))
-      .filter((line) => !/\b(arr|mrr|gross margin|cac|ltv|payback|burn rate|runway|ebitda|break[- ]?even|investment needed)\b\s*(?:is|=|:|\-|–|—)/i.test(line))
+      .map((line) => {
+        if (!metricPattern.test(line)) {
+          return line;
+        }
+
+        const markerMatch = line.match(detailMarker);
+
+        return markerMatch?.index !== undefined
+          ? line.slice(markerMatch.index).trim()
+          : "";
+      })
+      .filter(Boolean)
       .join("\n");
   }
 
   return content;
+}
+
+function getMetricDetailsContent(title: string, content: string) {
+  if (title.toLowerCase().includes("financial dashboard")) {
+    const metricPattern =
+      /^(?:[-*]\s*)?(?:\*\*)?(arr|mrr|revenue|expenses|gross margin|cac|ltv|payback(?: period)?|burn(?: rate)?|runway|ebitda|break[- ]?even(?: month)?|investment(?: needed)?)(?:\*\*)?\s*[:\-–—]\s*/i;
+    const detailMarker =
+      /\b(?:formula|assumptions?|confidence|benchmark(?: source| comparison)?|explanation|justification|source)\b\s*[:\-–—]/i;
+
+    return content
+      .replace(/\r\n/g, "\n")
+      .split("\n")
+      .map((line) => {
+        const trimmed = line.trim();
+
+        if (!trimmed) {
+          return "";
+        }
+
+        if (!metricPattern.test(trimmed)) {
+          return trimmed;
+        }
+
+        const markerMatch = trimmed.match(detailMarker);
+
+        return markerMatch?.index !== undefined
+          ? trimmed.slice(markerMatch.index).trim()
+          : "";
+      })
+      .filter(Boolean)
+      .join("\n");
+  }
+
+  return removeDuplicateVisualText(title, content);
 }
 
 function extractScore(content: string, label: string) {
@@ -754,9 +814,11 @@ function ReportSectionVisual({
             Live model
           </span>
         </div>
-        <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-3 p-4">
+        <div className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-3">
           {financialDashboardMetrics.map((metric, index) => {
-            const value = extractMetricValueFromAliases(content, metric.aliases);
+            const value = formatMetricCardValue(
+              extractMetricValueFromAliases(content, metric.aliases)
+            );
 
             return (
               <div key={metric.label} className="flex min-h-36 min-w-0 flex-col justify-between rounded-3xl border border-white/10 bg-black/35 p-4 shadow-xl shadow-black/20">
@@ -1346,7 +1408,7 @@ export default async function ReportDetailPage({
                 .toLowerCase()
                 .includes("financial dashboard");
               const detailsContent = isFinancialDashboard
-                ? removeDuplicateVisualText(section.title, section.content)
+                ? getMetricDetailsContent(section.title, section.content)
                 : section.content;
 
               return (

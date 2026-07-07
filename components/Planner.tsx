@@ -1081,6 +1081,20 @@ function extractMetricValueFromAliases(
   return "";
 }
 
+function formatMetricCardValue(value: string) {
+  const cleanValue = value.trim().replace(/\*\*/g, "");
+
+  if (!cleanValue) {
+    return "";
+  }
+
+  return cleanValue
+    .split(/\b(?:formula|assumptions?|confidence|benchmark(?: source| comparison)?|explanation|justification|source)\b\s*[:\-–—]/i)[0]
+    .split(/\s+(?:based on|using|assuming|calculated from|derived from)\s+/i)[0]
+    .split(/\s*[;|]\s*/)[0]
+    .trim();
+}
+
 function extractScore(content: string, label: string) {
   const value = extractMetricValue(content, label);
   const scoreMatch = value.match(/\b(\d{1,3})\b/);
@@ -1154,11 +1168,23 @@ function removeDuplicateVisualText(title: string, content: string) {
 
   if (normalizedTitle.includes("financial dashboard")) {
     const metricPattern =
-      /^(?:[-*]\s*)?(?:\*\*)?(arr|mrr|revenue|expenses|gross margin|cac|ltv|payback(?: period)?|burn(?: rate)?|runway|ebitda|break[- ]?even(?: month)?|investment(?: needed)?)(?:\*\*)?\s*[:\-–—]/i;
+      /^(?:[-*]\s*)?(?:\*\*)?(arr|mrr|revenue|expenses|gross margin|cac|ltv|payback(?: period)?|burn(?: rate)?|runway|ebitda|break[- ]?even(?: month)?|investment(?: needed)?)(?:\*\*)?\s*[:\-–—]\s*/i;
+    const detailMarker =
+      /\b(?:formula|assumptions?|confidence|benchmark(?: source| comparison)?|explanation|justification|source)\b\s*[:\-–—]/i;
 
     return lines
-      .filter((line) => !metricPattern.test(line))
-      .filter((line) => !/\b(arr|mrr|gross margin|cac|ltv|payback|burn rate|runway|ebitda|break[- ]?even|investment needed)\b\s*(?:is|=|:|\-|–|—)/i.test(line))
+      .map((line) => {
+        if (!metricPattern.test(line)) {
+          return line;
+        }
+
+        const markerMatch = line.match(detailMarker);
+
+        return markerMatch?.index !== undefined
+          ? line.slice(markerMatch.index).trim()
+          : "";
+      })
+      .filter(Boolean)
       .join("\n");
   }
 
@@ -1176,6 +1202,36 @@ function removeDuplicateVisualText(title: string, content: string) {
 }
 
 function getMetricDetailsContent(title: string, content: string) {
+  if (title.toLowerCase().includes("financial dashboard")) {
+    const metricPattern =
+      /^(?:[-*]\s*)?(?:\*\*)?(arr|mrr|revenue|expenses|gross margin|cac|ltv|payback(?: period)?|burn(?: rate)?|runway|ebitda|break[- ]?even(?: month)?|investment(?: needed)?)(?:\*\*)?\s*[:\-–—]\s*/i;
+    const detailMarker =
+      /\b(?:formula|assumptions?|confidence|benchmark(?: source| comparison)?|explanation|justification|source)\b\s*[:\-–—]/i;
+
+    return content
+      .replace(/\r\n/g, "\n")
+      .split("\n")
+      .map((line) => {
+        const trimmed = line.trim();
+
+        if (!trimmed) {
+          return "";
+        }
+
+        if (!metricPattern.test(trimmed)) {
+          return trimmed;
+        }
+
+        const markerMatch = trimmed.match(detailMarker);
+
+        return markerMatch?.index !== undefined
+          ? trimmed.slice(markerMatch.index).trim()
+          : "";
+      })
+      .filter(Boolean)
+      .join("\n");
+  }
+
   const details = removeDuplicateVisualText(title, content);
 
   if (details.trim()) {
@@ -1721,9 +1777,11 @@ function PremiumSectionVisual({ section }: { section: ReportSection }) {
             Live model
           </span>
         </div>
-        <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-3 p-4">
+        <div className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-3">
           {financialDashboardMetrics.map((metric, index) => {
-            const value = extractMetricValueFromAliases(section.content, metric.aliases);
+            const value = formatMetricCardValue(
+              extractMetricValueFromAliases(section.content, metric.aliases)
+            );
 
             return (
               <div
@@ -3131,17 +3189,19 @@ const ReportPanel = memo(function ReportPanel({
                     : section.field === "unitEconomics"
                       ? ["Gross Margin", "CAC", "LTV", "Payback"]
                       : ["Rivalry", "Entrants", "Buyer", "Substitutes"];
-        const columns = section.field === "financialDashboard" ? 3 : labels.length > 6 ? 4 : labels.length;
+        const columns = section.field === "financialDashboard" ? 2 : labels.length > 6 ? 4 : labels.length;
         const itemWidth = (visualWidth - (columns - 1) * 3) / columns;
 
         labels.forEach((item, index) => {
           const label = typeof item === "string" ? item : item.label;
           const aliases = typeof item === "string" ? [item] : item.aliases;
           const x = bodyX + (index % columns) * (itemWidth + 3);
-          const itemHeight = section.field === "financialDashboard" ? 13 : 10;
+          const itemHeight = section.field === "financialDashboard" ? 16 : 10;
           const itemY = visualY + Math.floor(index / columns) * (itemHeight + 3);
           const score = extractScore(section.content, label) ?? [42, 62, 84, 56][index] ?? 60;
-          const value = extractMetricValueFromAliases(section.content, aliases);
+          const value = formatMetricCardValue(
+            extractMetricValueFromAliases(section.content, aliases)
+          );
 
           pdf.setFillColor("#18181b");
           pdf.setDrawColor("#27272a");
@@ -3151,8 +3211,11 @@ const ReportPanel = memo(function ReportPanel({
           pdf.text(label, x + 2, itemY + 3.2, { maxWidth: itemWidth - 4 });
           if (section.field === "financialDashboard" && value) {
             pdf.setTextColor("#f4f4f5");
-            pdf.setFontSize(7.2);
-            pdf.text(value, x + 2, itemY + 8.4, { maxWidth: itemWidth - 4 });
+            pdf.setFontSize(8);
+            pdf.text(pdf.splitTextToSize(value, itemWidth - 4).slice(0, 2), x + 2, itemY + 8.1, {
+              lineHeightFactor: 1.12,
+              maxWidth: itemWidth - 4,
+            });
             return;
           }
           pdf.setFillColor("#27272a");
@@ -3169,7 +3232,7 @@ const ReportPanel = memo(function ReportPanel({
           );
         });
 
-        return section.field === "financialDashboard" ? 52 : labels.length > 6 ? 38 : 22;
+        return section.field === "financialDashboard" ? 112 : labels.length > 6 ? 38 : 22;
       };
 
       const drawTableOfContents = () => {
