@@ -467,10 +467,10 @@ function buildLanguageInstructions(language: ResponseLanguage) {
     "Each report section must contribute a unique analytical job. Do not restate conclusions, paragraphs, metrics, or examples assigned to another section.",
     "Respect strict section ownership: Executive Summary = executive decision only; Problem = customer pain only; Solution = product only; Target Customer = ICP only; Market Opportunity = market attractiveness without TAM/SAM/SOM calculations; TAM/SAM/SOM = market sizing only; Competitor Landscape = competitors only; Business Model = revenue mechanics only; SWOT = internal strengths/weaknesses plus non-duplicative external bullets; Porter's Five Forces = industry forces only; Pricing = pricing logic only; Go-to-Market = customer acquisition only; Sales Strategy = enterprise sales process only; Unit Economics = financial unit metrics only; Financial Dashboard = high-level financial KPIs only; Scenario Analysis = future scenarios only; KPI Dashboard = operating metric values only; KPIs = governance cadence and decision triggers only; Executive Recommendation = final investment decision only; Risks = risks only; Founder Roadmap = founder execution plan only; 30-60-90 Roadmap = timeline only; Financial Assumptions = assumptions only; Founder Score = founder evaluation only; Sources / Assumptions = sources only.",
     "Never repeat the same metric more than once unless necessary. If a metric appears in Unit Economics, later financial sections may summarize it but must not explain it again.",
-    "Use one consistent financial assumption set across Unit Economics, Financial Dashboard, Scenario Analysis, Financial Assumptions, and Executive Recommendation. Reuse exact ASP, ARR, MRR, CAC, LTV, payback, burn, runway, and investment values unless explicitly updating the scenario.",
-    "The Canonical Financial Assumptions block in the user input is the single source of truth for all financial metrics. No section may invent, override, or independently recalculate those metrics.",
-    "Executive Summary, Business Model, Unit Economics, KPI Dashboard, Financial Dashboard, Scenario Analysis, Financial Assumptions, and Executive Recommendation must reference the same canonical values whenever financial metrics appear.",
-    "If a canonical metric has Low confidence, label it as an assumption needing validation instead of producing a different number.",
+    "Use one internally consistent AI-generated financial model across Unit Economics, Financial Dashboard, Scenario Analysis, Financial Assumptions, and Executive Recommendation. Reuse exact TAM, SAM, SOM, ARPA, ARR, MRR, CAC, LTV, payback, burn, runway, EBITDA, break-even, and investment-needed values unless explicitly updating a scenario.",
+    "The AI-Driven Financial Modeling Engine block in the user input defines how to calculate dynamic financial metrics. Build the values from the user's business idea, target customer, pricing model, industry, geography, and business model.",
+    "Executive Summary, Business Model, Unit Economics, KPI Dashboard, Financial Dashboard, Scenario Analysis, Financial Assumptions, and Executive Recommendation must reference the same AI-generated financial model whenever financial metrics appear.",
+    "Every financial estimate must include a confidence level. If confidence is Low, label it as an assumption needing validation instead of presenting it as a verified benchmark.",
     "Keep payback, LTV:CAC, CAC, and runway realistic for the sector and capital intensity. If a result looks unusually strong, label it as a sensitivity or low-confidence assumption rather than a base case.",
     "Recommendation confidence must match evidence quality: RAISE normally requires 70-90 with strong validation; WAIT normally sits at 40-70; PIVOT or NO GO normally sits at 50-80 depending on evidence. Do not use extreme confidence values unless justified.",
     "Do not fake source authority. If a precise source is unavailable, use assumption language such as 'Assumption based on comparable sector benchmarks', 'Needs validation with primary research', or 'Low confidence until verified'.",
@@ -610,8 +610,8 @@ Report quality rules:
 - Do not repeat ideas, metrics, examples, or conclusions that belong to other sections; this section must add unique value.
 - Remove filler phrases such as "It is important to", "Businesses should", "This strategy can help", "In today's market", and "By leveraging".
 - Maintain exact financial consistency with the same assumption set across Unit Economics, Financial Dashboard, Scenario Analysis, Financial Assumptions, and Executive Recommendation.
-- Use the Canonical Financial Assumptions block as the only source of truth for ASP, CAC, LTV, Gross Margin, MRR, ARR, Payback, Burn Rate, Runway, EBITDA, and Break-even.
-- Do not invent or override financial values. If the canonical value is low-confidence, call it an assumption and state what must be validated.
+- Use the AI-Driven Financial Modeling Engine block to calculate one dynamic internal model for TAM, SAM, SOM, ARPA, CAC, LTV, Gross Margin, MRR, ARR, Payback, Burn Rate, Runway, EBITDA, Break-even Month, and Investment Needed.
+- Reuse that single generated model everywhere. Do not create conflicting financial values in separate sections. If a generated value is low-confidence, call it an assumption and state what must be validated.
 - Align recommendation confidence with evidence quality; avoid extreme confidence values unless the evidence clearly supports them.
 - Use honest assumption language instead of vague source claims such as "industry reports".
 - Finish with a complete sentence or complete bullet. Do not end mid-sentence.
@@ -754,8 +754,8 @@ Report quality rules:
 - Follow the section ownership contract exactly; do not borrow content assigned to another section.
 - Keep each JSON value concise, dense, analytical, investor-ready, and complete.
 - Do not repeat ideas, metrics, examples, or conclusions across sections.
-- Use the Canonical Financial Assumptions block as the only source of truth for ASP, CAC, LTV, Gross Margin, MRR, ARR, Payback, Burn Rate, Runway, EBITDA, and Break-even.
-- Do not invent or override financial values. If the canonical value is low-confidence, call it an assumption and state what must be validated.
+- Use the AI-Driven Financial Modeling Engine block to calculate one dynamic internal model for TAM, SAM, SOM, ARPA, CAC, LTV, Gross Margin, MRR, ARR, Payback, Burn Rate, Runway, EBITDA, Break-even Month, and Investment Needed.
+- Reuse that single generated model everywhere. Do not create conflicting financial values in separate sections. If a generated value is low-confidence, call it an assumption and state what must be validated.
 - Align recommendation confidence with evidence quality; avoid extreme confidence values unless the evidence clearly supports them.
 - Use honest assumption language instead of vague source claims such as "industry reports".
 - Finish every section with a complete sentence or complete bullet. Never end mid-sentence.
