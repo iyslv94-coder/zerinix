@@ -598,6 +598,14 @@ Do not generate business-plan sections here. Do not suggest website URLs, domain
     };
 
     if (!productionLimit.allowed) {
+      console.info("[api:market-analysis] quota denied before provider call", {
+        reportField: usageReportField,
+        reportRequestId: reportRequestId || null,
+        providerCalled: false,
+        quotaConsumed: false,
+        failureReason: productionLimit.reason,
+      });
+
       return NextResponse.json(
         { error: productionLimit.reason },
         { status: 429 }
@@ -642,6 +650,7 @@ Do not generate business-plan sections here. Do not suggest website URLs, domain
           responseTimeMs: 0,
           metadata: {
             quota_event: false,
+            quota_consumed: false,
             report_request_id: reportRequestId || null,
             usage_kind: "full_report_cache_hit",
             actual_ai_call: false,
@@ -721,6 +730,14 @@ Do not include markdown code fences, braces inside string values, or commentary 
       const startedAt = Date.now();
 
       try {
+        console.info("[api:market-analysis] provider call started", {
+          reportField: FULL_REPORT_FIELD,
+          reportRequestId: reportRequestId || null,
+          model,
+          providerCalled: true,
+          quotaConsumed: false,
+        });
+
         const response = await client.responses.create(
           {
             model,
@@ -782,13 +799,22 @@ Do not include markdown code fences, braces inside string values, or commentary 
           cacheHit: false,
           responseTimeMs,
           metadata: {
-            quota_event: false,
+            quota_event: !productionLimit.quotaAlreadyCharged,
+            quota_consumed: !productionLimit.quotaAlreadyCharged,
             report_request_id: reportRequestId || null,
             usage_kind: "full_report_generation",
             actual_ai_call: true,
             max_ai_calls_per_report: MAX_AI_CALLS_PER_MARKET_REPORT,
             job: queuedJob,
           },
+        });
+
+        console.info("[api:market-analysis] provider call completed", {
+          reportField: FULL_REPORT_FIELD,
+          reportRequestId: reportRequestId || null,
+          model,
+          providerCalled: true,
+          quotaConsumed: !productionLimit.quotaAlreadyCharged,
         });
 
         return new Response(encoder.encode(serializeMarketReportChunks(parsedReport)), {
@@ -812,12 +838,24 @@ Do not include markdown code fences, braces inside string values, or commentary 
           responseTimeMs: Date.now() - startedAt,
           metadata: {
             quota_event: false,
+            quota_consumed: false,
             report_request_id: reportRequestId || null,
             usage_kind: "full_report_generation",
             actual_ai_call: true,
             max_ai_calls_per_report: MAX_AI_CALLS_PER_MARKET_REPORT,
             job: queuedJob,
+            failure_reason:
+              error instanceof Error && error.message ? error.message : "GenerationFailed",
           },
+        });
+        console.info("[api:market-analysis] provider call failed", {
+          reportField: FULL_REPORT_FIELD,
+          reportRequestId: reportRequestId || null,
+          model,
+          providerCalled: true,
+          quotaConsumed: false,
+          failureReason:
+            error instanceof Error && error.message ? error.message : "GenerationFailed",
         });
         logServerError("api:market-analysis:full-report", error);
 
@@ -857,6 +895,7 @@ Do not include markdown code fences, braces inside string values, or commentary 
         responseTimeMs: 0,
         metadata: {
           ...sectionUsageMetadata,
+          quota_consumed: false,
           cachedEstimatedCostUsd: cachedResponse.estimatedCostUsd,
         },
       });
@@ -888,6 +927,14 @@ Do not include markdown code fences, braces inside string values, or commentary 
     });
     const startedAt = Date.now();
 
+    console.info("[api:market-analysis] provider call started", {
+      reportField,
+      reportRequestId: reportRequestId || null,
+      model,
+      providerCalled: true,
+      quotaConsumed: false,
+    });
+
     const stream = await client.responses
       .create(
         {
@@ -913,6 +960,16 @@ Do not include markdown code fences, braces inside string values, or commentary 
         { signal: req.signal }
       )
       .catch(async (error) => {
+        console.info("[api:market-analysis] provider request failed", {
+          reportField,
+          reportRequestId: reportRequestId || null,
+          model,
+          providerCalled: true,
+          quotaConsumed: false,
+          failureReason:
+            error instanceof Error && error.message ? error.message : "ProviderError",
+        });
+
         await recordAiUsage(supabase, {
           userId: user.id,
           endpoint: "/api/market-analysis",
@@ -927,8 +984,11 @@ Do not include markdown code fences, braces inside string values, or commentary 
           responseTimeMs: Date.now() - startedAt,
           metadata: {
             ...sectionUsageMetadata,
+            quota_consumed: false,
             job: queuedJob,
             phase: "openai_request",
+            failure_reason:
+              error instanceof Error && error.message ? error.message : "ProviderError",
           },
         });
 
@@ -1013,8 +1073,18 @@ Do not include markdown code fences, braces inside string values, or commentary 
               responseTimeMs,
               metadata: {
                 ...sectionUsageMetadata,
+                quota_event: !productionLimit.quotaAlreadyCharged,
+                quota_consumed: !productionLimit.quotaAlreadyCharged,
                 job: queuedJob,
               },
+            });
+
+            console.info("[api:market-analysis] provider call completed", {
+              reportField,
+              reportRequestId: reportRequestId || null,
+              model,
+              providerCalled: true,
+              quotaConsumed: !productionLimit.quotaAlreadyCharged,
             });
 
             controller.close();
@@ -1033,7 +1103,10 @@ Do not include markdown code fences, braces inside string values, or commentary 
               responseTimeMs: Date.now() - startedAt,
               metadata: {
                 ...sectionUsageMetadata,
+                quota_consumed: false,
                 job: queuedJob,
+                failure_reason:
+                  error instanceof Error && error.message ? error.message : "GenerationFailed",
               },
             });
             logServerError("api:market-analysis:stream", error);

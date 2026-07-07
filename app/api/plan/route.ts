@@ -558,6 +558,14 @@ Write only the content for this section. Do not write a JSON object, field name,
     };
 
     if (!productionLimit.allowed) {
+      console.info("[api:plan] quota denied before provider call", {
+        reportField: usageReportField,
+        reportRequestId: reportRequestId || null,
+        providerCalled: false,
+        quotaConsumed: false,
+        failureReason: productionLimit.reason,
+      });
+
       return NextResponse.json(
         { error: productionLimit.reason },
         { status: 429 }
@@ -602,6 +610,7 @@ Write only the content for this section. Do not write a JSON object, field name,
           responseTimeMs: 0,
           metadata: {
             quota_event: false,
+            quota_consumed: false,
             report_request_id: reportRequestId || null,
             usage_kind: "full_report_cache_hit",
             actual_ai_call: false,
@@ -681,6 +690,14 @@ Report quality rules:
       const startedAt = Date.now();
 
       try {
+        console.info("[api:plan] provider call started", {
+          reportField: FULL_REPORT_FIELD,
+          reportRequestId: reportRequestId || null,
+          model,
+          providerCalled: true,
+          quotaConsumed: false,
+        });
+
         const response = await client.responses.create(
           {
             model,
@@ -735,13 +752,22 @@ Report quality rules:
           cacheHit: false,
           responseTimeMs,
           metadata: {
-            quota_event: false,
+            quota_event: !productionLimit.quotaAlreadyCharged,
+            quota_consumed: !productionLimit.quotaAlreadyCharged,
             report_request_id: reportRequestId || null,
             usage_kind: "full_report_generation",
             actual_ai_call: true,
             max_ai_calls_per_report: MAX_AI_CALLS_PER_PLAN_REPORT,
             job: queuedJob,
           },
+        });
+
+        console.info("[api:plan] provider call completed", {
+          reportField: FULL_REPORT_FIELD,
+          reportRequestId: reportRequestId || null,
+          model,
+          providerCalled: true,
+          quotaConsumed: !productionLimit.quotaAlreadyCharged,
         });
 
         return new Response(encoder.encode(serializePlanReportChunks(parsedReport)), {
@@ -765,12 +791,24 @@ Report quality rules:
           responseTimeMs: Date.now() - startedAt,
           metadata: {
             quota_event: false,
+            quota_consumed: false,
             report_request_id: reportRequestId || null,
             usage_kind: "full_report_generation",
             actual_ai_call: true,
             max_ai_calls_per_report: MAX_AI_CALLS_PER_PLAN_REPORT,
             job: queuedJob,
+            failure_reason:
+              error instanceof Error && error.message ? error.message : "GenerationFailed",
           },
+        });
+        console.info("[api:plan] provider call failed", {
+          reportField: FULL_REPORT_FIELD,
+          reportRequestId: reportRequestId || null,
+          model,
+          providerCalled: true,
+          quotaConsumed: false,
+          failureReason:
+            error instanceof Error && error.message ? error.message : "GenerationFailed",
         });
         logServerError("api:plan:full-report", error);
 
@@ -810,6 +848,7 @@ Report quality rules:
         responseTimeMs: 0,
         metadata: {
           ...sectionUsageMetadata,
+          quota_consumed: false,
           cachedEstimatedCostUsd: cachedResponse.estimatedCostUsd,
         },
       });
@@ -841,6 +880,14 @@ Report quality rules:
     });
     const startedAt = Date.now();
 
+    console.info("[api:plan] provider call started", {
+      reportField,
+      reportRequestId: reportRequestId || null,
+      model,
+      providerCalled: true,
+      quotaConsumed: false,
+    });
+
     const stream = await client.responses
       .create(
         {
@@ -859,6 +906,16 @@ Report quality rules:
         { signal: req.signal }
       )
       .catch(async (error) => {
+        console.info("[api:plan] provider request failed", {
+          reportField,
+          reportRequestId: reportRequestId || null,
+          model,
+          providerCalled: true,
+          quotaConsumed: false,
+          failureReason:
+            error instanceof Error && error.message ? error.message : "ProviderError",
+        });
+
         await recordAiUsage(supabase, {
           userId: user.id,
           endpoint: "/api/plan",
@@ -873,8 +930,11 @@ Report quality rules:
           responseTimeMs: Date.now() - startedAt,
           metadata: {
             ...sectionUsageMetadata,
+            quota_consumed: false,
             job: queuedJob,
             phase: "openai_request",
+            failure_reason:
+              error instanceof Error && error.message ? error.message : "ProviderError",
           },
         });
 
@@ -950,8 +1010,18 @@ Report quality rules:
               responseTimeMs,
               metadata: {
                 ...sectionUsageMetadata,
+                quota_event: !productionLimit.quotaAlreadyCharged,
+                quota_consumed: !productionLimit.quotaAlreadyCharged,
                 job: queuedJob,
               },
+            });
+
+            console.info("[api:plan] provider call completed", {
+              reportField,
+              reportRequestId: reportRequestId || null,
+              model,
+              providerCalled: true,
+              quotaConsumed: !productionLimit.quotaAlreadyCharged,
             });
 
             controller.close();
@@ -970,7 +1040,10 @@ Report quality rules:
               responseTimeMs: Date.now() - startedAt,
               metadata: {
                 ...sectionUsageMetadata,
+                quota_consumed: false,
                 job: queuedJob,
+                failure_reason:
+                  error instanceof Error && error.message ? error.message : "GenerationFailed",
               },
             });
             logServerError("api:plan:stream", error);

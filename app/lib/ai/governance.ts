@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { logServerError } from "@/app/lib/security/errors";
+import { QUOTA_COUNTING_USAGE_KIND_EXCLUSION } from "@/app/lib/ai/quota-rules.mjs";
 
 export type PlanTier = "free" | "pro" | "business";
 export type AiRequestKind = "simple" | "business_plan" | "market_analysis";
@@ -197,6 +198,7 @@ export async function checkUsageAllowance(
       .eq("user_id", userId)
       .eq("status", "completed")
       .eq("metadata->>quota_event", "true")
+      .neq("metadata->>usage_kind", QUOTA_COUNTING_USAGE_KIND_EXCLUSION)
       .gte("created_at", dayStart),
     supabase
       .from("ai_usage_events")
@@ -204,6 +206,7 @@ export async function checkUsageAllowance(
       .eq("user_id", userId)
       .eq("status", "completed")
       .eq("metadata->>quota_event", "true")
+      .neq("metadata->>usage_kind", QUOTA_COUNTING_USAGE_KIND_EXCLUSION)
       .gte("created_at", monthStart),
   ]);
 

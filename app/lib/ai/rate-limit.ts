@@ -9,6 +9,7 @@ import {
   selectAiModel,
   type AiRequestKind,
 } from "@/app/lib/ai/governance";
+import { QUOTA_COUNTING_USAGE_KIND_EXCLUSION } from "@/app/lib/ai/quota-rules.mjs";
 
 type AiProductionRateLimitInput = {
   supabase: SupabaseClient;
@@ -43,6 +44,7 @@ export async function checkAiProductionRateLimit({
       .eq("user_id", userId)
       .eq("status", "completed")
       .eq("metadata->>quota_event", "true")
+      .neq("metadata->>usage_kind", QUOTA_COUNTING_USAGE_KIND_EXCLUSION)
       .eq("metadata->>report_request_id", reportRequestId);
 
     if (!error && count && count > 0) {
@@ -65,6 +67,20 @@ export async function checkAiProductionRateLimit({
   const allowance = await checkUsageAllowance(supabase, userId, planTier);
 
   if (!allowance.allowed) {
+    console.info("[ai quota] request blocked", {
+      endpoint,
+      reportField: reportField ?? null,
+      reportRequestId: reportRequestId ?? null,
+      planTier,
+      dailyUsed: allowance.dailyUsed,
+      dailyRequests: allowance.dailyRequests,
+      monthlyUsed: allowance.monthlyUsed,
+      monthlyRequests: allowance.monthlyRequests,
+      providerCalled: false,
+      quotaConsumed: false,
+      failureReason: dailyAiLimitMessage,
+    });
+
     await recordAiUsage(supabase, {
       userId,
       endpoint,
@@ -78,7 +94,8 @@ export async function checkAiProductionRateLimit({
       status: "rate_limited",
       responseTimeMs: 0,
       metadata: {
-        quota_event: true,
+        quota_event: false,
+        quota_consumed: false,
         report_request_id: reportRequestId ?? null,
         usage_kind: "quota_check",
         reason: dailyAiLimitMessage,
@@ -91,24 +108,18 @@ export async function checkAiProductionRateLimit({
       },
     });
   } else {
-    await recordAiUsage(supabase, {
-      userId,
+    console.info("[ai quota] request allowed", {
       endpoint,
-      reportField: reportRequestId ? undefined : reportField,
-      promptHash,
-      model,
+      reportField: reportField ?? null,
+      reportRequestId: reportRequestId ?? null,
       planTier,
-      tokenUsage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-      estimatedCostUsd: 0,
-      cacheHit: false,
-      responseTimeMs: 0,
-      metadata: {
-        quota_event: true,
-        report_request_id: reportRequestId ?? null,
-        usage_kind: "quota_check",
-        requestKind,
-        first_report_field: reportField ?? null,
-      },
+      dailyUsed: allowance.dailyUsed,
+      dailyRequests: allowance.dailyRequests,
+      monthlyUsed: allowance.monthlyUsed,
+      monthlyRequests: allowance.monthlyRequests,
+      requestKind,
+      providerCalled: false,
+      quotaConsumed: false,
     });
   }
 
