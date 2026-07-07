@@ -1081,6 +1081,21 @@ function extractMetricValueFromAliases(
   return "";
 }
 
+function buildBenchmarkRows(content: string) {
+  return financialDashboardMetrics.slice(2, 8).map((metric, index) => ({
+    metric: metric.label,
+    benchmark:
+      extractMetricValueFromAliases(content, [
+        `${metric.label} Benchmark`,
+        `${metric.label} Benchmark Source`,
+        `${metric.label} Benchmark Comparison`,
+        `${metric.label} Confidence`,
+        `${metric.label} Assumption`,
+      ]) || "Model benchmark",
+    status: ["Quality", "Efficiency", "Resilience", "Velocity", "Sensitivity", "Validation"][index] || "Model",
+  }));
+}
+
 function extractScore(content: string, label: string) {
   const value = extractMetricValue(content, label);
   const scoreMatch = value.match(/\b(\d{1,3})\b/);
@@ -1136,6 +1151,36 @@ function extractBullets(content: string, fallback: string) {
     .slice(0, 3);
 
   return bullets.length > 0 ? bullets : [fallback];
+}
+
+function removeDuplicateVisualText(title: string, content: string) {
+  const normalizedTitle = title.toLowerCase();
+  const lines = normalizePdfText(content)
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (normalizedTitle.includes("tam / sam / som")) {
+    return lines
+      .filter((line) => !/^(?:[-*]\s*)?(?:\*\*)?(tam|sam|som)(?:\*\*)?\s*[:\-–—]/i.test(line))
+      .join("\n");
+  }
+
+  if (normalizedTitle.includes("financial dashboard")) {
+    const metricPattern =
+      /^(?:[-*]\s*)?(?:\*\*)?(arr|mrr|revenue|expenses|gross margin|cac|ltv|payback(?: period)?|burn(?: rate)?|runway|ebitda|break[- ]?even(?: month)?|investment(?: needed)?)(?:\*\*)?\s*[:\-–—]/i;
+
+    return lines.filter((line) => !metricPattern.test(line)).join("\n");
+  }
+
+  if (normalizedTitle.includes("swot")) {
+    const swotPattern =
+      /^(?:[-*]\s*)?(?:\*\*)?(strengths?|weaknesses?|opportunities|threats?)(?:\*\*)?\s*[:\-–—]/i;
+
+    return lines.filter((line) => !swotPattern.test(line)).join("\n");
+  }
+
+  return normalizePdfText(content);
 }
 
 function extractFirstInsight(content: string) {
@@ -1644,12 +1689,7 @@ function PremiumSectionVisual({ section }: { section: ReportSection }) {
   }
 
   if (field === "financialDashboard") {
-    const benchmarkRows = [
-      { metric: "Gross Margin", benchmark: "70%+ SaaS", status: "Quality" },
-      { metric: "CAC", benchmark: "Payback-led", status: "Efficiency" },
-      { metric: "Runway", benchmark: "18+ months", status: "Resilience" },
-      { metric: "Payback", benchmark: "<12 months", status: "Velocity" },
-    ];
+    const benchmarkRows = buildBenchmarkRows(section.content);
 
     return (
       <div className="mb-5 overflow-hidden rounded-[2rem] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(94,234,212,0.12),transparent_32%),linear-gradient(180deg,rgba(255,255,255,0.055),rgba(255,255,255,0.015))]">
@@ -2526,6 +2566,7 @@ const ReportPanel = memo(function ReportPanel({
   reportData,
   reportFields,
   reportTitle,
+  sourcePrompt,
   waitingMessage,
   result,
   failureMessage,
@@ -2537,6 +2578,7 @@ const ReportPanel = memo(function ReportPanel({
     icon: LucideIcon;
   }>;
   reportTitle: string;
+  sourcePrompt?: string;
   waitingMessage: string;
   result: string;
   failureMessage?: string;
@@ -2641,6 +2683,8 @@ const ReportPanel = memo(function ReportPanel({
       const bodyLineHeight = 5.25;
       const cardHeaderHeight = 24;
       const cardBottomPadding = 9;
+      const businessIdea = normalizePdfText(sourcePrompt || reportTitle);
+      const tocEntries: Array<{ title: string; page: number }> = [];
       let y = margin;
 
       pdf.addFileToVFS("Geist-Regular.ttf", pdfFontBase64);
@@ -2675,16 +2719,29 @@ const ReportPanel = memo(function ReportPanel({
       };
 
       const drawFooter = () => {
+        const currentPage = pdf.getCurrentPageInfo().pageNumber;
+
+        pdf.setFillColor("#000000");
+        pdf.rect(margin, pageHeight - 11, contentWidth, 8, "F");
         pdf.setDrawColor("#27272a");
         pdf.line(margin, pageHeight - 10, pageWidth - margin, pageHeight - 10);
         pdf.setFontSize(7);
         pdf.setTextColor("#71717a");
         pdf.text("ZERINIX CONFIDENTIAL INVESTOR REPORT", margin, pageHeight - 5);
         pdf.text(
-          `Page ${pdf.getNumberOfPages()}`,
-          pageWidth - margin - 18,
+          `Page ${currentPage} / ${pdf.getNumberOfPages()}`,
+          pageWidth - margin - 28,
           pageHeight - 5
         );
+      };
+
+      const drawLogoMark = (x: number, logoY: number, size = 13) => {
+        pdf.setFillColor("#042f2e");
+        pdf.setDrawColor("#14b8a6");
+        pdf.roundedRect(x, logoY, size, size, 3, 3, "FD");
+        pdf.setFontSize(size * 0.52);
+        pdf.setTextColor("#ccfbf1");
+        pdf.text("Z", x + size * 0.34, logoY + size * 0.68);
       };
 
       const drawTag = (label: string, x: number, tagY: number, width: number) => {
@@ -2704,9 +2761,10 @@ const ReportPanel = memo(function ReportPanel({
         pdf.setFillColor("#14b8a6");
         pdf.rect(margin, 18, 2, pageHeight - 36, "F");
 
+        drawLogoMark(margin + 12, 32, 14);
         pdf.setFontSize(10);
         pdf.setTextColor("#5eead4");
-        pdf.text("ZERINIX REPORT", margin + 12, 38);
+        pdf.text("ZERINIX REPORT", margin + 31, 41);
 
         pdf.setFontSize(32);
         pdf.setTextColor("#ffffff");
@@ -2723,7 +2781,7 @@ const ReportPanel = memo(function ReportPanel({
 
         const coverMeta = [
           ["Report Type", reportTitle],
-          ["Business Idea", "Generated from the active ZERINIX workspace"],
+          ["Business Idea", businessIdea],
           ["Date", new Date().toLocaleDateString("tr-TR")],
           ["Theme", "Strategic analysis, financial dashboard, and executive recommendation"],
         ];
@@ -2767,8 +2825,11 @@ const ReportPanel = memo(function ReportPanel({
         drawFooter();
       };
 
-      paintPage();
       drawCoverPage();
+      pdf.addPage();
+      const tocPage = pdf.getNumberOfPages();
+      paintPage();
+      drawFooter();
       pdf.addPage();
       paintPage();
       y = margin;
@@ -2776,7 +2837,8 @@ const ReportPanel = memo(function ReportPanel({
       pdf.setFont("Geist", "normal");
       pdf.setFontSize(10);
       pdf.setTextColor("#5eead4");
-      pdf.text("ZERINIX REPORT", margin, y);
+      drawLogoMark(margin, y - 6, 10);
+      pdf.text("ZERINIX REPORT", margin + 14, y);
 
       pdf.setFontSize(24);
       pdf.setTextColor("#ffffff");
@@ -3107,25 +3169,69 @@ const ReportPanel = memo(function ReportPanel({
         return section.field === "financialDashboard" ? 52 : labels.length > 6 ? 38 : 22;
       };
 
+      const drawTableOfContents = () => {
+        paintPage();
+        drawLogoMark(margin, 24, 13);
+        pdf.setFontSize(10);
+        pdf.setTextColor("#5eead4");
+        pdf.text("ZERINIX REPORT", margin + 17, 33);
+        pdf.setFontSize(26);
+        pdf.setTextColor("#ffffff");
+        pdf.text("Table of Contents", margin, 54);
+        pdf.setFontSize(8.5);
+        pdf.setTextColor("#a1a1aa");
+        pdf.text("Click a section title to jump directly to that page.", margin, 64);
+
+        let tocY = 82;
+        tocEntries.slice(0, 18).forEach((entry, index) => {
+          if (tocY > pageHeight - 26) {
+            return;
+          }
+
+          pdf.setFillColor(index % 2 === 0 ? "#09090b" : "#050505");
+          pdf.setDrawColor("#27272a");
+          pdf.roundedRect(margin, tocY - 6, contentWidth, 12, 3, 3, "FD");
+          pdf.setFontSize(8.5);
+          pdf.setTextColor("#f4f4f5");
+          pdf.textWithLink(normalizePdfText(entry.title), margin + 6, tocY + 1.5, {
+            pageNumber: entry.page,
+          });
+          pdf.setTextColor("#5eead4");
+          pdf.text(String(entry.page), pageWidth - margin - 10, tocY + 1.5);
+          tocY += 14;
+        });
+
+        drawFooter();
+      };
+
       sections.forEach((section) => {
         if (section.content === waitingMessage) {
           return;
         }
 
         const visualHeight = getPdfVisualHeight(section);
+        const sectionBodyContent = removeDuplicateVisualText(section.title, section.content);
         const bodyLines = pdf.splitTextToSize(
-          normalizePdfText(section.content),
+          sectionBodyContent,
           bodyWidth
         ) as string[];
+        const safeBodyLines = bodyLines.length > 0 ? bodyLines : [""];
         let lineIndex = 0;
 
-        while (lineIndex < bodyLines.length) {
+        while (lineIndex < safeBodyLines.length) {
           ensureSpace(38);
+
+          if (lineIndex === 0) {
+            tocEntries.push({
+              title: section.title,
+              page: pdf.getCurrentPageInfo().pageNumber,
+            });
+          }
 
           const availableHeight =
             pageHeight - margin - y - cardHeaderHeight - visualHeight - cardBottomPadding;
           const maxLines = Math.max(1, Math.floor(availableHeight / bodyLineHeight));
-          const lines = bodyLines.slice(lineIndex, lineIndex + maxLines);
+          const lines = safeBodyLines.slice(lineIndex, lineIndex + maxLines);
           const isContinued = lineIndex > 0;
           const cardHeight = Math.max(
             31,
@@ -3174,6 +3280,17 @@ const ReportPanel = memo(function ReportPanel({
       });
 
       drawFooter();
+      const finalPage = pdf.getCurrentPageInfo().pageNumber;
+      pdf.setPage(tocPage);
+      drawTableOfContents();
+      const totalPages = pdf.getNumberOfPages();
+
+      for (let pageNumber = 1; pageNumber <= totalPages; pageNumber += 1) {
+        pdf.setPage(pageNumber);
+        drawFooter();
+      }
+
+      pdf.setPage(finalPage);
 
       const blob = pdf.output("blob");
       const url = URL.createObjectURL(blob);
@@ -5093,6 +5210,7 @@ export default function Planner({
                 reportData={planReport || marketReport}
                 reportFields={activeReportFields}
                 reportTitle={currentReportTitle}
+                sourcePrompt={lastRequest?.prompt}
                 waitingMessage={currentLanguageCopy.waitingSection}
                 result={result}
                 failureMessage={reportGenerationError}

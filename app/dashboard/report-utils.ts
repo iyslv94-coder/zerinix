@@ -5,6 +5,7 @@ export type DashboardReport = {
   id: string;
   workspaceId: string;
   title: string;
+  prompt: string;
   createdAt: string;
   type: "Business Plan" | "Market Analysis";
   status: string;
@@ -190,6 +191,7 @@ export function normalizeReport(row: ReportRow): DashboardReport {
     id: readString(row, ["id", "report_id"], crypto.randomUUID()),
     workspaceId: readString(row, ["workspace_id", "workspaceId"], ""),
     title: readString(row, ["title", "name"], titleFallback),
+    prompt: readString(row, ["prompt", "business_idea", "idea"], ""),
     createdAt,
     type: reportType,
     status: failedReport ? "failed" : rowStatus,

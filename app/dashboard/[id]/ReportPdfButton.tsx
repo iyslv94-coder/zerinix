@@ -296,6 +296,8 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
       const bodyLineHeight = 5.25;
       const cardHeaderHeight = 24;
       const cardBottomPadding = 9;
+      const businessIdea = normalizePdfText(report.prompt || report.title);
+      const tocEntries: Array<{ title: string; page: number }> = [];
       let y = margin;
 
       pdf.addFileToVFS("Geist-Regular.ttf", fontBase64);
@@ -330,16 +332,29 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
       };
 
       const drawFooter = () => {
+        const currentPage = pdf.getCurrentPageInfo().pageNumber;
+
+        pdf.setFillColor("#000000");
+        pdf.rect(margin, pageHeight - 11, contentWidth, 8, "F");
         pdf.setDrawColor("#27272a");
         pdf.line(margin, pageHeight - 10, pageWidth - margin, pageHeight - 10);
         pdf.setFontSize(7);
         pdf.setTextColor("#71717a");
         pdf.text("ZERINIX CONFIDENTIAL INVESTOR REPORT", margin, pageHeight - 5);
         pdf.text(
-          `Page ${pdf.getNumberOfPages()}`,
-          pageWidth - margin - 18,
+          `Page ${currentPage} / ${pdf.getNumberOfPages()}`,
+          pageWidth - margin - 28,
           pageHeight - 5
         );
+      };
+
+      const drawLogoMark = (x: number, logoY: number, size = 13) => {
+        pdf.setFillColor("#042f2e");
+        pdf.setDrawColor("#14b8a6");
+        pdf.roundedRect(x, logoY, size, size, 3, 3, "FD");
+        pdf.setFontSize(size * 0.52);
+        pdf.setTextColor("#ccfbf1");
+        pdf.text("Z", x + size * 0.34, logoY + size * 0.68);
       };
 
       const drawTag = (label: string, x: number, tagY: number, width: number) => {
@@ -373,7 +388,7 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
         ]);
         const nextAction =
           extractFirstMetric(fullContent, ["Next Critical Action", "Next Action"]) ||
-          "Validate the highest-risk assumption before scaling spend.";
+          "Use the detailed recommendation section.";
         const strengths = extractDashboardList(
           fullContent,
           ["Top 3 Strengths", "Strengths"],
@@ -404,9 +419,10 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
         pdf.setFillColor("#14b8a6");
         pdf.rect(margin, 18, 2, pageHeight - 36, "F");
 
+        drawLogoMark(margin + 12, 28, 14);
         pdf.setFontSize(10);
         pdf.setTextColor("#5eead4");
-        pdf.text("ZERINIX INVESTOR INTELLIGENCE", margin + 12, 34);
+        pdf.text("ZERINIX INVESTOR INTELLIGENCE", margin + 31, 37);
 
         pdf.setFontSize(24);
         pdf.setTextColor("#ffffff");
@@ -418,7 +434,7 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
 
         pdf.setFontSize(8.5);
         pdf.setTextColor("#a1a1aa");
-        pdf.text("Executive Investment Dashboard - board-ready snapshot generated from the completed report.", margin + 12, 78, {
+        pdf.text(businessIdea, margin + 12, 78, {
           maxWidth: contentWidth - 24,
         });
 
@@ -455,8 +471,8 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
 
         const kpis = [
           ["Confidence", confidence === null ? "TBD" : `${confidence}%`],
-          ["Estimated Valuation", valuation || "Needs validation"],
-          ["Funding Stage", fundingStage || "Seed / validation"],
+          ["Estimated Valuation", valuation || "From report model"],
+          ["Funding Stage", fundingStage || report.type],
           ["Status", report.status],
         ];
 
@@ -493,7 +509,7 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
           pdf.text(title.toUpperCase(), x + 5, panelY + 7);
           pdf.setFontSize(6.6);
           pdf.setTextColor("#d4d4d8");
-          (items.length ? items : ["Pending stronger report evidence."]).slice(0, 3).forEach((item, index) => {
+          (items.length ? items : ["See detailed section analysis."]).slice(0, 3).forEach((item, index) => {
             pdf.setFillColor(accent);
             pdf.circle(x + 5, panelY + 15 + index * 9, 1, "F");
             pdf.text(item, x + 9, panelY + 16.2 + index * 9, {
@@ -520,12 +536,17 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
 
       drawCoverPage();
       pdf.addPage();
+      const tocPage = pdf.getNumberOfPages();
+      paintPage();
+      drawFooter();
+      pdf.addPage();
       paintPage();
       y = margin;
 
       pdf.setFontSize(10);
       pdf.setTextColor("#5eead4");
-      pdf.text("ZERINIX REPORT", margin, y);
+      drawLogoMark(margin, y - 6, 10);
+      pdf.text("ZERINIX REPORT", margin + 14, y);
 
       pdf.setFontSize(21);
       pdf.setTextColor("#ffffff");
@@ -861,6 +882,41 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
           : 0;
       };
 
+      const drawTableOfContents = () => {
+        paintPage();
+        drawLogoMark(margin, 24, 13);
+        pdf.setFontSize(10);
+        pdf.setTextColor("#5eead4");
+        pdf.text("ZERINIX REPORT", margin + 17, 33);
+        pdf.setFontSize(26);
+        pdf.setTextColor("#ffffff");
+        pdf.text("Table of Contents", margin, 54);
+        pdf.setFontSize(8.5);
+        pdf.setTextColor("#a1a1aa");
+        pdf.text("Click a section title to jump directly to that page.", margin, 64);
+
+        let tocY = 82;
+        tocEntries.slice(0, 18).forEach((entry, index) => {
+          if (tocY > pageHeight - 26) {
+            return;
+          }
+
+          pdf.setFillColor(index % 2 === 0 ? "#09090b" : "#050505");
+          pdf.setDrawColor("#27272a");
+          pdf.roundedRect(margin, tocY - 6, contentWidth, 12, 3, 3, "FD");
+          pdf.setFontSize(8.5);
+          pdf.setTextColor("#f4f4f5");
+          pdf.textWithLink(normalizePdfText(entry.title), margin + 6, tocY + 1.5, {
+            pageNumber: entry.page,
+          });
+          pdf.setTextColor("#5eead4");
+          pdf.text(String(entry.page), pageWidth - margin - 10, tocY + 1.5);
+          tocY += 14;
+        });
+
+        drawFooter();
+      };
+
       report.sections.forEach((section) => {
         const visualHeight = getVisualHeight(section.title);
         const sectionBodyContent = removeDuplicateVisualText(
@@ -876,6 +932,13 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
 
         while (lineIndex < safeBodyLines.length) {
           ensureSpace(38);
+
+          if (lineIndex === 0) {
+            tocEntries.push({
+              title: section.title,
+              page: pdf.getCurrentPageInfo().pageNumber,
+            });
+          }
 
           const availableHeight =
             pageHeight - margin - y - cardHeaderHeight - visualHeight - cardBottomPadding;
@@ -929,6 +992,17 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
       });
 
       drawFooter();
+      const finalPage = pdf.getCurrentPageInfo().pageNumber;
+      pdf.setPage(tocPage);
+      drawTableOfContents();
+      const totalPages = pdf.getNumberOfPages();
+
+      for (let pageNumber = 1; pageNumber <= totalPages; pageNumber += 1) {
+        pdf.setPage(pageNumber);
+        drawFooter();
+      }
+
+      pdf.setPage(finalPage);
 
       const blob = pdf.output("blob");
       const url = URL.createObjectURL(blob);

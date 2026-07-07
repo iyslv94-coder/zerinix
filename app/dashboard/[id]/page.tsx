@@ -141,6 +141,21 @@ function extractMetricValueFromAliases(
   return "";
 }
 
+function buildBenchmarkRows(content: string) {
+  return financialDashboardMetrics.slice(2, 8).map((metric, index) => ({
+    metric: metric.label,
+    benchmark:
+      extractMetricValueFromAliases(content, [
+        `${metric.label} Benchmark`,
+        `${metric.label} Benchmark Source`,
+        `${metric.label} Benchmark Comparison`,
+        `${metric.label} Confidence`,
+        `${metric.label} Assumption`,
+      ]) || "Model benchmark",
+    status: ["Quality", "Efficiency", "Resilience", "Velocity", "Sensitivity", "Validation"][index] || "Model",
+  }));
+}
+
 function extractScore(content: string, label: string) {
   const value = extractMetricValue(content, label);
   const scoreMatch = value.match(/\b(\d{1,3})\b/);
@@ -718,12 +733,7 @@ function ReportSectionVisual({
   }
 
   if (normalizedTitle.includes("financial dashboard")) {
-    const benchmarkRows = [
-      { metric: "Gross Margin", benchmark: "70%+ SaaS", status: "Quality" },
-      { metric: "CAC", benchmark: "Payback-led", status: "Efficiency" },
-      { metric: "Runway", benchmark: "18+ months", status: "Resilience" },
-      { metric: "Payback", benchmark: "<12 months", status: "Velocity" },
-    ];
+    const benchmarkRows = buildBenchmarkRows(content);
 
     return (
       <div className="mb-5 overflow-hidden rounded-[2rem] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(94,234,212,0.12),transparent_32%),linear-gradient(180deg,rgba(255,255,255,0.055),rgba(255,255,255,0.015))]">

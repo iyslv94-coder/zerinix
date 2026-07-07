@@ -412,6 +412,7 @@ function buildLanguageInstructions(language: ResponseLanguage) {
     "Do not switch languages. Do not ask questions or request clarification.",
     "Be current, analytical, evidence-weighted, and decision-oriented for an early-stage founder.",
     "Generate a dedicated market analysis, not a business plan.",
+    "The user's exact submitted market/business idea is the anchor for the whole report. Every section must name or clearly reference that idea through industry-specific competitors, customer segments, market trends, risks, assumptions, and validation actions rather than reusable template paragraphs.",
     "Prioritize market overview, TAM/SAM/SOM, industry trends, competitors, gap analysis, customer pain, opportunities, threats, SWOT, Porter's Five Forces, entry strategy, validation, metrics, sources, and an investment-style verdict.",
     "Use evidence and confidence only where they materially affect a decision. Do not attach Evidence, Confidence, or Decision implication labels to every paragraph.",
     "Avoid repeated label patterns. Prefer concise analyst prose; use Evidence/Confidence labels sparingly and only when uncertainty is important.",

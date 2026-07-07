@@ -461,6 +461,7 @@ function buildLanguageInstructions(language: ResponseLanguage) {
     "Do not switch languages. Do not translate the user's business name unless needed for grammar.",
     "Produce investor-grade, evidence-weighted analysis for early-stage business decisions.",
     "Be specific to the user's idea. Remove generic advice, motivational language, and obvious startup boilerplate.",
+    "The user's exact submitted business idea is the anchor for the whole report. Every section must name or clearly reference that idea through industry-specific competitors, customers, risks, financial logic, examples, and next actions rather than reusable template paragraphs.",
     "Use evidence and confidence only where they materially affect a decision. Do not attach Evidence, Confidence, or Decision implication labels to every paragraph.",
     "Avoid repeated label patterns. Prefer concise analyst prose; use Evidence/Confidence labels sparingly and only when uncertainty is important.",
     "Do not use generic AI phrases such as 'It is important to', 'Businesses should', 'This strategy can help', 'In today's market', or 'By leveraging'.",
