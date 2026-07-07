@@ -534,6 +534,93 @@ function textStream(content: string) {
   );
 }
 
+function extractResponseText(response: unknown) {
+  if (!response || typeof response !== "object") {
+    return "";
+  }
+
+  const directText = (response as { output_text?: unknown }).output_text;
+
+  if (typeof directText === "string" && directText.trim()) {
+    return directText;
+  }
+
+  const output = (response as { output?: unknown }).output;
+
+  if (!Array.isArray(output)) {
+    return "";
+  }
+
+  return output
+    .flatMap((item) => {
+      if (!item || typeof item !== "object") {
+        return [];
+      }
+
+      const content = (item as { content?: unknown }).content;
+
+      if (!Array.isArray(content)) {
+        return [];
+      }
+
+      return content
+        .map((part) => {
+          if (!part || typeof part !== "object") {
+            return "";
+          }
+
+          const text = (part as { text?: unknown }).text;
+          const refusal = (part as { refusal?: unknown }).refusal;
+
+          if (typeof text === "string") {
+            return text;
+          }
+
+          if (typeof refusal === "string") {
+            return refusal;
+          }
+
+          return "";
+        })
+        .filter(Boolean);
+    })
+    .join("");
+}
+
+function extractOutputItemText(item: unknown) {
+  if (!item || typeof item !== "object") {
+    return "";
+  }
+
+  const content = (item as { content?: unknown }).content;
+
+  if (!Array.isArray(content)) {
+    return "";
+  }
+
+  return content
+    .map((part) => {
+      if (!part || typeof part !== "object") {
+        return "";
+      }
+
+      const text = (part as { text?: unknown }).text;
+      const refusal = (part as { refusal?: unknown }).refusal;
+
+      if (typeof text === "string") {
+        return text;
+      }
+
+      if (typeof refusal === "string") {
+        return refusal;
+      }
+
+      return "";
+    })
+    .filter(Boolean)
+    .join("");
+}
+
 export async function POST(req: Request) {
   const startedAt = Date.now();
   const ip = getClientIpFromRequest(req);
@@ -705,11 +792,12 @@ export async function POST(req: Request) {
       new ReadableStream({
         async start(controller) {
           let streamedText = "";
+          let completedText = "";
           let tokenUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
 
           try {
             for await (const event of stream) {
-              if (event.type === "response.output_text.delta") {
+              if (event.type === "response.output_text.delta" && event.delta) {
                 streamedText += event.delta;
                 controller.enqueue(encoder.encode(event.delta));
               }
@@ -719,9 +807,43 @@ export async function POST(req: Request) {
                 controller.enqueue(encoder.encode(event.text));
               }
 
+              if (event.type === "response.output_item.done" && !streamedText) {
+                const itemText = extractOutputItemText(event.item);
+
+                if (itemText) {
+                  streamedText = itemText;
+                  controller.enqueue(encoder.encode(itemText));
+                }
+              }
+
               if (event.type === "response.completed") {
                 tokenUsage = extractTokenUsage(event.response);
+                completedText = extractResponseText(event.response);
+
+                if (!streamedText && completedText) {
+                  streamedText = completedText;
+                  controller.enqueue(encoder.encode(completedText));
+                }
               }
+
+              if (event.type === "response.failed") {
+                const errorMessage =
+                  event.response?.error?.message || "OpenAI chat response failed.";
+
+                throw new Error(errorMessage);
+              }
+            }
+
+            if (!streamedText.trim()) {
+              console.error("[api:chat] OpenAI completed without output text", {
+                model,
+                selectedIntent,
+                selectedExpert,
+                conversationId: conversationId || null,
+                completedTextLength: completedText.length,
+              });
+
+              throw new Error("OpenAI chat response completed without output text.");
             }
 
             await recordAiUsage(supabase, {
