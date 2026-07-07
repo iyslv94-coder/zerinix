@@ -575,6 +575,48 @@ function getReportMarkdown(
   return `## ${title}\n\n${sections || "Preparing the first sections..."}`;
 }
 
+function normalizeConversationPreview(content: string) {
+  return content
+    .replace(/^#{1,6}\s*/gm, "")
+    .replace(/\*\*/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isReportPreparingPreview(content: string) {
+  const preview = normalizeConversationPreview(content).toLowerCase();
+
+  return (
+    preview.includes("preparing the first sections") ||
+    preview.includes("preparing live market research") ||
+    preview.includes("ilk bölümler hazırlanıyor") ||
+    preview.includes("canlı pazar araştırması hazırlanıyor")
+  );
+}
+
+function getConversationPreview(conversation: Conversation) {
+  const messages = [...conversation.messages].reverse();
+  const failedMessage = messages.find(
+    (message) => message.role === "assistant" && message.status === "failed"
+  );
+
+  if (failedMessage) {
+    const failedPreview = normalizeConversationPreview(failedMessage.content);
+
+    return failedPreview && !isReportPreparingPreview(failedPreview)
+      ? failedPreview
+      : "Report generation failed";
+  }
+
+  const latestMessage = messages.find(
+    (message) => message.content.trim() && !isReportPreparingPreview(message.content)
+  );
+
+  return latestMessage
+    ? normalizeConversationPreview(latestMessage.content)
+    : "Ready for a new strategy session.";
+}
+
 function highlightCode(code: string) {
   const escaped = code
     .replace(/&/g, "&amp;")
@@ -2169,7 +2211,7 @@ function ConversationSidebar({
                   </p>
                 )}
                 <p className="mt-2 line-clamp-2 text-zinc-500">
-                  {conversation.messages.at(-1)?.content || "Ready for a new strategy session."}
+                  {getConversationPreview(conversation)}
                 </p>
               </div>
               <div className="flex shrink-0 items-center gap-1 opacity-100 md:opacity-0 md:transition md:group-hover:opacity-100">
