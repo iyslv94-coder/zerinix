@@ -96,6 +96,8 @@ export function inferIndustryKey(value: string): IndustryKey {
       [/\b(ecommerce|e-commerce|online store|shopify|retail marketplace|dtc|direct to consumer)\b/, "ecommerce"],
       [/\b(marketplace|two-sided|two sided|platform marketplace)\b/, "marketplace"],
       [/\b(coffee|cafe|espresso|roastery|tea|beverage)\b/, "luxuryCoffee"],
+      [/\b(restaurant|food service|foodservice|fast casual|fine dining|qsr)\b/, "restaurant"],
+      [/\b(drone|drones|uav|autonomous aerial|aerial robotics)\b/, "drone"],
       [/\b(cybersecurity|security|soc|compliance|threat|fraud)\b/, "cybersecurity"],
       [/\b(ai|artificial intelligence|automation|agent|assistant|llm)\b/, "ai"],
       [/\b(saas|crm|software|platform)\b/, "saas"],
@@ -126,6 +128,8 @@ export function inferFinancialModelingInputs(prompt: string): FinancialModelingI
         [/\b(saas|subscription|platform|software|crm|cybersecurity)\b/, "subscription software"],
         [/\b(marketplace|two-sided|two sided)\b/, "marketplace"],
         [/\b(franchise|chain)\b/, "multi-location / franchise"],
+        [/\b(restaurant|food service|foodservice|fast casual|fine dining|qsr)\b/, "location-based food service"],
+        [/\b(drone|drones|uav|autonomous aerial|aerial robotics)\b/, "hardware plus service contracts"],
         [/\b(manufacturer|manufacturing|factory|battery|yacht)\b/, "asset-heavy manufacturing"],
         [/\b(hotel|hospital|clinic|gym|restaurant|coffee|cafe)\b/, "asset-heavy operating company"],
         [/\b(consulting|agency|service|studio)\b/, "services"],
@@ -163,6 +167,8 @@ export function inferFinancialModelingInputs(prompt: string): FinancialModelingI
         [/\b(take rate|commission|marketplace)\b/, "take-rate / commission"],
         [/\b(franchise)\b/, "franchise fee plus royalties"],
         [/\b(coffee|cafe|hotel|yacht|hospital|clinic|gym|luxury|premium)\b/, "premium ticket / membership / service package"],
+        [/\b(restaurant|food service|foodservice|fast casual|fine dining|qsr)\b/, "ticket size plus repeat purchase frequency"],
+        [/\b(drone|drones|uav|autonomous aerial|aerial robotics)\b/, "hardware sale plus recurring software/service"],
         [/\b(manufacturer|manufacturing|battery|factory)\b/, "unit sales plus service contracts"],
       ],
       "inferred pricing model",
@@ -215,6 +221,7 @@ function confidenceFor(input: {
     input.industryKey === "hospitality" ||
     input.industryKey === "luxuryGoods" ||
     input.industryKey === "evCharging" ||
+    input.industryKey === "drone" ||
     input.industryKey === "fintech" ||
     input.industryKey === "agriculture";
 

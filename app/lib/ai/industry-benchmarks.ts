@@ -10,6 +10,8 @@ export type IndustryKey =
   | "ecommerce"
   | "luxuryCoffee"
   | "logistics"
+  | "restaurant"
+  | "drone"
   | "evCharging"
   | "manufacturing"
   | "hospitality"
@@ -505,6 +507,66 @@ export const industryBenchmarks: Record<IndustryKey, IndustryBenchmark> = {
       targetRunwayMonths: 22,
     },
   },
+  restaurant: {
+    key: "restaurant",
+    label: "Restaurant / food service",
+    benchmarkBasis:
+      "Restaurant and food-service benchmarks adjusted for location economics, labor cost, food cost, table/throughput capacity, repeat visits, and local demand density.",
+    confidence: "Medium",
+    ranges: {
+      grossMargin: { low: 0.58, high: 0.72, unit: "percent" },
+      cac: { low: 8, high: 85, unit: "usd" },
+      ltv: { low: 160, high: 1_400, unit: "usd" },
+      cacPayback: { low: 1, high: 7, unit: "months" },
+      arrGrowth: { low: 0.15, high: 0.65, unit: "percent" },
+      ebitdaMargin: { low: -0.18, high: 0.18, unit: "percent" },
+      revenueMultiple: { low: 0.6, high: 2.2, unit: "multiple" },
+    },
+    modeling: {
+      tamUsd: 82_000_000_000,
+      samRate: 0.025,
+      somRate: 0.004,
+      arpaMonthly: 42,
+      month12Customers: 9_500,
+      customerGrowthRate: 0.38,
+      cacUsd: 34,
+      grossMarginRate: 0.64,
+      lifetimeMonths: 16,
+      monthlyBurnUsd: 125_000,
+      startupCapexUsd: 650_000,
+      targetRunwayMonths: 15,
+    },
+  },
+  drone: {
+    key: "drone",
+    label: "Drone technology / autonomous systems",
+    benchmarkBasis:
+      "Drone hardware, autonomy, inspection, defense, and industrial robotics benchmarks adjusted for hardware margin, regulatory approvals, enterprise procurement, fleet operations, and service contracts.",
+    confidence: "Low",
+    ranges: {
+      grossMargin: { low: 0.28, high: 0.62, unit: "percent" },
+      cac: { low: 12_000, high: 75_000, unit: "usd" },
+      ltv: { low: 55_000, high: 650_000, unit: "usd" },
+      cacPayback: { low: 12, high: 36, unit: "months" },
+      arrGrowth: { low: 0.35, high: 1.4, unit: "percent" },
+      ebitdaMargin: { low: -0.55, high: 0.2, unit: "percent" },
+      revenueMultiple: { low: 1.5, high: 8, unit: "multiple" },
+    },
+    modeling: {
+      tamUsd: 42_000_000_000,
+      samRate: 0.035,
+      somRate: 0.006,
+      arpaMonthly: 12_000,
+      month12Customers: 22,
+      customerGrowthRate: 0.78,
+      cacUsd: 28_000,
+      grossMarginRate: 0.44,
+      lifetimeMonths: 36,
+      monthlyBurnUsd: 380_000,
+      startupCapexUsd: 1_900_000,
+      targetRunwayMonths: 22,
+    },
+  },
   services: {
     key: "services",
     label: "Professional services",
@@ -560,6 +622,14 @@ function normalizeIndustryKey(industry: string): IndustryKey {
     specialtycoffee: "luxuryCoffee",
     coffee: "luxuryCoffee",
     supplychain: "logistics",
+    restaurant: "restaurant",
+    restaurants: "restaurant",
+    foodservice: "restaurant",
+    foodandbeverage: "restaurant",
+    drone: "drone",
+    drones: "drone",
+    uav: "drone",
+    autonomoussystems: "drone",
     evcharging: "evCharging",
     electricvehiclecharging: "evCharging",
     manufacturing: "manufacturing",

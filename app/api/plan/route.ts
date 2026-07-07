@@ -33,7 +33,7 @@ const client = new OpenAI({
 const planPrompts = {
   executiveSummary: {
     prompt:
-      "Write an investor-grade Executive Summary with one job only: executive decision. Cover final thesis, investment attractiveness, strongest proof, largest constraint, financial viability signal, and one board-level priority. Do not explain the business model, product, market sizing, SWOT, pricing, GTM, risks, or roadmap. Use no more than one compact evidence/confidence note if it materially changes the verdict. Max 120 words.",
+      "Write an investor-grade Executive Summary with one job only: executive decision. Cover final thesis, Investment Score, Recommendation as GO / WAIT / PASS, Confidence %, Estimated Valuation, Funding Stage, top 3 strengths, top 3 risks, and next critical action. Do not explain the business model, product, market sizing, SWOT, pricing, GTM, risks, or roadmap. Use only concise evidence labels when they change the verdict. Max 120 words.",
     maxTokens: 650,
   },
   problem: {
@@ -98,12 +98,12 @@ const planPrompts = {
   },
   unitEconomics: {
     prompt:
-      "Write only financial unit metrics. Include ARPA/ACV if relevant, gross margin, CAC, LTV, LTV:CAC, payback period, retention/churn assumption, and the single assumption that most affects viability. Use numbers and ranges only; no strategic prose, market claims, or GTM explanation. Max 145 words.",
+      "Write only financial unit metrics as a compact explainable table. Include ARPA/ACV if relevant, gross margin, CAC, LTV, LTV:CAC, payback period, retention/churn assumption, and the single assumption that most affects viability. For each key metric show value, formula, assumption, confidence, and benchmark source in compressed form. No strategic prose, market claims, or GTM explanation. Max 145 words.",
     maxTokens: 850,
   },
   financialDashboard: {
     prompt:
-      "Create only high-level financial KPI cards. Use compact lines for Revenue, Expenses, Gross Margin, CAC, LTV, Payback Period, Burn Rate, Runway, EBITDA, Break-even Month, and Investment Needed. Summarize CAC/LTV/payback if already covered by Unit Economics; do not explain them again. No generic commentary. Max 145 words.",
+      "Create only high-level financial KPI cards. Use compact lines for ARR, MRR, Revenue, Expenses, Gross Margin, CAC, LTV, Payback Period, Burn Rate, Runway, EBITDA, Break-even Month, and Investment Needed. Each line must include value plus tiny formula/assumption/confidence/benchmark-source cues. Summarize CAC/LTV/payback if already covered by Unit Economics; do not explain them again. No generic commentary. Max 145 words.",
     maxTokens: 950,
   },
   scenarioAnalysis: {
@@ -118,7 +118,7 @@ const planPrompts = {
   },
   executiveRecommendation: {
     prompt:
-      "Write only final investment decision. Include exactly four elements: selected decision, confidence level, biggest risks, and next actions. Select exactly one option and no second option: GO, NO GO, WAIT, PIVOT, RAISE, or BOOTSTRAP. Confidence must align with evidence: RAISE usually 70-90 only with strong validation, WAIT usually 40-70, PIVOT/NO GO usually 50-80. Do not restate the business model, market summary, SWOT, roadmap, or financial dashboard. Max 95 words.",
+      "Write only final investment decision. Include exactly five elements: selected decision, confidence level, biggest risks, next actions, and why the calculated Decision Engine supports it. Select exactly one option and no second option: GO, WAIT, or PASS. Confidence must align with evidence quality and the Investment Scoring Engine. Do not restate the business model, market summary, SWOT, roadmap, or financial dashboard. Max 95 words.",
     maxTokens: 650,
   },
   risks: {
@@ -469,10 +469,13 @@ function buildLanguageInstructions(language: ResponseLanguage) {
     "Never repeat the same metric more than once unless necessary. If a metric appears in Unit Economics, later financial sections may summarize it but must not explain it again.",
     "Use one internally consistent server-calculated financial model across Unit Economics, Financial Dashboard, Scenario Analysis, Financial Assumptions, and Executive Recommendation. Reuse exact TAM, SAM, SOM, ARPA, ARR, MRR, CAC, LTV, payback, burn, runway, EBITDA, break-even, investment-needed, ROI, and revenue forecast values unless explicitly updating a scenario.",
     "The Data-Driven Financial Analysis Engine block in the user input contains the calculated base-case financial model. Use those values as the source of truth.",
+    "The Investment Scoring Engine block in the user input contains the calculated investment score, GO/WAIT/PASS recommendation, estimated valuation, funding stage, decision scores, strengths, weaknesses, top risks, and next critical action. Use those values as the source of truth.",
     "Executive Summary, Business Model, Unit Economics, KPI Dashboard, Financial Dashboard, Scenario Analysis, Financial Assumptions, and Executive Recommendation must reference the same calculated financial model whenever financial metrics appear.",
-    "Every financial estimate must include a confidence level. If confidence is Low, label it as an assumption needing validation instead of presenting it as a verified benchmark.",
+    "For ARR, MRR, CAC, LTV, Gross Margin, Burn, Runway, EBITDA, and Break-even, financial sections must show value, formula, assumptions, confidence, and benchmark source. If confidence is Low, label it as an assumption needing validation instead of presenting it as a verified benchmark.",
+    "Important claims may use one concise evidence label from this controlled set: Real Evidence, Benchmark, Industry Estimate, AI Assumption, Low Confidence, High Confidence. Do not over-label ordinary sentences.",
+    "Make reasoning deeply industry-specific for SaaS, AI, Cybersecurity, Healthcare, Logistics, Restaurant, Drone, Marketplace, FinTech, E-commerce, EV Charging, and other detected sectors. KPIs, risks, roadmap logic, and financial interpretation must reflect that sector's economics.",
     "Keep payback, LTV:CAC, CAC, and runway realistic for the sector and capital intensity. If a result looks unusually strong, label it as a sensitivity or low-confidence assumption rather than a base case.",
-    "Recommendation confidence must match evidence quality: RAISE normally requires 70-90 with strong validation; WAIT normally sits at 40-70; PIVOT or NO GO normally sits at 50-80 depending on evidence. Do not use extreme confidence values unless justified.",
+    "Recommendation confidence must match evidence quality and the Investment Scoring Engine. GO requires strong score/evidence, WAIT means validation gaps remain, and PASS means economics or execution risk are not investable yet.",
     "Do not fake source authority. If a precise source is unavailable, use assumption language such as 'Assumption based on comparable sector benchmarks', 'Needs validation with primary research', or 'Low confidence until verified'.",
     "Every section must end with a complete sentence or complete bullet. Never end mid-sentence.",
     "Distinguish facts, assumptions, and hypotheses. Never present guesses as facts.",
@@ -486,9 +489,8 @@ function buildLanguageInstructions(language: ResponseLanguage) {
     "Maintain dependency logic across the whole report: Problem changes Solution; Solution changes Pricing; Pricing changes Financial; Financial changes Runway; Runway changes Risk; Risk changes CEO Recommendation.",
     "Financial reasoning must follow this chain: Revenue -> MRR -> Gross Margin -> CAC -> LTV -> Payback -> Burn -> Runway -> EBITDA.",
     "Use real data first when available. If data is missing, create an explicit assumption, explain why it is reasonable, and assign confidence.",
-    "The final executive decision must be exactly one of: Launch, Delay, Pivot, Kill, Bootstrap, Raise, Acquire, Merge, Franchise, Licensing, Joint Venture.",
-    "When writing Executive Recommendation, select exactly one of: GO, NO GO, WAIT, PIVOT, RAISE, BOOTSTRAP.",
-    "Founder Score must include Overall Score, Innovation, Market Timing, Competition, Capital Intensity, Execution Difficulty, Revenue Potential, and Risk Level.",
+    "When writing Executive Recommendation, select exactly one of: GO, WAIT, PASS.",
+    "Founder Score must reuse the Investment Scoring Engine and include Overall Score, Market Score, Financial Score, Founder Score, Execution Score, Risk Score, Competition Score, and Technology Score.",
     "Founder Roadmap must include Tomorrow, This Week, 30 Days, 90 Days, 180 Days, and 12 Months, with each step dependent on the prior proof point.",
   ].join("\n");
 }
@@ -611,8 +613,11 @@ Report quality rules:
 - Remove filler phrases such as "It is important to", "Businesses should", "This strategy can help", "In today's market", and "By leveraging".
 - Maintain exact financial consistency with the same assumption set across Unit Economics, Financial Dashboard, Scenario Analysis, Financial Assumptions, and Executive Recommendation.
 - Use the Data-Driven Financial Analysis Engine block as the calculated base-case model for TAM, SAM, SOM, ARPA, CAC, LTV, Gross Margin, MRR, ARR, Payback, Burn Rate, Runway, EBITDA, Break-even Month, Investment Needed, ROI, and Revenue Forecast.
+- Use the Investment Scoring Engine block as the calculated source for Investment Score, GO/WAIT/PASS recommendation, confidence, estimated valuation, funding stage, decision scores, strengths, weaknesses, top risks, and next critical action.
 - Reuse that single calculated model everywhere. Do not create conflicting financial values in separate sections. If a value is low-confidence, warn that it needs validation and explain why.
-- Align recommendation confidence with evidence quality; avoid extreme confidence values unless the evidence clearly supports them.
+- Align recommendation confidence with evidence quality and the calculated Investment Scoring Engine; avoid extreme confidence values unless the evidence clearly supports them.
+- Use evidence labels sparingly from this exact set when useful: Real Evidence, Benchmark, Industry Estimate, AI Assumption, Low Confidence, High Confidence.
+- Make examples, KPIs, risks, roadmap actions, and financial interpretation specific to the detected industry instead of using generic startup templates.
 - Use honest assumption language instead of vague source claims such as "industry reports".
 - Finish with a complete sentence or complete bullet. Do not end mid-sentence.
 - Include practical founder actions, examples, decision criteria, and validation thresholds only when they belong to this section.

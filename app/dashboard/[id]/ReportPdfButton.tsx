@@ -127,9 +127,11 @@ function extractScore(content: string, label: string) {
 }
 
 function detectRecommendation(content: string) {
-  const match = content.match(/\b(GO|NO GO|WAIT|PIVOT|RAISE|BOOTSTRAP)\b/i);
+  const match = content.match(/\b(GO|PASS|NO GO|WAIT|PIVOT|RAISE|BOOTSTRAP)\b/i);
 
-  return match?.[1]?.toUpperCase() || "";
+  const recommendation = match?.[1]?.toUpperCase() || "";
+
+  return recommendation === "NO GO" ? "PASS" : recommendation;
 }
 
 function extractConfidence(content: string) {
@@ -143,6 +145,37 @@ function extractConfidence(content: string) {
   const percent = Number(percentMatch?.[1] || NaN);
 
   return Number.isFinite(percent) ? Math.max(0, Math.min(100, percent)) : null;
+}
+
+function extractFirstMetric(content: string, labels: string[]) {
+  for (const label of labels) {
+    const value = extractMetricValue(content, label);
+
+    if (value) {
+      return value;
+    }
+  }
+
+  return "";
+}
+
+function extractDashboardList(content: string, labels: string[], limit: number) {
+  const lines = normalizePdfText(content)
+    .split("\n")
+    .map((line) => line.trim().replace(/^[-*]\s+/, "").replace(/\*\*/g, ""))
+    .filter(Boolean);
+  const labelIndex = lines.findIndex((line) =>
+    labels.some((label) => line.toLowerCase().startsWith(label.toLowerCase()))
+  );
+
+  if (labelIndex === -1) {
+    return [];
+  }
+
+  return lines
+    .slice(labelIndex + 1)
+    .filter((line) => !/^(weaknesses|top risks|risks|next critical action|category scores|decision engine|financial modeling rules)\b/i.test(line))
+    .slice(0, limit);
 }
 
 function extractSectionSnippet(content: string, title: string) {
@@ -319,6 +352,51 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
       };
 
       const drawCoverPage = () => {
+        const fullContent = report.sections
+          .map((section) => `${section.title}\n${section.content}`)
+          .join("\n\n");
+        const investmentScore =
+          extractScore(fullContent, "Total Investment Score") ??
+          extractScore(fullContent, "Investment Score") ??
+          extractScore(fullContent, "AI Investment Score") ??
+          extractScore(fullContent, "Overall Score");
+        const confidence = extractConfidence(fullContent);
+        const recommendation = detectRecommendation(fullContent) || "WAIT";
+        const valuation = extractFirstMetric(fullContent, [
+          "Estimated Valuation",
+          "Valuation",
+          "Enterprise Value",
+        ]);
+        const fundingStage = extractFirstMetric(fullContent, [
+          "Funding Stage",
+          "Stage",
+        ]);
+        const nextAction =
+          extractFirstMetric(fullContent, ["Next Critical Action", "Next Action"]) ||
+          "Validate the highest-risk assumption before scaling spend.";
+        const strengths = extractDashboardList(
+          fullContent,
+          ["Top 3 Strengths", "Strengths"],
+          3
+        );
+        const risks = extractDashboardList(
+          fullContent,
+          ["Top 3 Risks", "Top Risks", "Risks"],
+          3
+        );
+        const recommendationFill =
+          recommendation === "GO"
+            ? "#064e3b"
+            : recommendation === "PASS"
+              ? "#7f1d1d"
+              : "#713f12";
+        const recommendationText =
+          recommendation === "GO"
+            ? "#bbf7d0"
+            : recommendation === "PASS"
+              ? "#fecaca"
+              : "#fde68a";
+
         paintPage();
         pdf.setFillColor("#020617");
         pdf.setDrawColor("#134e4a");
@@ -328,60 +406,114 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
 
         pdf.setFontSize(10);
         pdf.setTextColor("#5eead4");
-        pdf.text("ZERINIX REPORT", margin + 12, 38);
+        pdf.text("ZERINIX INVESTOR INTELLIGENCE", margin + 12, 34);
 
-        pdf.setFontSize(31);
+        pdf.setFontSize(24);
         pdf.setTextColor("#ffffff");
         const coverTitle = pdf.splitTextToSize(normalizePdfText(report.title), contentWidth - 24);
-        pdf.text(coverTitle, margin + 12, 60, {
+        pdf.text(coverTitle, margin + 12, 51, {
           lineHeightFactor: 1.08,
           maxWidth: contentWidth - 24,
         });
 
-        pdf.setFontSize(11);
+        pdf.setFontSize(8.5);
         pdf.setTextColor("#a1a1aa");
-        pdf.text("Premium AI business intelligence report for founder and investor decisions.", margin + 12, 84, {
+        pdf.text("Executive Investment Dashboard - board-ready snapshot generated from the completed report.", margin + 12, 78, {
           maxWidth: contentWidth - 24,
         });
 
-        drawTag("AI Ready", margin + 12, 101, 28);
-        drawTag("Investor Ready", margin + 44, 101, 38);
+        drawTag("Investor Ready", margin + 12, 90, 36);
+        drawTag(report.type, margin + 52, 90, 42);
 
-        const coverMeta = [
-          ["Report Type", report.type],
-          ["Business Idea", report.title],
-          ["Date", report.createdAt ? new Date(report.createdAt).toLocaleDateString("tr-TR") : "Tarih yok"],
+        const scoreX = margin + 12;
+        const scoreY = 112;
+        const scoreSize = 58;
+        pdf.setFillColor("#030712");
+        pdf.setDrawColor("#115e59");
+        pdf.roundedRect(scoreX, scoreY, scoreSize, scoreSize, 7, 7, "FD");
+        pdf.setDrawColor("#134e4a");
+        pdf.circle(scoreX + 29, scoreY + 28, 20, "S");
+        pdf.setDrawColor("#5eead4");
+        pdf.setLineWidth(1.1);
+        pdf.circle(scoreX + 29, scoreY + 28, 14, "S");
+        pdf.setLineWidth(0.15);
+        pdf.setFontSize(24);
+        pdf.setTextColor("#ffffff");
+        pdf.text(String(investmentScore ?? "--"), scoreX + 20, scoreY + 31);
+        pdf.setFontSize(6.5);
+        pdf.setTextColor("#99f6e4");
+        pdf.text("INVESTMENT SCORE", scoreX + 12, scoreY + 43);
+
+        pdf.setFillColor(recommendationFill);
+        pdf.setDrawColor("#334155");
+        pdf.roundedRect(scoreX + 66, scoreY, contentWidth - 102, 26, 5, 5, "FD");
+        pdf.setFontSize(7);
+        pdf.setTextColor(recommendationText);
+        pdf.text("RECOMMENDATION", scoreX + 72, scoreY + 8);
+        pdf.setFontSize(18);
+        pdf.text(recommendation, scoreX + 72, scoreY + 20);
+
+        const kpis = [
+          ["Confidence", confidence === null ? "TBD" : `${confidence}%`],
+          ["Estimated Valuation", valuation || "Needs validation"],
+          ["Funding Stage", fundingStage || "Seed / validation"],
           ["Status", report.status],
         ];
 
-        let metaY = 128;
-        coverMeta.forEach(([label, value]) => {
+        kpis.forEach(([label, value], index) => {
+          const cardWidth = (contentWidth - 86) / 2;
+          const cardX = scoreX + 66 + (index % 2) * (cardWidth + 4);
+          const cardY = scoreY + 32 + Math.floor(index / 2) * 20;
           pdf.setFillColor("#09090b");
           pdf.setDrawColor("#27272a");
-          pdf.roundedRect(margin + 12, metaY, contentWidth - 24, 17, 4, 4, "FD");
+          pdf.roundedRect(cardX, cardY, cardWidth, 16, 3, 3, "FD");
           pdf.setFontSize(7.5);
           pdf.setTextColor("#71717a");
-          pdf.text(label.toUpperCase(), margin + 18, metaY + 6);
+          pdf.text(label.toUpperCase(), cardX + 4, cardY + 5.5, { maxWidth: cardWidth - 8 });
           pdf.setFontSize(9.5);
           pdf.setTextColor("#f4f4f5");
-          pdf.text(value, margin + 18, metaY + 12, { maxWidth: contentWidth - 36 });
-          metaY += 22;
+          pdf.text(value, cardX + 4, cardY + 11.8, { maxWidth: cardWidth - 8 });
         });
 
-        ["TAM / SAM / SOM", "Financial Dashboard", "Founder Score", "Executive Recommendation"].forEach((label, index) => {
-          const cardWidth = (contentWidth - 33) / 2;
-          const cardX = margin + 12 + (index % 2) * (cardWidth + 9);
-          const cardY = 220 + Math.floor(index / 2) * 20;
-
+        const drawInsightPanel = (
+          title: string,
+          items: string[],
+          x: number,
+          panelY: number,
+          panelWidth: number,
+          accent: string
+        ) => {
           pdf.setFillColor("#0a0a0a");
           pdf.setDrawColor("#27272a");
-          pdf.roundedRect(cardX, cardY, cardWidth, 14, 4, 4, "FD");
-          pdf.setFillColor("#5eead4");
-          pdf.circle(cardX + 6, cardY + 7, 1.7, "F");
+          pdf.roundedRect(x, panelY, panelWidth, 46, 4, 4, "FD");
+          pdf.setFillColor(accent);
+          pdf.rect(x, panelY, 1.5, 46, "F");
           pdf.setFontSize(8);
+          pdf.setTextColor("#ccfbf1");
+          pdf.text(title.toUpperCase(), x + 5, panelY + 7);
+          pdf.setFontSize(6.6);
           pdf.setTextColor("#d4d4d8");
-          pdf.text(label, cardX + 11, cardY + 8.5, { maxWidth: cardWidth - 15 });
-        });
+          (items.length ? items : ["Pending stronger report evidence."]).slice(0, 3).forEach((item, index) => {
+            pdf.setFillColor(accent);
+            pdf.circle(x + 5, panelY + 15 + index * 9, 1, "F");
+            pdf.text(item, x + 9, panelY + 16.2 + index * 9, {
+              maxWidth: panelWidth - 14,
+            });
+          });
+        };
+
+        drawInsightPanel("Top 3 Strengths", strengths, margin + 12, 186, (contentWidth - 31) / 2, "#14b8a6");
+        drawInsightPanel("Top 3 Risks", risks, margin + 21 + (contentWidth - 31) / 2, 186, (contentWidth - 31) / 2, "#f97316");
+
+        pdf.setFillColor("#042f2e");
+        pdf.setDrawColor("#115e59");
+        pdf.roundedRect(margin + 12, 241, contentWidth - 24, 22, 5, 5, "FD");
+        pdf.setFontSize(7);
+        pdf.setTextColor("#99f6e4");
+        pdf.text("NEXT CRITICAL ACTION", margin + 18, 249);
+        pdf.setFontSize(9);
+        pdf.setTextColor("#f8fafc");
+        pdf.text(nextAction, margin + 18, 257, { maxWidth: contentWidth - 36 });
 
         drawFooter();
       };

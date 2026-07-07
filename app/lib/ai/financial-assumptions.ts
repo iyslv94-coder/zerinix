@@ -30,12 +30,13 @@ export function createCanonicalFinancialAssumptions(input: {
   };
 }
 
-function formatMetricRow(metric: FinancialMetricModel) {
+function formatMetricRow(metric: FinancialMetricModel, benchmarkSource: string) {
   return [
     `- ${metric.label}: ${formatFinancialModelValue(metric)}`,
     `formula=${metric.formula}`,
     `assumptions=${metric.assumptions.join("; ")}`,
     `benchmark=${metric.benchmarkComparison}`,
+    `benchmarkSource=${benchmarkSource}`,
     `confidence=${metric.confidence}`,
   ].join(" | ");
 }
@@ -54,7 +55,9 @@ function formatUsd(value: number) {
 export function formatCanonicalFinancialAssumptions(
   context: AiFinancialModelContext
 ) {
-  const metricRows = Object.values(context.metrics).map(formatMetricRow).join("\n");
+  const metricRows = Object.values(context.metrics)
+    .map((metric) => formatMetricRow(metric, context.benchmark.basis))
+    .join("\n");
   const forecastRows = context.revenueForecast
     .map(
       (year) =>
@@ -89,5 +92,8 @@ Financial modeling rules:
 - Financial Dashboard, Unit Economics, Scenario Analysis, Executive Summary, Executive Recommendation, KPI Dashboard, and Financial Assumptions must reuse these same values.
 - Scenario Analysis may vary these values for worst/base/best cases, but Base Case must match this calculated model exactly.
 - Use the Investment Scoring Engine as the source of truth for Total Investment Score, confidence, strengths, weaknesses, Founder Score, and investment recommendation logic.
-- Do not invent static investment scores or category scores; reuse the calculated score and category reasoning above.`;
+- Do not invent static investment scores or category scores; reuse the calculated score and category reasoning above.
+- Executive Summary and Executive Recommendation must use the calculated Recommendation, Estimated Valuation, Funding Stage, Top Risks, and Next Critical Action from the Investment Scoring Engine.
+- For ARR, MRR, CAC, LTV, Gross Margin, Burn, Runway, EBITDA, and Break-even, show value, formula, assumptions, confidence, and benchmark source when the section is responsible for financial explanation.
+- Tag important claims with one concise evidence label only when useful: Real Evidence, Benchmark, Industry Estimate, AI Assumption, Low Confidence, or High Confidence. Do not create fake citations.`;
 }

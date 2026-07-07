@@ -26,9 +26,24 @@ export type InvestmentScore = {
   fingerprint: string;
   totalScore: number;
   confidence: number;
+  recommendation: "GO" | "WAIT" | "PASS";
+  estimatedValuation: string;
+  fundingStage: string;
+  nextCriticalAction: string;
   strengths: string[];
   weaknesses: string[];
+  topRisks: string[];
   categories: Record<InvestmentScoreCategoryKey, InvestmentScoreCategory>;
+  decisionEngine: Record<
+    | "marketScore"
+    | "financialScore"
+    | "founderScore"
+    | "executionScore"
+    | "riskScore"
+    | "competitionScore"
+    | "technologyScore",
+    InvestmentScoreCategory
+  >;
 };
 
 type InvestmentScoreInput = {
@@ -124,6 +139,17 @@ function makeCategory(input: {
   };
 }
 
+function formatUsd(value: number) {
+  const abs = Math.abs(value);
+  const sign = value < 0 ? "-" : "";
+
+  if (abs >= 1_000_000_000) return `${sign}$${(abs / 1_000_000_000).toFixed(1)}B`;
+  if (abs >= 1_000_000) return `${sign}$${(abs / 1_000_000).toFixed(1)}M`;
+  if (abs >= 1_000) return `${sign}$${Math.round(abs / 1_000)}k`;
+
+  return `${sign}$${Math.round(abs).toLocaleString("en-US")}`;
+}
+
 function createStrengths(categories: InvestmentScoreCategory[], model: FinancialModel) {
   const topCategories = [...categories]
     .sort((a, b) => b.score / b.maximumScore - a.score / a.maximumScore)
@@ -154,6 +180,73 @@ function createWeaknesses(categories: InvestmentScoreCategory[], model: Financia
   return bottomCategories.slice(0, 4);
 }
 
+function createRecommendation(totalScore: number, confidence: number) {
+  if (totalScore >= 72 && confidence >= 60) return "GO";
+  if (totalScore < 48 || confidence < 42) return "PASS";
+  return "WAIT";
+}
+
+function createFundingStage(model: FinancialModel) {
+  const investmentNeeded = model.metrics.investmentNeeded.value;
+  const arr = model.metrics.arr.value;
+
+  if (arr < 250_000 && investmentNeeded < 750_000) return "Pre-seed";
+  if (arr < 1_500_000 && investmentNeeded < 3_000_000) return "Seed";
+  if (arr < 8_000_000 && investmentNeeded < 10_000_000) return "Seed / Series A";
+  return "Series A+ / growth capital";
+}
+
+function createEstimatedValuation(model: FinancialModel) {
+  const multiple = average([
+    model.benchmark.ranges.revenueMultiple.low,
+    model.benchmark.ranges.revenueMultiple.high,
+  ]);
+  const baseValuation = Math.max(
+    model.metrics.arr.value * multiple,
+    model.metrics.investmentNeeded.value * 1.25
+  );
+
+  return `${formatUsd(baseValuation * 0.8)}-${formatUsd(baseValuation * 1.2)}`;
+}
+
+function createNextCriticalAction(model: FinancialModel, recommendation: "GO" | "WAIT" | "PASS") {
+  if (recommendation === "PASS") {
+    return "Do not scale spend until the weakest economics are redesigned and validated.";
+  }
+
+  if (model.metrics.cacPayback.value > model.benchmark.ranges.cacPayback.high) {
+    return "Validate a lower-CAC acquisition motion before increasing budget.";
+  }
+
+  if (model.metrics.grossMargin.confidence === "Low" || model.metrics.tam.confidence === "Low") {
+    return "Run primary research to validate market size and contribution margin assumptions.";
+  }
+
+  if (recommendation === "GO") {
+    return "Convert the strongest ICP into paid pilots using the calculated pricing and payback targets.";
+  }
+
+  return "Validate pricing, buyer urgency, and repeatable acquisition before committing full funding.";
+}
+
+function createTopRisks(model: FinancialModel, categories: InvestmentScoreCategory[]) {
+  const risks = [
+    `Execution risk: ${categories.find((category) => category.key === "executionRisk")?.explanation}`,
+    `Capital efficiency: investment need is ${model.metrics.investmentNeeded.displayValue} against ${model.metrics.arr.displayValue} Year-1 ARR.`,
+    `Confidence: ${model.benchmark.label} assumptions require primary validation where confidence is Low.`,
+  ].filter(Boolean);
+
+  if (model.metrics.cacPayback.value > model.benchmark.ranges.cacPayback.high) {
+    risks.unshift(`Payback risk: ${model.metrics.cacPayback.displayValue} exceeds the benchmark range.`);
+  }
+
+  if (model.metrics.runway.value < 12) {
+    risks.unshift(`Runway risk: ${model.metrics.runway.displayValue} gives limited iteration time.`);
+  }
+
+  return risks.slice(0, 3);
+}
+
 export function createInvestmentScore(input: InvestmentScoreInput): InvestmentScore {
   const model = input.financialModel;
   const metrics = model.metrics;
@@ -161,7 +254,7 @@ export function createInvestmentScore(input: InvestmentScoreInput): InvestmentSc
   const normalizedPrompt = normalizePrompt(input.prompt);
   const specificity = promptSpecificityScore(input.prompt);
   const capitalHeavy = hasAny(normalizedPrompt, [
-    /\b(manufacturing|factory|hospital|hotel|yacht|ev charging|battery|clinic|franchise)\b/,
+    /\b(manufacturing|factory|hospital|hotel|yacht|ev charging|battery|clinic|franchise|drone|uav)\b/,
   ]);
   const defensibilitySignals = hasAny(normalizedPrompt, [
     /\b(proprietary|patent|data moat|network effect|regulated|compliance|brand|luxury|enterprise)\b/,
@@ -341,6 +434,77 @@ export function createInvestmentScore(input: InvestmentScoreInput): InvestmentSc
       defensibilitySignals ? 72 : 58,
     ])
   );
+  const recommendation = createRecommendation(totalScore, confidence);
+  const technologyScore = makeCategory({
+    key: "competitiveAdvantage",
+    label: "Technology Score",
+    normalizedScore: average([
+      hasAny(normalizedPrompt, [/\b(ai|software|automation|cybersecurity|drone|uav|ev|battery|platform)\b/])
+        ? 0.76
+        : 0.48,
+      defensibilitySignals ? 0.74 : 0.5,
+      normalizeHigherBetter(metrics.grossMargin.value, ranges.grossMargin.low, ranges.grossMargin.high),
+    ]),
+    explanation: "Technology score is calculated from technical intensity, defensibility signals, and margin leverage.",
+    reasoning: [
+      `Technical signals detected: ${
+        hasAny(normalizedPrompt, [/\b(ai|software|automation|cybersecurity|drone|uav|ev|battery|platform)\b/])
+          ? "yes"
+          : "no"
+      }`,
+      `Defensibility signals detected: ${defensibilitySignals ? "yes" : "no"}`,
+      `Gross margin: ${metrics.grossMargin.displayValue}`,
+    ],
+  });
+  const decisionEngine = {
+    marketScore: {
+      ...marketOpportunity,
+      key: "marketOpportunity" as const,
+      label: "Market Score",
+      score: roundScore((marketOpportunity.score / marketOpportunity.maximumScore) * 100),
+      maximumScore: 100,
+    },
+    financialScore: {
+      ...financialHealth,
+      key: "financialHealth" as const,
+      label: "Financial Score",
+      score: roundScore((financialHealth.score / financialHealth.maximumScore) * 100),
+      maximumScore: 100,
+    },
+    founderScore: {
+      ...teamFounder,
+      key: "teamFounder" as const,
+      label: "Founder Score",
+      score: roundScore((teamFounder.score / teamFounder.maximumScore) * 100),
+      maximumScore: 100,
+    },
+    executionScore: {
+      ...executionRisk,
+      key: "executionRisk" as const,
+      label: "Execution Score",
+      score: roundScore((executionRisk.score / executionRisk.maximumScore) * 100),
+      maximumScore: 100,
+    },
+    riskScore: {
+      ...executionRisk,
+      key: "executionRisk" as const,
+      label: "Risk Score",
+      score: roundScore((executionRisk.score / executionRisk.maximumScore) * 100),
+      maximumScore: 100,
+    },
+    competitionScore: {
+      ...competitiveAdvantage,
+      key: "competitiveAdvantage" as const,
+      label: "Competition Score",
+      score: roundScore((competitiveAdvantage.score / competitiveAdvantage.maximumScore) * 100),
+      maximumScore: 100,
+    },
+    technologyScore: {
+      ...technologyScore,
+      score: roundScore((technologyScore.score / technologyScore.maximumScore) * 100),
+      maximumScore: 100,
+    },
+  };
 
   return {
     version: "investment_score_engine_v1",
@@ -355,8 +519,13 @@ export function createInvestmentScore(input: InvestmentScoreInput): InvestmentSc
     ).slice(0, 16),
     totalScore,
     confidence,
+    recommendation,
+    estimatedValuation: createEstimatedValuation(model),
+    fundingStage: createFundingStage(model),
+    nextCriticalAction: createNextCriticalAction(model, recommendation),
     strengths: createStrengths(categoryList, model),
     weaknesses: createWeaknesses(categoryList, model),
+    topRisks: createTopRisks(model, categoryList),
     categories: {
       marketOpportunity,
       competitiveAdvantage,
@@ -367,6 +536,7 @@ export function createInvestmentScore(input: InvestmentScoreInput): InvestmentSc
       capitalEfficiency,
       executionRisk,
     },
+    decisionEngine,
   };
 }
 
@@ -379,17 +549,34 @@ export function formatInvestmentScore(score: InvestmentScore) {
     .join("\n");
   const strengths = score.strengths.map((strength) => `- ${strength}`).join("\n");
   const weaknesses = score.weaknesses.map((weakness) => `- ${weakness}`).join("\n");
+  const risks = score.topRisks.map((risk) => `- ${risk}`).join("\n");
+  const decisionRows = Object.values(score.decisionEngine)
+    .map(
+      (category) =>
+        `- ${category.label}: ${category.score}/${category.maximumScore} | explanation=${category.explanation} | reasoning=${category.reasoning.join("; ")}`
+    )
+    .join("\n");
 
   return `Investment Scoring Engine (${score.version}, ${score.fingerprint})
 Total Investment Score: ${score.totalScore}/100
 Confidence: ${score.confidence}%
+Recommendation: ${score.recommendation}
+Estimated Valuation: ${score.estimatedValuation}
+Funding Stage: ${score.fundingStage}
+Next Critical Action: ${score.nextCriticalAction}
 
 Category scores:
 ${categoryRows}
+
+Decision Engine:
+${decisionRows}
 
 Strengths:
 ${strengths}
 
 Weaknesses:
-${weaknesses}`;
+${weaknesses}
+
+Top Risks:
+${risks}`;
 }
