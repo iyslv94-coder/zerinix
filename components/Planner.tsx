@@ -2,6 +2,7 @@
 
 import {
   memo,
+  useDeferredValue,
   useEffect,
   useMemo,
   useRef,
@@ -722,11 +723,19 @@ function MarkdownTable({ lines }: { lines: string[] }) {
   );
 }
 
-function MarkdownRenderer({ content }: { content: string }) {
-  const blocks = content.split(/```/g);
+function MarkdownRenderer({
+  content,
+  streaming = false,
+}: {
+  content: string;
+  streaming?: boolean;
+}) {
+  const deferredContent = useDeferredValue(content);
+  const renderedContent = streaming ? deferredContent : content;
+  const blocks = renderedContent.split(/```/g);
 
   return (
-    <div className="space-y-4 text-[15px] leading-8 text-zinc-300">
+    <div className="min-w-0 space-y-4 text-[15px] leading-8 text-zinc-300 [overflow-wrap:anywhere]">
       {blocks.map((block, blockIndex) => {
         if (blockIndex % 2 === 1) {
           const [language = "", ...codeLines] = block.replace(/^\n/, "").split("\n");
@@ -1135,11 +1144,26 @@ function ExecutiveSummaryVisual({ section }: { section: ReportSection }) {
   ];
 
   return (
-    <div className="mb-5 overflow-hidden rounded-[2rem] border border-teal-200/15 bg-[radial-gradient(circle_at_top_right,rgba(94,234,212,0.18),transparent_34%),linear-gradient(135deg,rgba(255,255,255,0.07),rgba(255,255,255,0.02))]">
+    <div className="mb-5 overflow-hidden rounded-[2.25rem] border border-teal-200/15 bg-[radial-gradient(circle_at_20%_10%,rgba(94,234,212,0.22),transparent_28%),radial-gradient(circle_at_90%_20%,rgba(20,184,166,0.12),transparent_32%),linear-gradient(135deg,rgba(255,255,255,0.075),rgba(255,255,255,0.018))]">
+      <div className="border-b border-white/10 px-5 py-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-teal-200/75">
+              Executive Summary
+            </p>
+            <h4 className="mt-2 text-2xl font-semibold tracking-tight text-white">
+              Investment Decision Snapshot
+            </h4>
+          </div>
+          <span className={`w-fit rounded-full border px-4 py-2 text-xs font-semibold tracking-[0.18em] ${getDecisionClasses(recommendation)}`}>
+            {recommendation}
+          </span>
+        </div>
+      </div>
       <div className="grid gap-0 lg:grid-cols-[0.9fr_1.35fr]">
         <div className="border-b border-white/10 p-5 lg:border-b-0 lg:border-r">
           <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-teal-200/75">
-            Executive Command View
+            AI Investment Score
           </p>
           <div className="mt-5 flex items-end gap-4">
             <div
@@ -1258,27 +1282,78 @@ function PremiumSectionVisual({ section }: { section: ReportSection }) {
     ];
 
     return (
-      <div className="mb-5 space-y-3 rounded-3xl border border-white/10 bg-white/[0.025] p-4">
-        {bars.map((bar) => {
-          const value = extractMetricValueFromAliases(section.content, bar.aliases);
+      <div className="mb-5 rounded-[2rem] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(94,234,212,0.12),transparent_30%),rgba(255,255,255,0.025)] p-5">
+        <div className="mb-5 flex items-end justify-between gap-4">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.26em] text-teal-200/75">
+              Market Sizing Blocks
+            </p>
+            <p className="mt-2 text-sm text-zinc-400">TAM, SAM and SOM shown as investable opportunity layers.</p>
+          </div>
+          <div className="hidden h-16 w-16 rounded-full border border-teal-200/20 bg-teal-200/10 sm:block" />
+        </div>
+        <div className="space-y-4">
+          {bars.map((bar) => {
+            const value = extractMetricValueFromAliases(section.content, bar.aliases);
 
-          return (
-            <div key={bar.label} className="grid grid-cols-[3rem_1fr] items-center gap-3">
-              <p className="text-xs font-semibold tracking-[0.2em] text-zinc-400">
-                {bar.label}
-              </p>
-              <div className="h-9 rounded-full bg-zinc-900 p-1">
-                <div
-                  className={`flex h-full items-center justify-between rounded-full bg-gradient-to-r ${bar.color} px-4 text-xs font-semibold text-black`}
-                  style={{ width: bar.width }}
-                >
-                  <span>{bar.label}</span>
-                  {value ? <span className="truncate pl-3">{value}</span> : null}
+            return (
+              <div key={bar.label} className="grid grid-cols-[4rem_1fr] items-center gap-4">
+                <div className="rounded-2xl border border-white/10 bg-black/35 p-3 text-center">
+                  <p className="text-xs font-semibold tracking-[0.2em] text-zinc-400">
+                    {bar.label}
+                  </p>
+                </div>
+                <div className="h-14 rounded-2xl border border-white/10 bg-zinc-950 p-1.5">
+                  <div
+                    className={`flex h-full items-center justify-between rounded-[1.1rem] bg-gradient-to-r ${bar.color} px-4 text-sm font-semibold text-black shadow-lg shadow-teal-950/20`}
+                    style={{ width: bar.width }}
+                  >
+                    <span>{bar.label}</span>
+                    {value ? <span className="truncate pl-3">{value}</span> : null}
+                  </div>
                 </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  if (field === "marketOpportunity" || field === "marketOverview") {
+    const opportunity = extractFirstInsight(section.content);
+    const chartBars = [
+      { label: "Demand", width: "82%", color: "bg-teal-200" },
+      { label: "Timing", width: "68%", color: "bg-cyan-200" },
+      { label: "Access", width: "56%", color: "bg-emerald-300" },
+      { label: "Defensibility", width: "48%", color: "bg-amber-200" },
+    ];
+
+    return (
+      <div className="mb-5 grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+        <div className="rounded-[2rem] border border-teal-200/15 bg-teal-200/[0.055] p-5">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.26em] text-teal-200/75">
+            Market Opportunity Chart
+          </p>
+          <p className="mt-3 line-clamp-3 text-xl font-semibold leading-8 text-white">
+            {opportunity || "Opportunity signal is being evaluated."}
+          </p>
+        </div>
+        <div className="rounded-[2rem] border border-white/10 bg-black/35 p-5">
+          <div className="space-y-4">
+            {chartBars.map((bar) => (
+              <div key={bar.label}>
+                <div className="mb-2 flex items-center justify-between text-xs">
+                  <span className="font-semibold uppercase tracking-[0.18em] text-zinc-500">{bar.label}</span>
+                  <span className="text-zinc-400">{bar.width}</span>
+                </div>
+                <div className="h-2.5 overflow-hidden rounded-full bg-white/10">
+                  <div className={`h-full rounded-full ${bar.color}`} style={{ width: bar.width }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     );
   }
@@ -1309,6 +1384,142 @@ function PremiumSectionVisual({ section }: { section: ReportSection }) {
             </div>
           );
         })}
+      </div>
+    );
+  }
+
+  if (field === "businessModel") {
+    const blocks = [
+      ["Value", extractKeywordInsight(section.content, ["value", "değer", "problem"])],
+      ["Delivery", extractKeywordInsight(section.content, ["delivery", "product", "platform", "ürün"])],
+      ["Revenue", extractKeywordInsight(section.content, ["revenue", "gelir", "subscription"])],
+      ["Moat", extractKeywordInsight(section.content, ["moat", "defensible", "advantage", "rekabet"])],
+    ];
+
+    return (
+      <div className="mb-5 rounded-[2rem] border border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.045),rgba(94,234,212,0.05))] p-5">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.26em] text-teal-200/75">
+          Operating Model Canvas
+        </p>
+        <div className="mt-4 grid gap-3 md:grid-cols-4">
+          {blocks.map(([label, value], index) => (
+            <div key={label} className="relative rounded-3xl border border-white/10 bg-black/35 p-4">
+              <span className="absolute right-4 top-4 text-3xl font-semibold text-white/5">
+                {index + 1}
+              </span>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">{label}</p>
+              <p className="mt-3 line-clamp-3 text-sm leading-6 text-zinc-200">{value || "Defined in analysis"}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (field === "pricingStrategy") {
+    const tiers = [
+      ["Entry", extractKeywordInsight(section.content, ["entry", "starter", "low", "başlangıç"])],
+      ["Core", extractKeywordInsight(section.content, ["core", "standard", "main", "ana"])],
+      ["Premium", extractKeywordInsight(section.content, ["premium", "enterprise", "high", "kurumsal"])],
+    ];
+
+    return (
+      <div className="mb-5 grid gap-3 md:grid-cols-3">
+        {tiers.map(([label, value], index) => (
+          <div
+            key={label}
+            className={`rounded-[2rem] border p-5 ${
+              index === 1
+                ? "border-teal-200/30 bg-teal-200/[0.07]"
+                : "border-white/10 bg-white/[0.03]"
+            }`}
+          >
+            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-zinc-500">
+              Pricing Tier
+            </p>
+            <p className="mt-3 text-2xl font-semibold text-white">{label}</p>
+            <p className="mt-4 line-clamp-3 text-sm leading-6 text-zinc-300">{value || "Pricing signal"}</p>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (field === "goToMarketPlan" || field === "salesStrategy" || field === "entryStrategy") {
+    const stages = ["Audience", "Channel", "Conversion", "Expansion"];
+
+    return (
+      <div className="mb-5 rounded-[2rem] border border-white/10 bg-black/35 p-5">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.26em] text-teal-200/75">
+          Go-To-Market Motion
+        </p>
+        <div className="mt-5 grid gap-3 md:grid-cols-4">
+          {stages.map((stage, index) => (
+            <div key={stage} className="relative rounded-3xl border border-white/10 bg-white/[0.035] p-4">
+              {index < stages.length - 1 ? (
+                <div className="absolute left-[calc(100%-0.25rem)] top-1/2 hidden h-px w-5 bg-teal-200/40 md:block" />
+              ) : null}
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-teal-200 text-xs font-bold text-black">
+                {index + 1}
+              </span>
+              <p className="mt-4 text-sm font-semibold text-white">{stage}</p>
+              <p className="mt-2 line-clamp-2 text-xs leading-5 text-zinc-500">
+                {extractKeywordInsight(section.content, [stage]) || "Execution lever"}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (field === "unitEconomics" || field === "financialAssumptions") {
+    const flow = ["Revenue", "CAC", "LTV", "Payback", "Runway"];
+
+    return (
+      <div className="mb-5 overflow-hidden rounded-[2rem] border border-white/10 bg-[linear-gradient(90deg,rgba(94,234,212,0.08),rgba(255,255,255,0.025))]">
+        <div className="border-b border-white/10 p-5">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.26em] text-teal-200/75">
+            Unit Economics Chain
+          </p>
+        </div>
+        <div className="grid gap-px bg-white/10 md:grid-cols-5">
+          {flow.map((metric) => (
+            <div key={metric} className="bg-zinc-950/80 p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">{metric}</p>
+              <p className="mt-3 line-clamp-2 text-lg font-semibold text-white">
+                {extractMetricValue(section.content, metric) || "Assumption"}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (field === "competitorAnalysis" || field === "competitorLandscape") {
+    return (
+      <div className="mb-5 rounded-[2rem] border border-white/10 bg-white/[0.025] p-5">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.26em] text-teal-200/75">
+          Competitive Positioning Map
+        </p>
+        <div className="relative mt-5 h-64 rounded-3xl border border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.035),rgba(94,234,212,0.07))]">
+          <div className="absolute left-1/2 top-0 h-full w-px bg-white/10" />
+          <div className="absolute left-0 top-1/2 h-px w-full bg-white/10" />
+          {[
+            ["Incumbents", "24%", "32%"],
+            ["Specialists", "70%", "30%"],
+            ["ZERINIX Thesis", "58%", "62%"],
+            ["Low-end", "28%", "75%"],
+          ].map(([label, left, top], index) => (
+            <div key={label} className="absolute -translate-x-1/2 -translate-y-1/2" style={{ left, top }}>
+              <div className={`h-4 w-4 rounded-full ${index === 2 ? "bg-teal-200" : "bg-white/35"}`} />
+              <p className="mt-2 whitespace-nowrap rounded-full border border-white/10 bg-black/65 px-2 py-1 text-xs font-semibold text-zinc-200">
+                {label}
+              </p>
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
@@ -1373,15 +1584,15 @@ function PremiumSectionVisual({ section }: { section: ReportSection }) {
             );
           })}
         </div>
-        <div className="m-4 mt-0 overflow-hidden rounded-3xl border border-white/10 bg-black/35">
-          <div className="grid grid-cols-4 border-b border-white/10 px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
+        <div className="m-4 mt-0 overflow-x-auto rounded-3xl border border-white/10 bg-black/35">
+          <div className="grid min-w-[680px] grid-cols-4 border-b border-white/10 px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
             <span>Metric</span>
             <span>Current</span>
             <span>Benchmark</span>
             <span>Status</span>
           </div>
           {benchmarkRows.map((row) => (
-            <div key={row.metric} className="grid grid-cols-4 gap-3 border-b border-white/10 px-4 py-3 text-sm last:border-b-0">
+            <div key={row.metric} className="grid min-w-[680px] grid-cols-4 gap-3 border-b border-white/10 px-4 py-3 text-sm last:border-b-0">
               <span className="font-medium text-white">{row.metric}</span>
               <span className="text-zinc-300">{extractMetricValue(section.content, row.metric) || "TBD"}</span>
               <span className="text-teal-100/80">{row.benchmark}</span>
@@ -1413,15 +1624,24 @@ function PremiumSectionVisual({ section }: { section: ReportSection }) {
 
   if (field === "scenarioAnalysis") {
     const scenarioMetrics = ["Revenue", "MRR", "Burn", "Runway", "Risk", "Decision"];
+    const styles = {
+      Worst: "border-red-300/20 bg-red-300/[0.055]",
+      Base: "border-teal-200/20 bg-teal-200/[0.055]",
+      Best: "border-emerald-300/20 bg-emerald-300/[0.06]",
+    } as const;
 
     return (
-      <div className="mb-5 grid gap-3 md:grid-cols-3">
+      <div className="mb-5 space-y-4">
+        <div className="grid gap-3 md:grid-cols-3">
         {["Worst", "Base", "Best"].map((scenario) => {
           const snippet = extractSectionSnippet(section.content, scenario);
 
           return (
-            <div key={scenario} className="rounded-3xl border border-white/10 bg-white/[0.035] p-4">
-              <p className="text-lg font-semibold text-white">{scenario}</p>
+            <div key={scenario} className={`rounded-3xl border p-4 ${styles[scenario as keyof typeof styles]}`}>
+              <div className="flex items-center justify-between">
+                <p className="text-lg font-semibold text-white">{scenario}</p>
+                <span className="h-3 w-3 rounded-full bg-current text-teal-200" />
+              </div>
               <div className="mt-4 space-y-2">
                 {scenarioMetrics.map((metric) => (
                   <div key={metric} className="flex items-start justify-between gap-3 border-t border-white/10 pt-2 first:border-t-0 first:pt-0">
@@ -1435,6 +1655,27 @@ function PremiumSectionVisual({ section }: { section: ReportSection }) {
             </div>
           );
         })}
+        </div>
+        <div className="rounded-[2rem] border border-white/10 bg-black/35 p-5">
+          <div className="mb-4 flex items-center justify-between text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">
+            <span>Risk</span>
+            <span>Return</span>
+          </div>
+          <div className="relative h-44 rounded-3xl border border-white/10 bg-[linear-gradient(135deg,rgba(248,113,113,0.16),rgba(94,234,212,0.14))]">
+            <div className="absolute left-1/2 top-0 h-full w-px bg-white/10" />
+            <div className="absolute left-0 top-1/2 h-px w-full bg-white/10" />
+            {[
+              { label: "Worst", left: "22%", top: "68%", color: "bg-red-300" },
+              { label: "Base", left: "50%", top: "42%", color: "bg-teal-200" },
+              { label: "Best", left: "76%", top: "22%", color: "bg-emerald-300" },
+            ].map((point) => (
+              <div key={point.label} className="absolute -translate-x-1/2 -translate-y-1/2" style={{ left: point.left, top: point.top }}>
+                <div className={`h-4 w-4 rounded-full ${point.color} shadow-lg shadow-black`} />
+                <p className="mt-2 rounded-full bg-black/60 px-2 py-1 text-xs font-semibold text-white">{point.label}</p>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     );
   }
@@ -1450,7 +1691,7 @@ function PremiumSectionVisual({ section }: { section: ReportSection }) {
     ];
 
     return (
-      <div className="mb-5 rounded-[2rem] border border-teal-200/20 bg-teal-200/[0.06] p-5">
+      <div className="mb-5 rounded-[2.25rem] border border-teal-200/20 bg-[radial-gradient(circle_at_top_right,rgba(94,234,212,0.16),transparent_30%),rgba(94,234,212,0.06)] p-5">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-teal-200/80">
@@ -1487,25 +1728,44 @@ function PremiumSectionVisual({ section }: { section: ReportSection }) {
             </div>
           ))}
         </div>
+        <div className="mt-5 grid gap-4 lg:grid-cols-[0.85fr_1.15fr]">
+          <div className="rounded-3xl border border-white/10 bg-black/30 p-4">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500">Confidence Meter</p>
+            <div className="mt-4 h-3 overflow-hidden rounded-full bg-white/10">
+              <div className="h-full rounded-full bg-teal-200" style={{ width: `${extractConfidence(section.content) ?? 50}%` }} />
+            </div>
+          </div>
+          <div className="rounded-3xl border border-white/10 bg-black/30 p-4">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500">Next Actions Checklist</p>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              {["Validate demand", "Protect runway", "Refine ICP", "Measure conversion"].map((action) => (
+                <div key={action} className="flex items-center gap-2 text-sm text-zinc-300">
+                  <span className="h-4 w-4 rounded-full border border-teal-200/40 bg-teal-200/10" />
+                  {action}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
 
   if (field === "founderRoadmap" || field === "roadmap306090") {
     return (
-      <div className="mb-5 overflow-x-auto rounded-3xl border border-white/10 bg-white/[0.025] p-4">
-        <div className="grid min-w-[780px] grid-cols-6 gap-3">
+      <div className="mb-5 overflow-x-auto rounded-[2rem] border border-white/10 bg-[linear-gradient(90deg,rgba(94,234,212,0.08),rgba(255,255,255,0.02))] p-5">
+        <div className="relative grid min-w-[840px] grid-cols-6 gap-4">
+        <div className="absolute left-8 right-8 top-8 h-px bg-gradient-to-r from-teal-200/10 via-teal-200/50 to-teal-200/10" />
         {founderRoadmapSteps.map((step, index) => (
-          <div key={step} className="relative rounded-2xl border border-white/10 bg-black/30 p-4">
-            {index < founderRoadmapSteps.length - 1 ? (
-              <div className="absolute left-[calc(100%-0.25rem)] top-1/2 hidden h-px w-4 bg-teal-200/40 md:block" />
-            ) : null}
+          <div key={step} className="relative rounded-[1.4rem] border border-white/10 bg-black/45 p-4">
             <div className="flex flex-col gap-3">
               <span className="flex h-8 w-8 items-center justify-center rounded-full bg-teal-200 text-xs font-bold text-black">
                 {index + 1}
               </span>
               <p className="text-sm font-semibold text-white">{step}</p>
-              <p className="text-xs leading-5 text-zinc-500">Milestone</p>
+              <span className="w-fit rounded-full border border-white/10 bg-white/[0.04] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
+                {index < 2 ? "Priority" : index < 4 ? "Build" : "Scale"}
+              </span>
             </div>
           </div>
         ))}
@@ -1515,24 +1775,49 @@ function PremiumSectionVisual({ section }: { section: ReportSection }) {
   }
 
   if (field === "portersFiveForces") {
+    const forces = ["Rivalry", "Entrants", "Buyer Power", "Supplier Power", "Substitutes"];
+
     return (
-      <div className="mb-5 grid gap-3 sm:grid-cols-5">
-        {["Rivalry", "Entrants", "Buyer Power", "Supplier Power", "Substitutes"].map((force, index) => (
-          <div key={force} className="rounded-3xl border border-white/10 bg-white/[0.035] p-4">
-            <p className="text-sm font-semibold text-white">{force}</p>
-            <p className="mt-3 text-lg tracking-[0.08em] text-teal-200">
-              {"★★★★★".slice(0, Math.max(2, 5 - (index % 3)))}
-              <span className="text-zinc-700">{"★★★★★".slice(Math.max(2, 5 - (index % 3)))}</span>
-            </p>
-            <div className="mt-4 h-2 overflow-hidden rounded-full bg-zinc-800">
+      <div className="mb-5 grid gap-4 lg:grid-cols-[0.85fr_1.15fr]">
+        <div className="relative flex min-h-72 items-center justify-center rounded-[2rem] border border-white/10 bg-[radial-gradient(circle,rgba(94,234,212,0.12),transparent_58%)]">
+          <div className="absolute h-56 w-56 rounded-full border border-teal-200/10" />
+          <div className="absolute h-40 w-40 rounded-full border border-teal-200/15" />
+          <div className="absolute h-24 w-24 rounded-full border border-teal-200/20" />
+          <div className="h-4 w-4 rounded-full bg-teal-200 shadow-[0_0_32px_rgba(94,234,212,0.55)]" />
+          {forces.map((force, index) => {
+            const positions = [
+              ["50%", "8%"],
+              ["82%", "30%"],
+              ["70%", "78%"],
+              ["30%", "78%"],
+              ["18%", "30%"],
+            ];
+
+            return (
               <div
-                className="h-full rounded-full bg-teal-200/75"
-                style={{ width: `${[72, 54, 66, 48, 60][index]}%` }}
-              />
+                key={force}
+                className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/10 bg-black/70 px-3 py-1 text-xs font-semibold text-teal-100"
+                style={{ left: positions[index][0], top: positions[index][1] }}
+              >
+                {force}
+              </div>
+            );
+          })}
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {forces.map((force, index) => (
+            <div key={force} className="rounded-3xl border border-white/10 bg-white/[0.035] p-4">
+              <p className="text-sm font-semibold text-white">{force}</p>
+              <div className="mt-4 h-2 overflow-hidden rounded-full bg-zinc-800">
+                <div
+                  className="h-full rounded-full bg-teal-200/75"
+                  style={{ width: `${[72, 54, 66, 48, 60][index]}%` }}
+                />
+              </div>
+              <p className="mt-2 text-xs text-zinc-500">Force intensity</p>
             </div>
-            <p className="mt-2 text-xs text-zinc-500">Force intensity</p>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
     );
   }
@@ -1570,15 +1855,26 @@ function PremiumSectionVisual({ section }: { section: ReportSection }) {
 function hasPremiumSectionVisual(section: ReportSection) {
   return (
     section.field === "executiveSummary" ||
+    section.field === "marketOverview" ||
+    section.field === "marketOpportunity" ||
+    section.field === "businessModel" ||
+    section.field === "competitorAnalysis" ||
+    section.field === "competitorLandscape" ||
     section.field === "tamSamSom" ||
     section.field === "swotAnalysis" ||
     section.field === "financialDashboard" ||
+    section.field === "financialAssumptions" ||
     section.field === "founderScore" ||
     section.field === "scenarioAnalysis" ||
     section.field === "executiveRecommendation" ||
     section.field === "founderRoadmap" ||
     section.field === "roadmap306090" ||
     section.field === "portersFiveForces" ||
+    section.field === "pricingStrategy" ||
+    section.field === "goToMarketPlan" ||
+    section.field === "salesStrategy" ||
+    section.field === "entryStrategy" ||
+    section.field === "unitEconomics" ||
     section.field === "kpiDashboard" ||
     section.field === "kpis"
   );
@@ -1586,7 +1882,7 @@ function hasPremiumSectionVisual(section: ReportSection) {
 
 function getReportArticleClass(section: ReportSection) {
   const base =
-    "relative overflow-hidden rounded-[1.75rem] border p-5 shadow-xl shadow-black/30";
+    "relative min-h-[220px] overflow-hidden rounded-[1.75rem] border p-5 shadow-xl shadow-black/30";
 
   if (section.field === "executiveSummary") {
     return `${base} border-teal-200/20 bg-[radial-gradient(circle_at_top_right,rgba(94,234,212,0.12),transparent_34%),rgba(0,0,0,0.62)]`;
@@ -1596,7 +1892,13 @@ function getReportArticleClass(section: ReportSection) {
     return `${base} border-white/10 bg-[linear-gradient(135deg,rgba(10,10,10,0.92),rgba(20,83,75,0.16))]`;
   }
 
-  if (section.field === "swotAnalysis" || section.field === "portersFiveForces" || section.field === "scenarioAnalysis") {
+  if (
+    section.field === "swotAnalysis" ||
+    section.field === "portersFiveForces" ||
+    section.field === "scenarioAnalysis" ||
+    section.field === "marketOverview" ||
+    section.field === "marketOpportunity"
+  ) {
     return `${base} border-white/10 bg-[linear-gradient(180deg,rgba(24,24,27,0.72),rgba(0,0,0,0.48))]`;
   }
 
@@ -1927,7 +2229,7 @@ function ConversationSidebar({
   );
 }
 
-function ChatMessageBubble({
+const ChatMessageBubble = memo(function ChatMessageBubble({
   message,
   onEdit,
   onSaveEdit,
@@ -1968,11 +2270,12 @@ function ChatMessageBubble({
         </div>
       ) : null}
       <div
-        className={`max-w-3xl rounded-3xl border p-5 shadow-xl shadow-black/20 transition ${
+        className={`w-full min-w-0 max-w-3xl rounded-3xl border p-5 shadow-xl shadow-black/20 transition ${
           isUser
             ? "border-teal-300/20 bg-teal-300/10"
             : "border-white/10 bg-zinc-950/80"
         }`}
+        style={{ contain: message.status === "streaming" ? "layout paint" : undefined }}
       >
         <div className="mb-3 flex items-center justify-between gap-4">
           <p className="text-xs font-semibold tracking-[0.2em] text-zinc-500">
@@ -2048,7 +2351,12 @@ function ChatMessageBubble({
             </div>
           </div>
         ) : (
-          <MarkdownRenderer content={message.content} />
+          <div className={message.status === "streaming" ? "min-h-28" : undefined}>
+            <MarkdownRenderer
+              content={message.content}
+              streaming={message.status === "streaming"}
+            />
+          </div>
         )}
 
         {message.attachments && message.attachments.length > 0 ? (
@@ -2071,6 +2379,27 @@ function ChatMessageBubble({
         </div>
       ) : null}
     </div>
+  );
+}, areChatMessagesEqual);
+
+function areChatMessagesEqual(
+  previous: {
+    message: ChatMessage;
+  },
+  next: {
+    message: ChatMessage;
+  }
+) {
+  const previousMessage = previous.message;
+  const nextMessage = next.message;
+
+  return (
+    previousMessage.id === nextMessage.id &&
+    previousMessage.content === nextMessage.content &&
+    previousMessage.status === nextMessage.status &&
+    previousMessage.role === nextMessage.role &&
+    previousMessage.mode === nextMessage.mode &&
+    previousMessage.attachments === nextMessage.attachments
   );
 }
 
@@ -2676,7 +3005,7 @@ const ReportPanel = memo(function ReportPanel({
   }
 
   return (
-    <section className="overflow-hidden rounded-[2rem] border border-white/10 bg-zinc-950/70 shadow-2xl shadow-black/50 backdrop-blur-2xl">
+    <section className="min-h-[640px] overflow-hidden rounded-[2rem] border border-white/10 bg-zinc-950/70 shadow-2xl shadow-black/50 backdrop-blur-2xl">
       <div className="border-b border-white/10 bg-[radial-gradient(circle_at_top_right,rgba(94,234,212,0.14),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.02))] p-5 sm:p-7">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
@@ -2704,6 +3033,7 @@ const ReportPanel = memo(function ReportPanel({
             <article
               key={section.title}
               className={getReportArticleClass(section)}
+              style={{ contain: section.content === waitingMessage ? "layout paint" : undefined }}
             >
               <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-teal-200/30 to-transparent" />
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
@@ -2781,6 +3111,94 @@ const ReportPanel = memo(function ReportPanel({
   );
 });
 
+function ReportGenerationShell({
+  title,
+  currentSection,
+  progress,
+}: {
+  title: string;
+  currentSection: string;
+  progress: number;
+}) {
+  const safeProgress = Math.max(0, Math.min(100, progress));
+
+  return (
+    <section className="min-h-[640px] overflow-hidden rounded-[2rem] border border-white/10 bg-zinc-950/70 shadow-2xl shadow-black/50 backdrop-blur-2xl">
+      <div className="border-b border-white/10 bg-[radial-gradient(circle_at_top_right,rgba(94,234,212,0.14),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.02))] p-5 sm:p-7">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold tracking-[0.35em] text-teal-300/70">
+              ZERINIX EXECUTIVE REPORT
+            </p>
+            <h2 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+              {title}
+            </h2>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-400">
+              ZERINIX is generating the complete report before rendering the final document.
+            </p>
+          </div>
+          <div className="w-fit rounded-full border border-teal-300/20 bg-teal-300/10 px-4 py-2 text-sm text-teal-100">
+            Generating
+          </div>
+        </div>
+      </div>
+
+      <div className="p-4 sm:p-5">
+        <div className="rounded-[1.75rem] border border-teal-200/15 bg-[linear-gradient(135deg,rgba(94,234,212,0.1),rgba(255,255,255,0.025))] p-5">
+          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.26em] text-teal-200/75">
+                Overall Progress
+              </p>
+              <p className="mt-2 text-xl font-semibold tracking-tight text-white">
+                {currentSection || "Preparing report engine"}
+              </p>
+            </div>
+            <p className="text-4xl font-semibold tracking-tight text-white">
+              {Math.round(safeProgress)}%
+            </p>
+          </div>
+          <div className="mt-5 h-3 overflow-hidden rounded-full bg-white/10">
+            <div
+              className="h-full rounded-full bg-teal-200 transition-[width] duration-500 ease-out"
+              style={{ width: `${safeProgress}%` }}
+            />
+          </div>
+        </div>
+
+        <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {[
+            "Executive thesis",
+            "Market intelligence",
+            "Financial model",
+            "Scenario analysis",
+            "Founder roadmap",
+            "Final recommendation",
+          ].map((label, index) => (
+            <div
+              key={label}
+              className="min-h-40 rounded-[1.75rem] border border-white/10 bg-black/35 p-5"
+            >
+              <div className="flex items-center justify-between">
+                <span className="h-9 w-9 rounded-2xl border border-teal-200/20 bg-teal-200/10" />
+                <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
+                  {String(index + 1).padStart(2, "0")}
+                </span>
+              </div>
+              <p className="mt-5 text-sm font-semibold text-white">{label}</p>
+              <div className="mt-4 space-y-2.5">
+                <div className="h-2.5 animate-pulse rounded-full bg-white/10" />
+                <div className="h-2.5 w-10/12 animate-pulse rounded-full bg-white/10" />
+                <div className="h-2.5 w-7/12 animate-pulse rounded-full bg-white/10" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default function Planner({
   initialConversations = [],
   conversationLoadError = "",
@@ -2804,6 +3222,8 @@ export default function Planner({
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
   const [activeMode, setActiveMode] = useState<ChatMode>("plan");
   const [workflowCompletedSteps, setWorkflowCompletedSteps] = useState(0);
+  const [reportProgress, setReportProgress] = useState(0);
+  const [currentReportSectionName, setCurrentReportSectionName] = useState("");
   const [isDraggingFiles, setIsDraggingFiles] = useState(false);
   const [conversationError, setConversationError] = useState(conversationLoadError);
   const [userEmail, setUserEmail] = useState("");
@@ -2815,6 +3235,8 @@ export default function Planner({
     useState<ResponseLanguage>("English");
   const chatScrollerRef = useRef<HTMLDivElement | null>(null);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
+  const isNearBottomRef = useRef(true);
+  const scrollFrameRef = useRef<number | null>(null);
   const persistedConversationIdsRef = useRef(
     new Set(initialConversations.map((conversation) => conversation.id))
   );
@@ -2838,12 +3260,53 @@ export default function Planner({
     void loadPersistedConversations();
   }, []);
 
-  useEffect(() => {
-    chatScrollerRef.current?.scrollTo({
-      top: chatScrollerRef.current.scrollHeight,
-      behavior: "smooth",
+  function updateNearBottomState() {
+    const scroller = chatScrollerRef.current;
+
+    if (!scroller) {
+      isNearBottomRef.current = true;
+      return;
+    }
+
+    const distanceFromBottom =
+      scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight;
+    isNearBottomRef.current = distanceFromBottom < 180;
+  }
+
+  function scheduleScrollToBottom(behavior: ScrollBehavior = "smooth") {
+    if (!isNearBottomRef.current) {
+      return;
+    }
+
+    if (scrollFrameRef.current !== null) {
+      return;
+    }
+
+    scrollFrameRef.current = requestAnimationFrame(() => {
+      scrollFrameRef.current = null;
+      const scroller = chatScrollerRef.current;
+
+      if (!scroller || !isNearBottomRef.current) {
+        return;
+      }
+
+      scroller.scrollTo({
+        top: scroller.scrollHeight,
+        behavior,
+      });
     });
-  }, [messages.length, planReport, marketReport, result, workflowCompletedSteps]);
+  }
+
+  useEffect(() => {
+    scheduleScrollToBottom(messages.length <= 2 ? "auto" : "smooth");
+
+    return () => {
+      if (scrollFrameRef.current !== null) {
+        cancelAnimationFrame(scrollFrameRef.current);
+        scrollFrameRef.current = null;
+      }
+    };
+  }, [messages.length, workflowCompletedSteps]);
 
   useEffect(() => {
     function handleShortcut(event: KeyboardEvent) {
@@ -2895,6 +3358,8 @@ export default function Planner({
     setMarketReport(null);
     setPlanReport(null);
     setWorkflowCompletedSteps(0);
+    setReportProgress(0);
+    setCurrentReportSectionName("");
     await ensurePersistedConversation(id, conversation.title);
   }
 
@@ -3601,6 +4066,8 @@ export default function Planner({
     setActiveMode("plan");
     setWorkflowCompletedSteps(0);
     setLastRequest({ mode: "plan", prompt: submittedPrompt });
+    setReportProgress(0);
+    setCurrentReportSectionName("Preparing report engine");
     const responseLanguage = detectResponseLanguage(submittedPrompt);
     const copy = getLanguageCopy(responseLanguage);
     const outputFields = localizeReportFields(planReportFields, responseLanguage);
@@ -3640,32 +4107,19 @@ export default function Planner({
     });
     setResult("");
     setMarketReport(null);
-    setPlanReport(emptyPlanReport);
+    setPlanReport(null);
 
     const reportOutput: PlanReport = { ...emptyPlanReport };
-    let frame: number | null = null;
+    let completedSections = 0;
     let remainingSectionsStarted = false;
     let remainingSectionsPromise: Promise<void[]> = Promise.resolve([]);
 
-    const renderReport = () => {
-      setPlanReport({ ...reportOutput });
-      updateAssistantMessage(
-        assistantMessageId,
-        getReportMarkdown(copy.planTitle, reportOutput, outputFields),
-        "streaming",
-        conversationId
+    const markSectionComplete = (field: PlanReportField) => {
+      completedSections += 1;
+      setCurrentReportSectionName(
+        outputFields.find((item) => item.field === field)?.title || copy.planTitle
       );
-    };
-
-    const scheduleReportRender = () => {
-      if (frame !== null) {
-        return;
-      }
-
-      frame = requestAnimationFrame(() => {
-        frame = null;
-        renderReport();
-      });
+      setReportProgress((completedSections / planReportFields.length) * 100);
     };
 
     const streamField = async (
@@ -3684,6 +4138,9 @@ export default function Planner({
       });
 
       const fieldIndex = planReportFields.findIndex((item) => item.field === field);
+      setCurrentReportSectionName(
+        outputFields.find((item) => item.field === field)?.title || copy.planTitle
+      );
       setWorkflowCompletedSteps((current) =>
         Math.max(current, Math.min(workflowSteps.length - 1, fieldIndex + 1))
       );
@@ -3698,12 +4155,12 @@ export default function Planner({
           }
 
           reportOutput[field] += chunk;
-          scheduleReportRender();
         },
         copy.sectionFallback,
         onFirstChunk,
         field
       );
+      markSectionComplete(field);
     };
 
     const startRemainingSections = () => {
@@ -3718,7 +4175,7 @@ export default function Planner({
           .map(({ field }) =>
             streamField(field).catch(() => {
               reportOutput[field] = copy.sectionFallback;
-              scheduleReportRender();
+              markSectionComplete(field);
             })
           )
       );
@@ -3729,11 +4186,9 @@ export default function Planner({
       startRemainingSections();
       await remainingSectionsPromise;
 
-      if (frame !== null) {
-        cancelAnimationFrame(frame);
-      }
-
-      renderReport();
+      setPlanReport({ ...reportOutput });
+      setReportProgress(100);
+      setCurrentReportSectionName("Report ready");
       setWorkflowCompletedSteps(workflowSteps.length);
       updateAssistantMessage(
         assistantMessageId,
@@ -3782,6 +4237,8 @@ export default function Planner({
     setActiveMode("market");
     setWorkflowCompletedSteps(0);
     setLastRequest({ mode: "market", prompt: submittedPrompt });
+    setReportProgress(0);
+    setCurrentReportSectionName("Preparing report engine");
     const responseLanguage = detectResponseLanguage(submittedPrompt);
     const copy = getLanguageCopy(responseLanguage);
     const outputFields = localizeReportFields(reportFields, responseLanguage);
@@ -3821,32 +4278,19 @@ export default function Planner({
     });
     setResult("");
     setPlanReport(null);
-    setMarketReport(emptyMarketReport);
+    setMarketReport(null);
 
     const reportOutput: MarketReport = { ...emptyMarketReport };
-    let frame: number | null = null;
+    let completedSections = 0;
     let remainingSectionsStarted = false;
     let remainingSectionsPromise: Promise<void[]> = Promise.resolve([]);
 
-    const renderReport = () => {
-      setMarketReport({ ...reportOutput });
-      updateAssistantMessage(
-        assistantMessageId,
-        getReportMarkdown(copy.marketTitle, reportOutput, outputFields),
-        "streaming",
-        conversationId
+    const markSectionComplete = (field: MarketReportField) => {
+      completedSections += 1;
+      setCurrentReportSectionName(
+        outputFields.find((item) => item.field === field)?.title || copy.marketTitle
       );
-    };
-
-    const scheduleReportRender = () => {
-      if (frame !== null) {
-        return;
-      }
-
-      frame = requestAnimationFrame(() => {
-        frame = null;
-        renderReport();
-      });
+      setReportProgress((completedSections / reportFields.length) * 100);
     };
 
     const streamField = async (
@@ -3865,6 +4309,9 @@ export default function Planner({
       });
 
       const fieldIndex = reportFields.findIndex((item) => item.field === field);
+      setCurrentReportSectionName(
+        outputFields.find((item) => item.field === field)?.title || copy.marketTitle
+      );
       setWorkflowCompletedSteps((current) =>
         Math.max(current, Math.min(workflowSteps.length - 1, fieldIndex + 1))
       );
@@ -3879,12 +4326,12 @@ export default function Planner({
           }
 
           reportOutput[field] += chunk;
-          scheduleReportRender();
         },
         copy.sectionFallback,
         onFirstChunk,
         field
       );
+      markSectionComplete(field);
     };
 
     const startRemainingSections = () => {
@@ -3899,7 +4346,7 @@ export default function Planner({
           .map(({ field }) =>
             streamField(field).catch(() => {
               reportOutput[field] = copy.sectionFallback;
-              scheduleReportRender();
+              markSectionComplete(field);
             })
           )
       );
@@ -3910,11 +4357,9 @@ export default function Planner({
       startRemainingSections();
       await remainingSectionsPromise;
 
-      if (frame !== null) {
-        cancelAnimationFrame(frame);
-      }
-
-      renderReport();
+      setMarketReport({ ...reportOutput });
+      setReportProgress(100);
+      setCurrentReportSectionName("Report ready");
       setWorkflowCompletedSteps(workflowSteps.length);
       updateAssistantMessage(
         assistantMessageId,
@@ -3953,14 +4398,22 @@ export default function Planner({
   }
 
   const currentResponseLanguage = activeReportLanguage;
-  const currentLanguageCopy = getLanguageCopy(currentResponseLanguage);
-  const activeReportFields = planReport
-    ? localizeReportFields(planReportFields, currentResponseLanguage)
-    : localizeReportFields(reportFields, currentResponseLanguage) as Array<{
+  const currentLanguageCopy = useMemo(
+    () => getLanguageCopy(currentResponseLanguage),
+    [currentResponseLanguage]
+  );
+  const activeReportMode = planReport ? "plan" : "market";
+  const activeReportFields = useMemo(
+    () =>
+      (activeReportMode === "plan"
+        ? localizeReportFields(planReportFields, currentResponseLanguage)
+        : localizeReportFields(reportFields, currentResponseLanguage)) as Array<{
         field: keyof (MarketReport & PlanReport);
         title: string;
         icon: LucideIcon;
-      }>;
+      }>,
+    [activeReportMode, currentResponseLanguage]
+  );
   const currentReportTitle = planReport
     ? currentLanguageCopy.planTitle
     : currentLanguageCopy.marketTitle;
@@ -4058,7 +4511,11 @@ export default function Planner({
           </div>
         </header>
 
-        <div ref={chatScrollerRef} className="relative z-10 flex-1 overflow-y-auto px-4 py-5 sm:px-5 lg:px-8">
+        <div
+          ref={chatScrollerRef}
+          onScroll={updateNearBottomState}
+          className="relative z-10 flex-1 overflow-y-auto scroll-smooth px-4 py-5 sm:px-5 lg:px-8"
+        >
           <div className="mx-auto flex max-w-6xl flex-col gap-5 pb-48">
             {conversationError ? (
               <div className="rounded-3xl border border-red-300/20 bg-red-950/30 p-4 text-sm leading-6 text-red-100 shadow-2xl shadow-black/30">
@@ -4116,7 +4573,13 @@ export default function Planner({
 
             <WorkflowPanel active={isWorking} completedSteps={workflowCompletedSteps} />
 
-            {(planReport || marketReport || result) ? (
+            {isWorking ? (
+              <ReportGenerationShell
+                title={currentReportTitle}
+                currentSection={currentReportSectionName}
+                progress={reportProgress}
+              />
+            ) : (planReport || marketReport || result) ? (
               <ReportPanel
                 reportData={planReport || marketReport}
                 reportFields={activeReportFields}

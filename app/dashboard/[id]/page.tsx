@@ -329,11 +329,26 @@ function ExecutiveSummaryVisual({
   ];
 
   return (
-    <div className="mb-5 overflow-hidden rounded-[2rem] border border-teal-200/15 bg-[radial-gradient(circle_at_top_right,rgba(94,234,212,0.18),transparent_34%),linear-gradient(135deg,rgba(255,255,255,0.07),rgba(255,255,255,0.02))]">
+    <div className="mb-5 overflow-hidden rounded-[2.25rem] border border-teal-200/15 bg-[radial-gradient(circle_at_20%_10%,rgba(94,234,212,0.22),transparent_28%),radial-gradient(circle_at_90%_20%,rgba(20,184,166,0.12),transparent_32%),linear-gradient(135deg,rgba(255,255,255,0.075),rgba(255,255,255,0.018))]">
+      <div className="border-b border-white/10 px-5 py-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-teal-200/75">
+              Executive Summary
+            </p>
+            <h4 className="mt-2 text-2xl font-semibold tracking-tight text-white">
+              Investment Decision Snapshot
+            </h4>
+          </div>
+          <span className={`w-fit rounded-full border px-4 py-2 text-xs font-semibold tracking-[0.18em] ${getDecisionClasses(recommendation)}`}>
+            {recommendation}
+          </span>
+        </div>
+      </div>
       <div className="grid gap-0 lg:grid-cols-[0.9fr_1.35fr]">
         <div className="border-b border-white/10 p-5 lg:border-b-0 lg:border-r">
           <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-teal-200/75">
-            Executive Command View
+            AI Investment Score
           </p>
           <div className="mt-5 flex items-end gap-4">
             <div
@@ -462,25 +477,76 @@ function ReportSectionVisual({
     ];
 
     return (
-      <div className="mb-5 space-y-3 rounded-3xl border border-white/10 bg-white/[0.025] p-4">
-        {bars.map((bar) => {
-          const value = extractMetricValueFromAliases(content, bar.aliases);
+      <div className="mb-5 rounded-[2rem] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(94,234,212,0.12),transparent_30%),rgba(255,255,255,0.025)] p-5">
+        <div className="mb-5 flex items-end justify-between gap-4">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.26em] text-teal-200/75">
+              Market Sizing Blocks
+            </p>
+            <p className="mt-2 text-sm text-zinc-400">TAM, SAM and SOM shown as investable opportunity layers.</p>
+          </div>
+          <div className="hidden h-16 w-16 rounded-full border border-teal-200/20 bg-teal-200/10 sm:block" />
+        </div>
+        <div className="space-y-4">
+          {bars.map((bar) => {
+            const value = extractMetricValueFromAliases(content, bar.aliases);
 
-          return (
-            <div key={bar.label} className="grid grid-cols-[3rem_1fr] items-center gap-3">
-              <p className="text-xs font-semibold tracking-[0.2em] text-zinc-400">{bar.label}</p>
-              <div className="h-9 rounded-full bg-zinc-900 p-1">
-                <div
-                  className={`flex h-full items-center justify-between rounded-full bg-gradient-to-r ${bar.color} px-4 text-xs font-semibold text-black`}
-                  style={{ width: bar.width }}
-                >
-                  <span>{bar.label}</span>
-                  {value ? <span className="truncate pl-3">{value}</span> : null}
+            return (
+              <div key={bar.label} className="grid grid-cols-[4rem_1fr] items-center gap-4">
+                <div className="rounded-2xl border border-white/10 bg-black/35 p-3 text-center">
+                  <p className="text-xs font-semibold tracking-[0.2em] text-zinc-400">{bar.label}</p>
+                </div>
+                <div className="h-14 rounded-2xl border border-white/10 bg-zinc-950 p-1.5">
+                  <div
+                    className={`flex h-full items-center justify-between rounded-[1.1rem] bg-gradient-to-r ${bar.color} px-4 text-sm font-semibold text-black shadow-lg shadow-teal-950/20`}
+                    style={{ width: bar.width }}
+                  >
+                    <span>{bar.label}</span>
+                    {value ? <span className="truncate pl-3">{value}</span> : null}
+                  </div>
                 </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  if (normalizedTitle.includes("market opportunity") || normalizedTitle.includes("market overview") || normalizedTitle.includes("market analysis")) {
+    const opportunity = extractFirstInsight(content);
+    const chartBars = [
+      { label: "Demand", width: "82%", color: "bg-teal-200" },
+      { label: "Timing", width: "68%", color: "bg-cyan-200" },
+      { label: "Access", width: "56%", color: "bg-emerald-300" },
+      { label: "Defensibility", width: "48%", color: "bg-amber-200" },
+    ];
+
+    return (
+      <div className="mb-5 grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+        <div className="rounded-[2rem] border border-teal-200/15 bg-teal-200/[0.055] p-5">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.26em] text-teal-200/75">
+            Market Opportunity Chart
+          </p>
+          <p className="mt-3 line-clamp-3 text-xl font-semibold leading-8 text-white">
+            {opportunity || "Opportunity signal is being evaluated."}
+          </p>
+        </div>
+        <div className="rounded-[2rem] border border-white/10 bg-black/35 p-5">
+          <div className="space-y-4">
+            {chartBars.map((bar) => (
+              <div key={bar.label}>
+                <div className="mb-2 flex items-center justify-between text-xs">
+                  <span className="font-semibold uppercase tracking-[0.18em] text-zinc-500">{bar.label}</span>
+                  <span className="text-zinc-400">{bar.width}</span>
+                </div>
+                <div className="h-2.5 overflow-hidden rounded-full bg-white/10">
+                  <div className={`h-full rounded-full ${bar.color}`} style={{ width: bar.width }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     );
   }
@@ -511,6 +577,142 @@ function ReportSectionVisual({
             </div>
           );
         })}
+      </div>
+    );
+  }
+
+  if (normalizedTitle.includes("business model")) {
+    const blocks = [
+      ["Value", extractKeywordInsight(content, ["value", "değer", "problem"])],
+      ["Delivery", extractKeywordInsight(content, ["delivery", "product", "platform", "ürün"])],
+      ["Revenue", extractKeywordInsight(content, ["revenue", "gelir", "subscription"])],
+      ["Moat", extractKeywordInsight(content, ["moat", "defensible", "advantage", "rekabet"])],
+    ];
+
+    return (
+      <div className="mb-5 rounded-[2rem] border border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.045),rgba(94,234,212,0.05))] p-5">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.26em] text-teal-200/75">
+          Operating Model Canvas
+        </p>
+        <div className="mt-4 grid gap-3 md:grid-cols-4">
+          {blocks.map(([label, value], index) => (
+            <div key={label} className="relative rounded-3xl border border-white/10 bg-black/35 p-4">
+              <span className="absolute right-4 top-4 text-3xl font-semibold text-white/5">
+                {index + 1}
+              </span>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">{label}</p>
+              <p className="mt-3 line-clamp-3 text-sm leading-6 text-zinc-200">{value || "Defined in analysis"}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (normalizedTitle.includes("pricing")) {
+    const tiers = [
+      ["Entry", extractKeywordInsight(content, ["entry", "starter", "low", "başlangıç"])],
+      ["Core", extractKeywordInsight(content, ["core", "standard", "main", "ana"])],
+      ["Premium", extractKeywordInsight(content, ["premium", "enterprise", "high", "kurumsal"])],
+    ];
+
+    return (
+      <div className="mb-5 grid gap-3 md:grid-cols-3">
+        {tiers.map(([label, value], index) => (
+          <div
+            key={label}
+            className={`rounded-[2rem] border p-5 ${
+              index === 1
+                ? "border-teal-200/30 bg-teal-200/[0.07]"
+                : "border-white/10 bg-white/[0.03]"
+            }`}
+          >
+            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-zinc-500">
+              Pricing Tier
+            </p>
+            <p className="mt-3 text-2xl font-semibold text-white">{label}</p>
+            <p className="mt-4 line-clamp-3 text-sm leading-6 text-zinc-300">{value || "Pricing signal"}</p>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (normalizedTitle.includes("go-to-market") || normalizedTitle.includes("sales strategy") || normalizedTitle.includes("entry strategy")) {
+    const stages = ["Audience", "Channel", "Conversion", "Expansion"];
+
+    return (
+      <div className="mb-5 rounded-[2rem] border border-white/10 bg-black/35 p-5">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.26em] text-teal-200/75">
+          Go-To-Market Motion
+        </p>
+        <div className="mt-5 grid gap-3 md:grid-cols-4">
+          {stages.map((stage, index) => (
+            <div key={stage} className="relative rounded-3xl border border-white/10 bg-white/[0.035] p-4">
+              {index < stages.length - 1 ? (
+                <div className="absolute left-[calc(100%-0.25rem)] top-1/2 hidden h-px w-5 bg-teal-200/40 md:block" />
+              ) : null}
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-teal-200 text-xs font-bold text-black">
+                {index + 1}
+              </span>
+              <p className="mt-4 text-sm font-semibold text-white">{stage}</p>
+              <p className="mt-2 line-clamp-2 text-xs leading-5 text-zinc-500">
+                {extractKeywordInsight(content, [stage]) || "Execution lever"}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (normalizedTitle.includes("unit economics") || normalizedTitle.includes("financial assumptions")) {
+    const flow = ["Revenue", "CAC", "LTV", "Payback", "Runway"];
+
+    return (
+      <div className="mb-5 overflow-hidden rounded-[2rem] border border-white/10 bg-[linear-gradient(90deg,rgba(94,234,212,0.08),rgba(255,255,255,0.025))]">
+        <div className="border-b border-white/10 p-5">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.26em] text-teal-200/75">
+            Unit Economics Chain
+          </p>
+        </div>
+        <div className="grid gap-px bg-white/10 md:grid-cols-5">
+          {flow.map((metric) => (
+            <div key={metric} className="bg-zinc-950/80 p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">{metric}</p>
+              <p className="mt-3 line-clamp-2 text-lg font-semibold text-white">
+                {extractMetricValue(content, metric) || "Assumption"}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (normalizedTitle.includes("competitor")) {
+    return (
+      <div className="mb-5 rounded-[2rem] border border-white/10 bg-white/[0.025] p-5">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.26em] text-teal-200/75">
+          Competitive Positioning Map
+        </p>
+        <div className="relative mt-5 h-64 rounded-3xl border border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.035),rgba(94,234,212,0.07))]">
+          <div className="absolute left-1/2 top-0 h-full w-px bg-white/10" />
+          <div className="absolute left-0 top-1/2 h-px w-full bg-white/10" />
+          {[
+            ["Incumbents", "24%", "32%"],
+            ["Specialists", "70%", "30%"],
+            ["ZERINIX Thesis", "58%", "62%"],
+            ["Low-end", "28%", "75%"],
+          ].map(([label, left, top], index) => (
+            <div key={label} className="absolute -translate-x-1/2 -translate-y-1/2" style={{ left, top }}>
+              <div className={`h-4 w-4 rounded-full ${index === 2 ? "bg-teal-200" : "bg-white/35"}`} />
+              <p className="mt-2 whitespace-nowrap rounded-full border border-white/10 bg-black/65 px-2 py-1 text-xs font-semibold text-zinc-200">
+                {label}
+              </p>
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
@@ -572,15 +774,15 @@ function ReportSectionVisual({
             );
           })}
         </div>
-        <div className="m-4 mt-0 overflow-hidden rounded-3xl border border-white/10 bg-black/35">
-          <div className="grid grid-cols-4 border-b border-white/10 px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
+        <div className="m-4 mt-0 overflow-x-auto rounded-3xl border border-white/10 bg-black/35">
+          <div className="grid min-w-[680px] grid-cols-4 border-b border-white/10 px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
             <span>Metric</span>
             <span>Current</span>
             <span>Benchmark</span>
             <span>Status</span>
           </div>
           {benchmarkRows.map((row) => (
-            <div key={row.metric} className="grid grid-cols-4 gap-3 border-b border-white/10 px-4 py-3 text-sm last:border-b-0">
+            <div key={row.metric} className="grid min-w-[680px] grid-cols-4 gap-3 border-b border-white/10 px-4 py-3 text-sm last:border-b-0">
               <span className="font-medium text-white">{row.metric}</span>
               <span className="text-zinc-300">{extractMetricValue(content, row.metric) || "TBD"}</span>
               <span className="text-teal-100/80">{row.benchmark}</span>
@@ -612,15 +814,24 @@ function ReportSectionVisual({
 
   if (normalizedTitle.includes("scenario")) {
     const scenarioMetrics = ["Revenue", "MRR", "Burn", "Runway", "Risk", "Decision"];
+    const styles = {
+      Worst: "border-red-300/20 bg-red-300/[0.055]",
+      Base: "border-teal-200/20 bg-teal-200/[0.055]",
+      Best: "border-emerald-300/20 bg-emerald-300/[0.06]",
+    } as const;
 
     return (
-      <div className="mb-5 grid gap-3 md:grid-cols-3">
+      <div className="mb-5 space-y-4">
+        <div className="grid gap-3 md:grid-cols-3">
         {["Worst", "Base", "Best"].map((scenario) => {
           const snippet = extractSectionSnippet(content, scenario);
 
           return (
-            <div key={scenario} className="rounded-3xl border border-white/10 bg-white/[0.035] p-4">
-              <p className="text-lg font-semibold text-white">{scenario}</p>
+            <div key={scenario} className={`rounded-3xl border p-4 ${styles[scenario as keyof typeof styles]}`}>
+              <div className="flex items-center justify-between">
+                <p className="text-lg font-semibold text-white">{scenario}</p>
+                <span className="h-3 w-3 rounded-full bg-current text-teal-200" />
+              </div>
               <div className="mt-4 space-y-2">
                 {scenarioMetrics.map((metric) => (
                   <div key={metric} className="flex items-start justify-between gap-3 border-t border-white/10 pt-2 first:border-t-0 first:pt-0">
@@ -634,6 +845,27 @@ function ReportSectionVisual({
             </div>
           );
         })}
+        </div>
+        <div className="rounded-[2rem] border border-white/10 bg-black/35 p-5">
+          <div className="mb-4 flex items-center justify-between text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">
+            <span>Risk</span>
+            <span>Return</span>
+          </div>
+          <div className="relative h-44 rounded-3xl border border-white/10 bg-[linear-gradient(135deg,rgba(248,113,113,0.16),rgba(94,234,212,0.14))]">
+            <div className="absolute left-1/2 top-0 h-full w-px bg-white/10" />
+            <div className="absolute left-0 top-1/2 h-px w-full bg-white/10" />
+            {[
+              { label: "Worst", left: "22%", top: "68%", color: "bg-red-300" },
+              { label: "Base", left: "50%", top: "42%", color: "bg-teal-200" },
+              { label: "Best", left: "76%", top: "22%", color: "bg-emerald-300" },
+            ].map((point) => (
+              <div key={point.label} className="absolute -translate-x-1/2 -translate-y-1/2" style={{ left: point.left, top: point.top }}>
+                <div className={`h-4 w-4 rounded-full ${point.color} shadow-lg shadow-black`} />
+                <p className="mt-2 rounded-full bg-black/60 px-2 py-1 text-xs font-semibold text-white">{point.label}</p>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     );
   }
@@ -649,7 +881,7 @@ function ReportSectionVisual({
     ];
 
     return (
-      <div className="mb-5 rounded-[2rem] border border-teal-200/20 bg-teal-200/[0.06] p-5">
+      <div className="mb-5 rounded-[2.25rem] border border-teal-200/20 bg-[radial-gradient(circle_at_top_right,rgba(94,234,212,0.16),transparent_30%),rgba(94,234,212,0.06)] p-5">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-teal-200/80">
@@ -686,25 +918,44 @@ function ReportSectionVisual({
             </div>
           ))}
         </div>
+        <div className="mt-5 grid gap-4 lg:grid-cols-[0.85fr_1.15fr]">
+          <div className="rounded-3xl border border-white/10 bg-black/30 p-4">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500">Confidence Meter</p>
+            <div className="mt-4 h-3 overflow-hidden rounded-full bg-white/10">
+              <div className="h-full rounded-full bg-teal-200" style={{ width: `${extractConfidence(content) ?? 50}%` }} />
+            </div>
+          </div>
+          <div className="rounded-3xl border border-white/10 bg-black/30 p-4">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500">Next Actions Checklist</p>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              {["Validate demand", "Protect runway", "Refine ICP", "Measure conversion"].map((action) => (
+                <div key={action} className="flex items-center gap-2 text-sm text-zinc-300">
+                  <span className="h-4 w-4 rounded-full border border-teal-200/40 bg-teal-200/10" />
+                  {action}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
 
   if (normalizedTitle.includes("roadmap") || normalizedTitle.includes("yol haritası")) {
     return (
-      <div className="mb-5 overflow-x-auto rounded-3xl border border-white/10 bg-white/[0.025] p-4">
-        <div className="grid min-w-[780px] grid-cols-6 gap-3">
+      <div className="mb-5 overflow-x-auto rounded-[2rem] border border-white/10 bg-[linear-gradient(90deg,rgba(94,234,212,0.08),rgba(255,255,255,0.02))] p-5">
+        <div className="relative grid min-w-[840px] grid-cols-6 gap-4">
+        <div className="absolute left-8 right-8 top-8 h-px bg-gradient-to-r from-teal-200/10 via-teal-200/50 to-teal-200/10" />
         {founderRoadmapSteps.map((step, index) => (
-          <div key={step} className="relative rounded-2xl border border-white/10 bg-black/30 p-4">
-            {index < founderRoadmapSteps.length - 1 ? (
-              <div className="absolute left-[calc(100%-0.25rem)] top-1/2 hidden h-px w-4 bg-teal-200/40 md:block" />
-            ) : null}
+          <div key={step} className="relative rounded-[1.4rem] border border-white/10 bg-black/45 p-4">
             <div className="flex flex-col gap-3">
               <span className="flex h-8 w-8 items-center justify-center rounded-full bg-teal-200 text-xs font-bold text-black">
                 {index + 1}
               </span>
               <p className="text-sm font-semibold text-white">{step}</p>
-              <p className="text-xs leading-5 text-zinc-500">Milestone</p>
+              <span className="w-fit rounded-full border border-white/10 bg-white/[0.04] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
+                {index < 2 ? "Priority" : index < 4 ? "Build" : "Scale"}
+              </span>
             </div>
           </div>
         ))}
@@ -714,21 +965,46 @@ function ReportSectionVisual({
   }
 
   if (normalizedTitle.includes("porter")) {
+    const forces = ["Rivalry", "Entrants", "Buyer Power", "Supplier Power", "Substitutes"];
+
     return (
-      <div className="mb-5 grid gap-3 sm:grid-cols-5">
-        {["Rivalry", "Entrants", "Buyer Power", "Supplier Power", "Substitutes"].map((force, index) => (
-          <div key={force} className="rounded-3xl border border-white/10 bg-white/[0.035] p-4">
-            <p className="text-sm font-semibold text-white">{force}</p>
-            <p className="mt-3 text-lg tracking-[0.08em] text-teal-200">
-              {"★★★★★".slice(0, Math.max(2, 5 - (index % 3)))}
-              <span className="text-zinc-700">{"★★★★★".slice(Math.max(2, 5 - (index % 3)))}</span>
-            </p>
-            <div className="mt-4 h-2 overflow-hidden rounded-full bg-zinc-800">
-              <div className="h-full rounded-full bg-teal-200/75" style={{ width: `${[72, 54, 66, 48, 60][index]}%` }} />
+      <div className="mb-5 grid gap-4 lg:grid-cols-[0.85fr_1.15fr]">
+        <div className="relative flex min-h-72 items-center justify-center rounded-[2rem] border border-white/10 bg-[radial-gradient(circle,rgba(94,234,212,0.12),transparent_58%)]">
+          <div className="absolute h-56 w-56 rounded-full border border-teal-200/10" />
+          <div className="absolute h-40 w-40 rounded-full border border-teal-200/15" />
+          <div className="absolute h-24 w-24 rounded-full border border-teal-200/20" />
+          <div className="h-4 w-4 rounded-full bg-teal-200 shadow-[0_0_32px_rgba(94,234,212,0.55)]" />
+          {forces.map((force, index) => {
+            const positions = [
+              ["50%", "8%"],
+              ["82%", "30%"],
+              ["70%", "78%"],
+              ["30%", "78%"],
+              ["18%", "30%"],
+            ];
+
+            return (
+              <div
+                key={force}
+                className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/10 bg-black/70 px-3 py-1 text-xs font-semibold text-teal-100"
+                style={{ left: positions[index][0], top: positions[index][1] }}
+              >
+                {force}
+              </div>
+            );
+          })}
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {forces.map((force, index) => (
+            <div key={force} className="rounded-3xl border border-white/10 bg-white/[0.035] p-4">
+              <p className="text-sm font-semibold text-white">{force}</p>
+              <div className="mt-4 h-2 overflow-hidden rounded-full bg-zinc-800">
+                <div className="h-full rounded-full bg-teal-200/75" style={{ width: `${[72, 54, 66, 48, 60][index]}%` }} />
+              </div>
+              <p className="mt-2 text-xs text-zinc-500">Force intensity</p>
             </div>
-            <p className="mt-2 text-xs text-zinc-500">Force intensity</p>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
     );
   }
@@ -768,9 +1044,15 @@ function hasReportSectionVisual(title: string) {
 
   return (
     normalizedTitle.includes("executive summary") ||
+    normalizedTitle.includes("market opportunity") ||
+    normalizedTitle.includes("market overview") ||
+    normalizedTitle.includes("market analysis") ||
+    normalizedTitle.includes("business model") ||
+    normalizedTitle.includes("competitor") ||
     normalizedTitle.includes("tam / sam / som") ||
     normalizedTitle.includes("swot") ||
     normalizedTitle.includes("financial dashboard") ||
+    normalizedTitle.includes("financial assumptions") ||
     normalizedTitle.includes("founder score") ||
     normalizedTitle.includes("kurucu skoru") ||
     normalizedTitle.includes("scenario") ||
@@ -779,6 +1061,11 @@ function hasReportSectionVisual(title: string) {
     normalizedTitle.includes("roadmap") ||
     normalizedTitle.includes("yol haritası") ||
     normalizedTitle.includes("porter") ||
+    normalizedTitle.includes("pricing") ||
+    normalizedTitle.includes("go-to-market") ||
+    normalizedTitle.includes("sales strategy") ||
+    normalizedTitle.includes("entry strategy") ||
+    normalizedTitle.includes("unit economics") ||
     normalizedTitle.includes("kpi")
   );
 }
@@ -796,7 +1083,7 @@ function getReportArticleClass(title: string) {
     return `${base} border-white/10 bg-[linear-gradient(135deg,rgba(10,10,10,0.92),rgba(20,83,75,0.16))]`;
   }
 
-  if (normalizedTitle.includes("swot") || normalizedTitle.includes("porter") || normalizedTitle.includes("scenario")) {
+  if (normalizedTitle.includes("swot") || normalizedTitle.includes("porter") || normalizedTitle.includes("scenario") || normalizedTitle.includes("market")) {
     return `${base} border-white/10 bg-[linear-gradient(180deg,rgba(24,24,27,0.72),rgba(0,0,0,0.48))]`;
   }
 
