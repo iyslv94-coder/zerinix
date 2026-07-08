@@ -26,6 +26,7 @@ import {
 import { isReportGenerationFailureText } from "@/app/lib/report-errors";
 import {
   createOpenAiClient,
+  getAiConfigurationErrorMessage,
   isAiTestMode,
   logAiExecution,
 } from "@/app/lib/ai/runtime";
@@ -833,13 +834,13 @@ Report quality rules:
           quotaConsumed: false,
         });
 
+        const client = createOpenAiClient();
         logAiExecution({
           endpoint: "/api/plan",
           source: "real_ai",
           mode: FULL_REPORT_FIELD,
           model,
         });
-        const client = createOpenAiClient();
         const response = await client.responses.create(
           {
             model,
@@ -927,6 +928,12 @@ Report quality rules:
           },
         });
       } catch (error) {
+        const configurationError = getAiConfigurationErrorMessage(error);
+
+        if (configurationError) {
+          return NextResponse.json({ error: configurationError }, { status: 500 });
+        }
+
         await recordAiUsage(supabase, {
           userId: user.id,
           endpoint: "/api/plan",
@@ -1047,13 +1054,27 @@ Report quality rules:
       quotaConsumed: false,
     });
 
+    let client: ReturnType<typeof createOpenAiClient>;
+
+    try {
+      client = createOpenAiClient();
+    } catch (error) {
+      const configurationError = getAiConfigurationErrorMessage(error);
+
+      if (configurationError) {
+        return NextResponse.json({ error: configurationError }, { status: 500 });
+      }
+
+      throw error;
+    }
+
     logAiExecution({
       endpoint: "/api/plan",
       source: "real_ai",
       mode: reportField,
       model,
     });
-    const client = createOpenAiClient();
+
     const stream = await client.responses
       .create(
         {

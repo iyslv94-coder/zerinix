@@ -20,6 +20,7 @@ import {
 import { checkAiProductionRateLimit } from "@/app/lib/ai/rate-limit";
 import {
   createOpenAiClient,
+  getAiConfigurationErrorMessage,
   isAiTestMode,
   logAiExecution,
 } from "@/app/lib/ai/runtime";
@@ -863,13 +864,26 @@ export async function POST(req: Request) {
     }
 
     const attachmentContext = buildAttachmentContext(attachments);
+    let client: ReturnType<typeof createOpenAiClient>;
+
+    try {
+      client = createOpenAiClient();
+    } catch (error) {
+      const configurationError = getAiConfigurationErrorMessage(error);
+
+      if (configurationError) {
+        return NextResponse.json({ error: configurationError }, { status: 500 });
+      }
+
+      throw error;
+    }
+
     logAiExecution({
       endpoint: "/api/chat",
       source: "real_ai",
       mode: requestKind,
       model,
     });
-    const client = createOpenAiClient();
 
     const stream = client.responses.stream({
       model,

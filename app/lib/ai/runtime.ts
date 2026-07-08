@@ -29,6 +29,21 @@ export function getAiRuntimeEnvironment(): AiRuntimeEnvironment {
     return "test";
   }
 
+  const developmentMode = process.env.DEVELOPMENT_MODE === "true";
+  const productionMode = process.env.PRODUCTION_MODE === "true";
+
+  if (developmentMode && productionMode) {
+    throw new Error("Only one AI environment mode can be enabled.");
+  }
+
+  if (developmentMode) {
+    return "development";
+  }
+
+  if (productionMode) {
+    return "production";
+  }
+
   return process.env.NODE_ENV === "production" ? "production" : "development";
 }
 
@@ -85,6 +100,10 @@ export function getOpenAiApiKey() {
     return { environment, apiKey: devKey, usesMock: false };
   }
 
+  if (devKey) {
+    throw new Error("OPENAI_API_KEY_DEV must not be present during production AI calls.");
+  }
+
   if (!prodKey) {
     throw new Error("OPENAI_API_KEY_PROD is required for production AI calls.");
   }
@@ -96,6 +115,19 @@ export function createOpenAiClient() {
   const { apiKey } = getOpenAiApiKey();
 
   return new OpenAI({ apiKey });
+}
+
+export function getAiConfigurationErrorMessage(error: unknown) {
+  const message = error instanceof Error ? error.message : "";
+
+  if (
+    message.includes("OPENAI_API_KEY") ||
+    message.includes("AI environment mode")
+  ) {
+    return message;
+  }
+
+  return "";
 }
 
 export function isAiTestMode() {
@@ -112,7 +144,7 @@ export function logAiExecution(input: {
   console.info("[ai runtime]", {
     endpoint: input.endpoint,
     source: input.source,
-    environment: getAiRuntimeEnvironment(),
+    Environment: getAiRuntimeEnvironment().toUpperCase(),
     mode: input.mode,
     model: input.model ?? null,
     cacheHit: input.cacheHit ?? input.source === "cache",

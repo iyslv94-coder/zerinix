@@ -26,6 +26,7 @@ import {
 import { isReportGenerationFailureText } from "@/app/lib/report-errors";
 import {
   createOpenAiClient,
+  getAiConfigurationErrorMessage,
   isAiTestMode,
   logAiExecution,
 } from "@/app/lib/ai/runtime";
@@ -791,13 +792,13 @@ Do not include markdown code fences, braces inside string values, or commentary 
           quotaConsumed: false,
         });
 
+        const client = createOpenAiClient();
         logAiExecution({
           endpoint: "/api/market-analysis",
           source: "real_ai",
           mode: FULL_REPORT_FIELD,
           model,
         });
-        const client = createOpenAiClient();
         const response = await client.responses.create(
           {
             model,
@@ -885,6 +886,12 @@ Do not include markdown code fences, braces inside string values, or commentary 
           },
         });
       } catch (error) {
+        const configurationError = getAiConfigurationErrorMessage(error);
+
+        if (configurationError) {
+          return NextResponse.json({ error: configurationError }, { status: 500 });
+        }
+
         await recordAiUsage(supabase, {
           userId: user.id,
           endpoint: "/api/market-analysis",
@@ -1005,13 +1012,27 @@ Do not include markdown code fences, braces inside string values, or commentary 
       quotaConsumed: false,
     });
 
+    let client: ReturnType<typeof createOpenAiClient>;
+
+    try {
+      client = createOpenAiClient();
+    } catch (error) {
+      const configurationError = getAiConfigurationErrorMessage(error);
+
+      if (configurationError) {
+        return NextResponse.json({ error: configurationError }, { status: 500 });
+      }
+
+      throw error;
+    }
+
     logAiExecution({
       endpoint: "/api/market-analysis",
       source: "real_ai",
       mode: reportField,
       model,
     });
-    const client = createOpenAiClient();
+
     const stream = await client.responses
       .create(
         {
