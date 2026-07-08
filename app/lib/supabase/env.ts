@@ -1,8 +1,3 @@
-const unreachableSupabaseHosts = new Set([
-  "dgqmrwjqjlatthqwqwwm.supabase.co",
-  "dgqmrwjqljatthqwqwwm.supabase.co",
-]);
-
 function readEnv(name: string) {
   const value = process.env[name]?.trim();
 
@@ -43,30 +38,6 @@ export function getSupabaseConfigSource() {
   };
 }
 
-function getSupabaseUrlValidationError(supabaseUrl: string) {
-  let parsedUrl: URL;
-
-  try {
-    parsedUrl = new URL(supabaseUrl);
-  } catch {
-    return "Invalid Supabase configuration. SUPABASE_URL/NEXT_PUBLIC_SUPABASE_URL must be a valid https://*.supabase.co URL.";
-  }
-
-  if (parsedUrl.protocol !== "https:") {
-    return "Invalid Supabase configuration. Supabase URL must use https.";
-  }
-
-  if (!parsedUrl.hostname.endsWith(".supabase.co")) {
-    return "Invalid Supabase configuration. Supabase URL must point to a *.supabase.co host.";
-  }
-
-  if (unreachableSupabaseHosts.has(parsedUrl.hostname)) {
-    return `Invalid Supabase configuration. The configured Supabase project host is unreachable: ${parsedUrl.hostname}. Update SUPABASE_URL/NEXT_PUBLIC_SUPABASE_URL in production.`;
-  }
-
-  return "";
-}
-
 export function hasSupabaseConfig() {
   return Boolean(getSupabaseUrl() && getSupabasePublishableKey());
 }
@@ -79,12 +50,6 @@ export function requireSupabaseConfig() {
     throw new Error(
       "Missing Supabase configuration. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY to .env.local."
     );
-  }
-
-  const supabaseUrlValidationError = getSupabaseUrlValidationError(supabaseUrl);
-
-  if (supabaseUrlValidationError) {
-    throw new Error(supabaseUrlValidationError);
   }
 
   return {

@@ -80,33 +80,41 @@ export async function signInWithPassword(formData: FormData) {
 }
 
 function redirectWithSignupError(error: unknown): never {
+  const errorRecord =
+    typeof error === "object" && error ? (error as Record<string, unknown>) : {};
   const cause =
-    error instanceof Error && "cause" in error
-      ? (error as Error & { cause?: unknown }).cause
-      : undefined;
-  const causeMessage =
-    typeof cause === "object" && cause
-      ? [
-          "code" in cause ? `code=${String((cause as { code?: unknown }).code)}` : "",
-          "hostname" in cause
-            ? `hostname=${String((cause as { hostname?: unknown }).hostname)}`
-            : "",
-          "message" in cause
-            ? `message=${String((cause as { message?: unknown }).message)}`
-            : "",
-        ]
-          .filter(Boolean)
-          .join(", ")
-      : "";
+    error instanceof Error && "cause" in error ? errorRecord.cause : undefined;
+  const causeRecord =
+    typeof cause === "object" && cause ? (cause as Record<string, unknown>) : {};
+  const causeDetails = cause
+    ? {
+        message:
+          cause instanceof Error
+            ? cause.message
+            : typeof causeRecord.message === "string"
+              ? causeRecord.message
+              : undefined,
+        code: causeRecord.code,
+        status: causeRecord.status,
+        hostname: causeRecord.hostname,
+      }
+    : undefined;
   const message =
     error instanceof Error
       ? error.message
-      : typeof error === "object" && error && "message" in error
-        ? String((error as { message: unknown }).message)
+      : typeof errorRecord.message === "string"
+        ? errorRecord.message
         : String(error || "Unknown Supabase sign up error");
-  const displayMessage = causeMessage ? `${message} (${causeMessage})` : message;
+  const details = [
+    `message=${message}`,
+    errorRecord.code ? `code=${String(errorRecord.code)}` : "",
+    errorRecord.status ? `status=${String(errorRecord.status)}` : "",
+    causeDetails ? `cause=${JSON.stringify(causeDetails)}` : "",
+  ]
+    .filter(Boolean)
+    .join("; ");
 
-  redirect(`/register?auth_error=${encodeURIComponent(displayMessage)}`);
+  redirect(`/register?auth_error=${encodeURIComponent(details)}`);
 }
 
 export async function signUpWithPassword(formData: FormData) {
