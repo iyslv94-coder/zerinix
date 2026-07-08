@@ -2,7 +2,10 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/app/lib/supabase/server";
-import { getSupabaseConfigSource, getSupabaseUrl } from "@/app/lib/supabase/env";
+import {
+  getSupabaseRuntimeDebugConfig,
+  getSupabaseUrl,
+} from "@/app/lib/supabase/env";
 import {
   checkRateLimit,
   getServerActionClientIp,
@@ -80,6 +83,20 @@ export async function signInWithPassword(formData: FormData) {
 }
 
 function redirectWithSignupError(error: unknown): never {
+  const serializedError = serializeSignupError(error);
+  const details = [
+    `message=${serializedError.message}`,
+    serializedError.code ? `code=${String(serializedError.code)}` : "",
+    serializedError.status ? `status=${String(serializedError.status)}` : "",
+    serializedError.cause ? `cause=${JSON.stringify(serializedError.cause)}` : "",
+  ]
+    .filter(Boolean)
+    .join("; ");
+
+  redirect(`/register?auth_error=${encodeURIComponent(details)}`);
+}
+
+function serializeSignupError(error: unknown) {
   const errorRecord =
     typeof error === "object" && error ? (error as Record<string, unknown>) : {};
   const cause =
@@ -105,16 +122,22 @@ function redirectWithSignupError(error: unknown): never {
       : typeof errorRecord.message === "string"
         ? errorRecord.message
         : String(error || "Unknown Supabase sign up error");
-  const details = [
-    `message=${message}`,
-    errorRecord.code ? `code=${String(errorRecord.code)}` : "",
-    errorRecord.status ? `status=${String(errorRecord.status)}` : "",
-    causeDetails ? `cause=${JSON.stringify(causeDetails)}` : "",
-  ]
-    .filter(Boolean)
-    .join("; ");
 
-  redirect(`/register?auth_error=${encodeURIComponent(details)}`);
+  return {
+    message,
+    code: errorRecord.code,
+    status: errorRecord.status,
+    stack: error instanceof Error ? error.stack : undefined,
+    cause: causeDetails,
+    raw: error,
+  };
+}
+
+function logSignupError(scope: string, error: unknown) {
+  console.error(scope, {
+    supabase: getSupabaseRuntimeDebugConfig(),
+    error: serializeSignupError(error),
+  });
 }
 
 export async function signUpWithPassword(formData: FormData) {
@@ -137,13 +160,13 @@ export async function signUpWithPassword(formData: FormData) {
     const supabaseUrl = getSupabaseUrl();
 
     console.info("[auth:signup:supabase_config]", {
-      ...getSupabaseConfigSource(),
-      finalUrl: supabaseUrl ?? "missing",
+      ...getSupabaseRuntimeDebugConfig(),
+      actionUrl: supabaseUrl ?? "missing",
     });
 
     supabase = await createClient();
   } catch (error) {
-    console.error("[auth:signup:supabase_config]", error);
+    logSignupError("[auth:signup:supabase_config]", error);
     redirectWithSignupError(error);
   }
 
@@ -158,13 +181,13 @@ export async function signUpWithPassword(formData: FormData) {
       },
     })
     .catch((error: unknown) => {
-      console.error("[auth:signup:supabase_fetch]", error);
+      logSignupError("[auth:signup:supabase_fetch]", error);
 
       return { error };
     });
 
   if (signUpError) {
-    console.error("[auth:signup:supabase_error]", signUpError);
+    logSignupError("[auth:signup:supabase_error]", signUpError);
     redirectWithSignupError(signUpError);
   }
 

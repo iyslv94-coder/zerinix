@@ -38,6 +38,18 @@ export function getSupabaseConfigSource() {
   };
 }
 
+export function getSupabaseRuntimeDebugConfig() {
+  return {
+    loaded: getSupabaseConfigSource(),
+    values: {
+      SUPABASE_URL: readEnv("SUPABASE_URL") ?? "missing",
+      NEXT_PUBLIC_SUPABASE_URL: readEnv("NEXT_PUBLIC_SUPABASE_URL") ?? "missing",
+    },
+    finalUrl: getSupabaseUrl() ?? "missing",
+    keyLoaded: Boolean(getSupabasePublishableKey()),
+  };
+}
+
 export function hasSupabaseConfig() {
   return Boolean(getSupabaseUrl() && getSupabasePublishableKey());
 }
