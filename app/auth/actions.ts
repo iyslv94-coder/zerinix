@@ -6,6 +6,7 @@ import {
   checkRateLimit,
   getServerActionClientIp,
 } from "@/app/lib/security/rate-limit";
+import { logServerError } from "@/app/lib/security/errors";
 
 export type LoginActionState = {
   error?: string;
@@ -92,19 +93,32 @@ export async function signUpWithPassword(formData: FormData) {
     redirect("/register?auth_error=rate_limited");
   }
 
-  const supabase = await createClient();
+  let supabase: Awaited<ReturnType<typeof createClient>>;
 
-  const { error } = await supabase.auth.signUp({
-    email,
-    password,
-    options: {
-      data: {
-        full_name: name,
+  try {
+    supabase = await createClient();
+  } catch (error) {
+    logServerError("auth:signup:supabase_config", error);
+    redirect("/register?auth_error=signup_failed");
+  }
+
+  try {
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          full_name: name,
+        },
       },
-    },
-  });
+    });
 
-  if (error) {
+    if (error) {
+      logServerError("auth:signup:supabase_error", error);
+      redirect("/register?auth_error=signup_failed");
+    }
+  } catch (error) {
+    logServerError("auth:signup:supabase_fetch", error);
     redirect("/register?auth_error=signup_failed");
   }
 
