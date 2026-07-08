@@ -1,4 +1,3 @@
-import OpenAI from "openai";
 import { NextResponse } from "next/server";
 import { isPrivateBetaAllowed } from "@/app/lib/beta-access";
 import { isAmbiguousBusinessRequest } from "@/app/lib/business-idea-detection";
@@ -25,10 +24,11 @@ import {
   formatCanonicalFinancialAssumptions,
 } from "@/app/lib/ai/financial-assumptions";
 import { isReportGenerationFailureText } from "@/app/lib/report-errors";
-
-const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY!,
-});
+import {
+  createOpenAiClient,
+  isAiTestMode,
+  logAiExecution,
+} from "@/app/lib/ai/runtime";
 
 const planPrompts = {
   executiveSummary: {
@@ -257,6 +257,21 @@ function serializePlanChunk(field: PlanReportField, content: string) {
 
 function serializePlanReportChunks(report: Record<PlanReportField, string>) {
   return planFields.map((field) => serializePlanChunk(field, report[field])).join("");
+}
+
+function createMockPlanReport(prompt: string, language: ResponseLanguage) {
+  const labels = planFieldLabels[language];
+
+  return Object.fromEntries(
+    planFields.map((field, index) => [
+      field,
+      [
+        `${labels[field]} mock output for "${prompt}".`,
+        "AI_TEST_MODE is enabled, so this deterministic section was generated without calling OpenAI.",
+        `Mock validation marker: business-plan-${String(index + 1).padStart(2, "0")}.`,
+      ].join(" "),
+    ])
+  ) as Record<PlanReportField, string>;
 }
 
 function createFullReportJsonSchema(name: string, fields: readonly string[]) {
@@ -588,6 +603,27 @@ export async function POST(req: Request) {
     }
 
     const fieldConfig = planPrompts[reportField];
+    if (isAiTestMode()) {
+      logAiExecution({
+        endpoint: "/api/plan",
+        source: "mock",
+        mode: isFullReportRequest ? FULL_REPORT_FIELD : reportField,
+      });
+
+      const encoder = new TextEncoder();
+      const mockReport = createMockPlanReport(promptText, responseLanguage);
+      const payload = isFullReportRequest
+        ? serializePlanReportChunks(mockReport)
+        : serializePlanChunk(reportField, mockReport[reportField]);
+
+      return new Response(encoder.encode(payload), {
+        headers: {
+          "Content-Type": "application/x-ndjson; charset=utf-8",
+          "Cache-Control": "no-cache, no-transform",
+        },
+      });
+    }
+
     const instructions = buildLanguageInstructions(responseLanguage);
     const canonicalFinancialAssumptions = createCanonicalFinancialAssumptions({
       prompt: promptText,
@@ -681,6 +717,14 @@ Write only the content for this section. Do not write a JSON object, field name,
         cachedFullReport &&
         !isReportGenerationFailureText(cachedFullReport.responseText)
       ) {
+        logAiExecution({
+          endpoint: "/api/plan",
+          source: "cache",
+          mode: FULL_REPORT_FIELD,
+          model: cachedFullReport.model || model,
+          cacheHit: true,
+        });
+
         const parsedCachedReport = parseFullPlanReport(cachedFullReport.responseText);
 
         await recordAiUsage(supabase, {
@@ -789,6 +833,13 @@ Report quality rules:
           quotaConsumed: false,
         });
 
+        logAiExecution({
+          endpoint: "/api/plan",
+          source: "real_ai",
+          mode: FULL_REPORT_FIELD,
+          model,
+        });
+        const client = createOpenAiClient();
         const response = await client.responses.create(
           {
             model,
@@ -931,6 +982,14 @@ Report quality rules:
     const encoder = new TextEncoder();
 
     if (cachedResponse && !isReportGenerationFailureText(cachedResponse.responseText)) {
+      logAiExecution({
+        endpoint: "/api/plan",
+        source: "cache",
+        mode: reportField,
+        model: cachedResponse.model || model,
+        cacheHit: true,
+      });
+
       await recordAiUsage(supabase, {
         userId: user.id,
         endpoint: "/api/plan",
@@ -988,6 +1047,13 @@ Report quality rules:
       quotaConsumed: false,
     });
 
+    logAiExecution({
+      endpoint: "/api/plan",
+      source: "real_ai",
+      mode: reportField,
+      model,
+    });
+    const client = createOpenAiClient();
     const stream = await client.responses
       .create(
         {

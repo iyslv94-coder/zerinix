@@ -1,4 +1,3 @@
-import OpenAI from "openai";
 import { NextResponse } from "next/server";
 import { isPrivateBetaAllowed } from "@/app/lib/beta-access";
 import { isAmbiguousBusinessRequest } from "@/app/lib/business-idea-detection";
@@ -25,10 +24,11 @@ import {
   formatCanonicalFinancialAssumptions,
 } from "@/app/lib/ai/financial-assumptions";
 import { isReportGenerationFailureText } from "@/app/lib/report-errors";
-
-const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY!,
-});
+import {
+  createOpenAiClient,
+  isAiTestMode,
+  logAiExecution,
+} from "@/app/lib/ai/runtime";
 
 const fieldPrompts = {
   executiveSummary: {
@@ -291,6 +291,21 @@ function serializeMarketReportChunks(report: Record<MarketReportField, string>) 
     .join("");
 }
 
+function createMockMarketReport(prompt: string, language: ResponseLanguage) {
+  const labels = fieldLabelsByLanguage[language];
+
+  return Object.fromEntries(
+    reportFields.map((field, index) => [
+      field,
+      [
+        `${labels[field]} mock output for "${prompt}".`,
+        "AI_TEST_MODE is enabled, so this deterministic market section was generated without calling OpenAI or web search.",
+        `Mock validation marker: market-analysis-${String(index + 1).padStart(2, "0")}.`,
+      ].join(" "),
+    ])
+  ) as Record<MarketReportField, string>;
+}
+
 function createFullReportJsonSchema(name: string, fields: readonly string[]) {
   return {
     type: "json_schema" as const,
@@ -550,6 +565,27 @@ export async function POST(req: Request) {
 
     const fieldConfig = fieldPrompts[reportField];
 
+    if (isAiTestMode()) {
+      logAiExecution({
+        endpoint: "/api/market-analysis",
+        source: "mock",
+        mode: isFullReportRequest ? FULL_REPORT_FIELD : reportField,
+      });
+
+      const encoder = new TextEncoder();
+      const mockReport = createMockMarketReport(promptText, responseLanguage);
+      const payload = isFullReportRequest
+        ? serializeMarketReportChunks(mockReport)
+        : serializeReportChunk(reportField, mockReport[reportField]);
+
+      return new Response(encoder.encode(payload), {
+        headers: {
+          "Content-Type": "application/x-ndjson; charset=utf-8",
+          "Cache-Control": "no-cache, no-transform",
+        },
+      });
+    }
+
     const instructions = buildLanguageInstructions(responseLanguage);
     const canonicalFinancialAssumptions = createCanonicalFinancialAssumptions({
       prompt: promptText,
@@ -639,6 +675,14 @@ Do not generate business-plan sections here. Do not suggest website URLs, domain
         cachedFullReport &&
         !isReportGenerationFailureText(cachedFullReport.responseText)
       ) {
+        logAiExecution({
+          endpoint: "/api/market-analysis",
+          source: "cache",
+          mode: FULL_REPORT_FIELD,
+          model: cachedFullReport.model || model,
+          cacheHit: true,
+        });
+
         const parsedCachedReport = parseFullMarketReport(cachedFullReport.responseText);
 
         await recordAiUsage(supabase, {
@@ -747,6 +791,13 @@ Do not include markdown code fences, braces inside string values, or commentary 
           quotaConsumed: false,
         });
 
+        logAiExecution({
+          endpoint: "/api/market-analysis",
+          source: "real_ai",
+          mode: FULL_REPORT_FIELD,
+          model,
+        });
+        const client = createOpenAiClient();
         const response = await client.responses.create(
           {
             model,
@@ -889,6 +940,14 @@ Do not include markdown code fences, braces inside string values, or commentary 
     const encoder = new TextEncoder();
 
     if (cachedResponse && !isReportGenerationFailureText(cachedResponse.responseText)) {
+      logAiExecution({
+        endpoint: "/api/market-analysis",
+        source: "cache",
+        mode: reportField,
+        model: cachedResponse.model || model,
+        cacheHit: true,
+      });
+
       await recordAiUsage(supabase, {
         userId: user.id,
         endpoint: "/api/market-analysis",
@@ -946,6 +1005,13 @@ Do not include markdown code fences, braces inside string values, or commentary 
       quotaConsumed: false,
     });
 
+    logAiExecution({
+      endpoint: "/api/market-analysis",
+      source: "real_ai",
+      mode: reportField,
+      model,
+    });
+    const client = createOpenAiClient();
     const stream = await client.responses
       .create(
         {

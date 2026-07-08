@@ -1,4 +1,3 @@
-import OpenAI from "openai";
 import { NextResponse } from "next/server";
 import { isPrivateBetaAllowed } from "@/app/lib/beta-access";
 import { createClient } from "@/app/lib/supabase/server";
@@ -19,10 +18,11 @@ import {
   type AiRequestKind,
 } from "@/app/lib/ai/governance";
 import { checkAiProductionRateLimit } from "@/app/lib/ai/rate-limit";
-
-const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY!,
-});
+import {
+  createOpenAiClient,
+  isAiTestMode,
+  logAiExecution,
+} from "@/app/lib/ai/runtime";
 
 type ChatInputMessage = {
   role: "user" | "assistant";
@@ -571,6 +571,18 @@ function textStream(content: string) {
   );
 }
 
+function createMockChatResponse(prompt: string, expert: AiExpert) {
+  return [
+    `Mock ${expert} response for: ${prompt}`,
+    "",
+    "This deterministic response is served because AI_TEST_MODE is enabled.",
+    "",
+    "- No OpenAI request was made.",
+    "- Conversation, streaming UI, sidebar persistence, copy, regenerate, and file upload flows can be tested safely.",
+    "- Switch AI_TEST_MODE off to use the configured environment-specific OpenAI key.",
+  ].join("\n");
+}
+
 function extractResponseText(response: unknown) {
   if (!response || typeof response !== "object") {
     return "";
@@ -750,6 +762,16 @@ export async function POST(req: Request) {
     );
     const responseLanguage = detectResponseLanguage(prompt);
 
+    if (isAiTestMode()) {
+      logAiExecution({
+        endpoint: "/api/chat",
+        source: "mock",
+        mode: requestKind,
+      });
+
+      return textStream(createMockChatResponse(prompt, selectedExpert));
+    }
+
     if (advisorRequest && essentialAdvisorQuestions.length > 0) {
       return textStream(
         buildAdvisorClarification(prompt, essentialAdvisorQuestions, selectedExpert)
@@ -796,6 +818,14 @@ export async function POST(req: Request) {
       );
 
       if (cachedChatResponse?.responseText) {
+        logAiExecution({
+          endpoint: "/api/chat",
+          source: "cache",
+          mode: requestKind,
+          model: cachedChatResponse.model || model,
+          cacheHit: true,
+        });
+
         await recordAiUsage(supabase, {
           userId: user.id,
           endpoint: "/api/chat",
@@ -833,6 +863,13 @@ export async function POST(req: Request) {
     }
 
     const attachmentContext = buildAttachmentContext(attachments);
+    logAiExecution({
+      endpoint: "/api/chat",
+      source: "real_ai",
+      mode: requestKind,
+      model,
+    });
+    const client = createOpenAiClient();
 
     const stream = client.responses.stream({
       model,
