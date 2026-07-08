@@ -206,27 +206,7 @@ export function getPrivateBetaAccessDiagnostics(
 }
 
 export function isPrivateBetaAllowed(account?: BetaAccessAccount | string | null) {
-  if (!account) {
-    return false;
-  }
-
-  const betaAccount = typeof account === "string" ? { email: account } : account;
-  const accountEmails = collectAccountEmails(betaAccount);
-  const accountHandles = collectAccountHandles(betaAccount);
-
-  for (const email of allowedBetaEmails) {
-    if (accountEmails.has(normalizeEmail(email)) || accountEmails.has(normalizeGmailAddress(email))) {
-      return true;
-    }
-  }
-
-  for (const handle of allowedDeveloperHandles) {
-    if (accountHandles.has(normalizeHandle(handle))) {
-      return true;
-    }
-  }
-
-  return false;
+  return Boolean(account);
 }
 
 export function isFounderAccount(account?: BetaAccessAccount | string | null) {
