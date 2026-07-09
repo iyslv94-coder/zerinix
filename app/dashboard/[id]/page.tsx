@@ -272,7 +272,7 @@ function MiniProgressCircle({
   label: string;
   value: number | null;
 }) {
-  const displayValue = value === null ? "TBD" : `${value}%`;
+  const displayValue = value === null ? "—" : `${value}%`;
   const degrees = (value ?? 0) * 3.6;
 
   return (
@@ -320,7 +320,7 @@ function ExecutiveSummaryVisual({
   const kpis = [
     {
       label: "Investment Score",
-      value: score === null ? "TBD" : `${score}/100`,
+      value: score === null ? "—" : `${score}/100`,
       accent: "from-teal-200/25 to-cyan-200/5",
     },
     {
@@ -445,7 +445,7 @@ function ExecutiveInsightBanner({
           </p>
         </div>
         <div className="shrink-0 rounded-full border border-white/10 bg-black/30 px-3 py-1.5 text-xs font-semibold text-zinc-300">
-          Confidence {confidence === null ? "TBD" : `${confidence}%`}
+          Confidence {confidence === null ? "—" : `${confidence}%`}
         </div>
       </div>
     </div>
@@ -693,7 +693,7 @@ function ReportSectionVisual({
             <div key={metric} className="bg-zinc-950/80 p-4">
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">{metric}</p>
               <p className="mt-3 line-clamp-2 text-lg font-semibold text-white">
-                {extractMetricValue(content, metric) || "Assumption"}
+                {extractMetricValue(content, metric) || "Planning input"}
               </p>
             </div>
           ))}
@@ -769,7 +769,7 @@ function ReportSectionVisual({
                 </div>
                 <div className="mt-4 min-w-0">
                   <p className="line-clamp-2 break-words text-[clamp(1.15rem,2.2vw,1.65rem)] font-semibold leading-tight tracking-tight text-white">
-                    {value || "TBD"}
+                    {value || "—"}
                   </p>
                   <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-white/10">
                     <div
@@ -830,7 +830,7 @@ function ReportSectionVisual({
                   <div key={metric} className="flex items-start justify-between gap-3 border-t border-white/10 pt-2 first:border-t-0 first:pt-0">
                     <span className="text-xs uppercase tracking-[0.14em] text-zinc-500">{metric}</span>
                     <span className="max-w-40 text-right text-sm font-medium text-zinc-200">
-                      {extractMetricValue(snippet, metric) || "TBD"}
+                      {extractMetricValue(snippet, metric) || "—"}
                     </span>
                   </div>
                 ))}
@@ -867,10 +867,10 @@ function ReportSectionVisual({
     const selected = detectRecommendation(content);
     const decisions = ["GO", "NO GO", "WAIT", "PIVOT", "RAISE", "BOOTSTRAP"];
     const recommendationMetrics = [
-      ["Confidence", extractConfidence(content) ? `${extractConfidence(content)}%` : "TBD"],
-      ["Investment Needed", extractMetricValue(content, "Investment Needed") || "TBD"],
-      ["Next Action", extractMetricValue(content, "Next Action") || extractMetricValue(content, "Next Critical Action") || "TBD"],
-      ["Main Risk", extractMetricValue(content, "Main Risk") || "TBD"],
+      ["Confidence", extractConfidence(content) ? `${extractConfidence(content)}%` : "—"],
+      ["Investment Needed", extractMetricValue(content, "Investment Needed") || "—"],
+      ["Next Action", extractMetricValue(content, "Next Action") || extractMetricValue(content, "Next Critical Action") || "—"],
+      ["Main Risk", extractMetricValue(content, "Main Risk") || "—"],
     ];
 
     return (
@@ -881,7 +881,7 @@ function ReportSectionVisual({
               Executive Recommendation
             </p>
             <p className="mt-2 text-5xl font-semibold tracking-tight text-white">
-              {selected || "TBD"}
+              {selected || "Review"}
             </p>
           </div>
           <div className="flex flex-wrap gap-2">

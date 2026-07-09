@@ -134,12 +134,12 @@ const fieldPrompts = {
   },
   sourcesAssumptions: {
     prompt:
-      "List only sources, evidence basis, planning inputs, and missing data. Do not repeat market or financial analysis. For each verified source use this exact compact format when possible: Organization — Source title (Year). Then add one line: Confidence: High, Medium, or Low. If no verified source is available, write exactly: Source unavailable. Do not invent URLs, publications, or fake citations. Do not write vague source claims such as 'industry reports' unless a specific source is named. Do not write a heading. Max 160 words.",
+      "List only verified sources, evidence basis, planning inputs, and missing validation data. Do not repeat market or financial analysis. Prefer real organizations over generic references, especially OECD, World Bank, IMF, Eurostat, TÜİK, TCMB, Statista, McKinsey, BCG, Deloitte, PwC, EY, KPMG, CB Insights, PitchBook, or Crunchbase when genuinely relevant. For each verified source use this exact compact format when possible: Organization — Source title (Year). Then add one line: Confidence: High, Medium, or Low. If no verified source metadata exists, omit the citation item and write a concise planning-input note instead. Do not invent URLs, report names, publications, or fake citations. If uncertain, mark the item as a planning input instead of fabricating a citation. Do not write vague source claims such as 'industry reports' unless a specific source is named. Do not write a heading. Max 160 words.",
     maxTokens: 1300,
   },
   sources: {
     prompt:
-      "List only 4-6 reliable sources used or most relevant for validating this market. For each verified source use this exact compact format when possible: Organization — Source title (Year). Then add one line for the group or source: Confidence: High, Medium, or Low. If no verified source is available, write exactly: Source unavailable. Do not invent URLs, publications, or fake citations. Do not use generic phrases such as 'industry reports' as verified evidence. Do not repeat analysis. Do not write a heading.",
+      "List only 4-6 reliable verified sources used or most relevant for validating this market. Prefer real organizations over generic references, especially OECD, World Bank, IMF, Eurostat, TÜİK, TCMB, Statista, McKinsey, BCG, Deloitte, PwC, EY, KPMG, CB Insights, PitchBook, or Crunchbase when genuinely relevant. For each verified source use this exact compact format when possible: Organization — Source title (Year). Then add one line for the group or source: Confidence: High, Medium, or Low. If no verified source metadata exists, omit the citation item and write a concise planning-input note instead. Do not invent URLs, report names, publications, or fake citations. If uncertain, mark the item as a planning input instead of fabricating a citation. Do not use generic phrases such as 'industry reports' as verified evidence. Do not repeat analysis. Do not write a heading.",
     maxTokens: 1400,
   },
 } as const;
@@ -278,6 +278,12 @@ const marketReportTermReplacements: Array<[RegExp, string]> = [
   [/\bAI[\s-]+Assumptions?\b/gi, "Planning inputs"],
   [/\bBenchmarks?\b/gi, "Market references"],
   [/\bAssumptions?\b/gi, "Planning inputs"],
+  [/\bSource unavailable\b/gi, ""],
+  [/\bConfidence unavailable\b/gi, ""],
+  [/\bTBD\b/gi, ""],
+  [/\bPlaceholder\b/gi, ""],
+  [/\bUnknown\b/gi, ""],
+  [/\bUnavailable\b/gi, ""],
   [/\bWAIT\b/g, "Hold for validation"],
 ];
 
@@ -285,7 +291,10 @@ function sanitizeMarketReportContent(value: string) {
   return marketReportTermReplacements.reduce(
     (content, [pattern, replacement]) => content.replace(pattern, replacement),
     value
-  );
+  )
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 function detectLanguage(value: string): ResponseLanguage {
@@ -331,8 +340,8 @@ function createPartialSectionFallback(
   const title = fieldLabelsByLanguage[language][field];
 
   return language === "Turkish"
-    ? `${title} bölümü model yanıtında eksik veya tamamlanmamış döndü. Diğer bölümler kullanılabilir; bu bölüm için yeniden analiz çalıştırılması önerilir.`
-    : `${title} was missing or incomplete in the model response. The remaining sections are usable; rerun the analysis to regenerate this section.`;
+    ? `${title} için karar kalitesinde analiz üretmek üzere yeni bir analiz geçişi gerekir. Tamamlanan bölümler mevcut değerlendirme için kullanılabilir; bu başlık yeniden analiz edildiğinde netleştirilmelidir.`
+    : `${title} requires a fresh analysis pass to produce decision-grade detail. Use the completed sections as the current basis and regenerate the analysis when ready.`;
 }
 
 function createFallbackMarketReport(language: ResponseLanguage) {
@@ -557,6 +566,13 @@ function buildLanguageInstructions(language: ResponseLanguage) {
     "Write in polished investment memo prose. Do not attach internal evidence tags, confidence tiers, market-source labels, or decision-implication labels to paragraphs.",
     "Avoid repeated label patterns. Prefer concise analyst prose with natural language about evidence strength only when uncertainty changes the decision.",
     "Do not use generic AI phrases such as 'It is important to', 'Businesses should', 'This strategy can help', 'In today's market', or 'By leveraging'.",
+    "Write like an executive consulting memo: short analytical paragraphs, numbered insights where useful, concrete observations, and no filler conclusions.",
+    "Do not repeat the user's prompt verbatim. Refer to the opportunity through specific market context, customer segment, competitor set, or economic driver.",
+    "Every section must contain at least one concrete business insight that changes sizing, timing, positioning, pricing, distribution, risk, or validation priorities.",
+    "Prefer specific observed market dynamics over generic advice. If evidence is limited, state the decision-relevant uncertainty without sounding like an AI disclaimer.",
+    "For every major analytical statement, use consulting reasoning: claim first, then reason or supporting context, then the business implication for the founder.",
+    "Every major section must answer: what is happening, why it is happening, and why it matters for the founder.",
+    "Prefer causal reasoning over description. Avoid unsupported claims; if support is weak, frame the statement as a decision hypothesis to validate.",
     "Each report section must contribute a unique market diligence job. Do not restate conclusions, paragraphs, metrics, or examples already assigned to another section.",
     "Respect strict section ownership: Executive Summary = market verdict only; Market Overview = category and demand context only; TAM/SAM/SOM = market sizing only; Industry Trends = timing forces only; Target Customer = ICP only; Competitor Analysis = competitors only; Customer Pain Points = pain only; Opportunities and Threats = distinct market openings/risks only; SWOT = non-duplicative matrix only; Porter's Five Forces = industry forces only; Unit Economics = unit metrics only; Financial Dashboard = high-level KPIs only; Scenario Analysis = future scenarios only; KPI Dashboard/Key Metrics = operating validation metrics only; Executive Recommendation = final investment decision only; Entry Strategy = market entry only; Validation Plan = tests only; Founder Roadmap = execution sequence only; Sources / Assumptions and Sources = sources only.",
     "Never repeat the same metric more than once unless necessary. If a metric appears in Unit Economics, later financial sections may summarize it but must not explain it again.",
@@ -570,6 +586,8 @@ function buildLanguageInstructions(language: ResponseLanguage) {
     "Keep payback, LTV:CAC, CAC, and runway realistic for the sector and capital intensity. If a result looks unusually strong, describe it as a sensitivity case requiring validation rather than a base case.",
     "Recommendation conviction must match evidence quality and the Investment Scoring Engine. Use Proceed for strong evidence, Hold for validation when validation gaps remain, and Decline when economics or execution risk are not investable yet.",
     "Do not fake source authority. If a precise source is unavailable, use language such as 'Based on comparable sector patterns', 'Needs validation with primary research', or 'Directional until verified'.",
+    "When citing sources, prefer real organizations over generic references: OECD, World Bank, IMF, Eurostat, TÜİK, TCMB, Statista, McKinsey, BCG, Deloitte, PwC, EY, KPMG, CB Insights, PitchBook, or Crunchbase when genuinely relevant.",
+    "Never invent URLs, report names, publications, or fake citations. If a source cannot be verified from available context, mark it as an assumption instead of presenting it as a citation.",
     "Every section must end with a complete sentence or complete bullet. Never end mid-sentence.",
     "Distinguish facts, planning inputs, and hypotheses. Never present guesses as facts.",
     "Be honest about uncertainty; do not invent precise figures.",
@@ -732,6 +750,11 @@ Write the section as an investor-grade market diligence note with practical mark
 Do not lead every section with the same decision-implication formula. Use it only where the section's job requires it.
 Do not use internal evidence tags, confidence tiers, market-source labels, planning-input labels, or decision-implication labels.
 Avoid generic filler. Use planning inputs explicitly when evidence is limited and state what would change the verdict.
+Write in concise executive-consulting style: specific observations, short analytical paragraphs, numbered insights when useful, and no boilerplate conclusions.
+Do not repeat the user's prompt verbatim; anchor the analysis in the market, buyer, competitor, and economic context.
+Include at least one concrete business insight in this section that affects sizing, positioning, pricing, channel choice, risk, or validation priority.
+Use Claim -> Reason / supporting context -> Business implication whenever the section makes an analytical judgment.
+Answer what is happening, why it is happening, and why it matters for the founder without adding generic advice.
 Follow the section ownership contract exactly; do not borrow content assigned to another section.
 Do not repeat ideas, metrics, examples, or conclusions that belong to other sections; this section must add unique value.
 Remove filler phrases such as "It is important to", "Businesses should", "This strategy can help", "In today's market", and "By leveraging".
@@ -743,6 +766,7 @@ Align recommendation conviction with evidence quality and the calculated Investm
 Do not expose internal grading labels, source-model labels, or internal recommendation codes anywhere in the final report.
 Make examples, KPIs, risks, roadmap actions, and financial interpretation specific to the detected industry instead of using generic startup templates.
 Use honest planning-input language instead of vague source claims such as "industry reports".
+When citing sources, prefer real organizations such as OECD, World Bank, IMF, Eurostat, TÜİK, TCMB, Statista, McKinsey, BCG, Deloitte, PwC, EY, KPMG, CB Insights, PitchBook, or Crunchbase when genuinely relevant; never invent URLs or report names.
 Finish with a complete sentence or complete bullet. Do not end mid-sentence.
 Use structured markdown inside the section when useful: short paragraphs, bullets, or compact tables.
 Write only the content for this section. Do not write a JSON object, field name, braces, markdown code block, heading, or any other report section.
@@ -876,7 +900,7 @@ Do not generate business-plan sections here. Do not suggest website URLs, domain
             cachedMissingFields.length || cachedInvalidFields.length
               ? serializeWarningChunk({
                   warning:
-                    "Market analysis returned a partial report. Some sections were missing or incomplete and were marked for regeneration.",
+                    "Market analysis returned a partial report. Some areas need a fresh analysis pass before they are decision-grade.",
                   missingFields: cachedMissingFields,
                   invalidFields: cachedInvalidFields,
                   partial: true,
@@ -943,6 +967,13 @@ Translate any internal recommendation into exactly one visible decision: Proceed
 Do not expose internal grading labels, source-model labels, or internal recommendation codes anywhere in the final report.
 Align recommendation conviction with evidence quality; avoid extreme conviction values unless the evidence clearly supports them.
 Use honest planning-input language instead of vague source claims such as "industry reports".
+When citing sources, prefer real organizations such as OECD, World Bank, IMF, Eurostat, TÜİK, TCMB, Statista, McKinsey, BCG, Deloitte, PwC, EY, KPMG, CB Insights, PitchBook, or Crunchbase when genuinely relevant; never invent URLs or report names.
+Write concise executive memo prose with specific observations, numbered insights where useful, and no generic conclusions.
+Do not repeat the user's prompt verbatim; translate it into market context, buyer economics, competitor dynamics, and founder decisions.
+Every section must include at least one concrete business insight that changes sizing, timing, positioning, pricing, distribution, risk, or validation priority.
+Use Claim -> Reason / supporting context -> Business implication for major analytical statements.
+Every major section must make clear what is happening, why it is happening, and why it matters for the founder.
+Prefer causal reasoning over descriptive text and avoid unsupported assertions.
 Finish every section with a complete sentence or complete bullet. Never end mid-sentence.
 Do not generate business-plan sections here. Do not suggest website URLs, domain names, brand names, or site ideas for the product.
 Do not include markdown code fences, braces inside string values, or commentary outside JSON.`;
@@ -1094,7 +1125,7 @@ Do not include markdown code fences, braces inside string values, or commentary 
           isPartialReport
             ? serializeWarningChunk({
                 warning:
-                  "Market analysis returned a partial report. Some sections were missing or incomplete and were marked for regeneration.",
+                  "Market analysis returned a partial report. Some areas need a fresh analysis pass before they are decision-grade.",
                 missingFields,
                 invalidFields,
                 partial: true,
@@ -1154,7 +1185,7 @@ Do not include markdown code fences, braces inside string values, or commentary 
         const fallbackReport = createFallbackMarketReport(responseLanguage);
         const warning = serializeWarningChunk({
           warning:
-            "Market analysis returned a partial report because the provider response could not be parsed completely. Please retry to regenerate missing sections.",
+            "Market analysis returned a partial report because the provider response could not be parsed completely. Please retry to refresh the affected areas.",
           missingFields: failedFields,
           invalidFields: [],
           partial: true,

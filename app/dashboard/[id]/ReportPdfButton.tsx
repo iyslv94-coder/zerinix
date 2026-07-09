@@ -498,7 +498,7 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
         pdf.text(recommendation, scoreX + 72, scoreY + 20);
 
         const kpis = [
-          ["Confidence", confidence === null ? "TBD" : `${confidence}%`],
+          ["Confidence", confidence === null ? "—" : `${confidence}%`],
           ["Estimated Valuation", valuation || "From report model"],
           ["Funding Stage", fundingStage || report.type],
           ["Status", report.status],
@@ -737,8 +737,8 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
           );
 
           const recItems = [
-            ["Confidence", confidence === null ? "TBD" : `${confidence}%`],
-            ["Investment", investmentNeeded || "Assumption"],
+            ["Confidence", confidence === null ? "—" : `${confidence}%`],
+            ["Investment", investmentNeeded || "Planning input"],
             ["Main Risk", mainRisk || "See risk section"],
             ["Next Action", nextAction || "Validate critical proof point"],
           ];

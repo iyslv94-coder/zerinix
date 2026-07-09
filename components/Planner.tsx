@@ -1003,11 +1003,11 @@ function MarkdownRenderer({
 type CitationData = {
   sourceTitle: string;
   organization: string;
-  publicationYear: string;
-  confidence: "High" | "Medium" | "Low" | "Unavailable";
+  publicationYear?: string;
+  confidence?: "High" | "Medium" | "Low";
 };
 
-function normalizeCitationConfidence(value: string): CitationData["confidence"] {
+function normalizeCitationConfidence(value: string): CitationData["confidence"] | undefined {
   const normalized = value.trim().toLowerCase();
 
   if (normalized === "high") {
@@ -1022,11 +1022,11 @@ function normalizeCitationConfidence(value: string): CitationData["confidence"] 
     return "Low";
   }
 
-  return "Unavailable";
+  return undefined;
 }
 
 function parseCitations(content: string): CitationData[] {
-  if (/source unavailable/i.test(content)) {
+  if (/\bsource unavailable\b/i.test(content)) {
     return [];
   }
 
@@ -1042,7 +1042,7 @@ function parseCitations(content: string): CitationData[] {
         .replace(/\*\*/g, "")
         .trim()
     )
-    .map((line) => {
+    .map((line): CitationData | null => {
       const citationMatch = line.match(
         /^([^—–|-]{2,80})\s*[—–-]\s*(.+?)(?:\s*\((\d{4})\))?(?:\s*[.;:]?\s*)?$/
       );
@@ -1055,29 +1055,25 @@ function parseCitations(content: string): CitationData[] {
       const sourceTitle = citationMatch[2]
         .replace(/\bconfidence\s*[:\-–—]\s*(high|medium|low)\b/i, "")
         .trim();
-      const publicationYear = citationMatch[3]?.trim() || "Year unavailable";
+      const publicationYear = citationMatch[3]?.trim();
 
-      if (!organization || !sourceTitle || /source unavailable/i.test(sourceTitle)) {
+      if (!organization || !sourceTitle || /\bsource unavailable\b/i.test(sourceTitle)) {
         return null;
       }
 
       return {
         sourceTitle,
         organization,
-        publicationYear,
-        confidence: fallbackConfidence,
-      } satisfies CitationData;
+        ...(publicationYear ? { publicationYear } : {}),
+        ...(fallbackConfidence ? { confidence: fallbackConfidence } : {}),
+      };
     })
     .filter((citation): citation is CitationData => Boolean(citation));
 }
 
 function Citation({ citation }: { citation?: CitationData }) {
   if (!citation) {
-    return (
-      <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-zinc-400">
-        Source unavailable
-      </div>
-    );
+    return null;
   }
 
   return (
@@ -1085,11 +1081,15 @@ function Citation({ citation }: { citation?: CitationData }) {
       <p className="text-sm font-semibold text-white">
         {citation.organization} — {citation.sourceTitle}
       </p>
-      <div className="mt-2 flex flex-wrap gap-2 text-xs text-zinc-400">
-        <span>Publication year: {citation.publicationYear}</span>
-        <span className="text-zinc-600">/</span>
-        <span>Confidence: {citation.confidence}</span>
-      </div>
+      {citation.publicationYear || citation.confidence ? (
+        <div className="mt-2 flex flex-wrap gap-2 text-xs text-zinc-400">
+          {citation.publicationYear ? <span>Publication year: {citation.publicationYear}</span> : null}
+          {citation.publicationYear && citation.confidence ? (
+            <span className="text-zinc-600">/</span>
+          ) : null}
+          {citation.confidence ? <span>Confidence: {citation.confidence}</span> : null}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -1098,7 +1098,7 @@ function CitationList({ content }: { content: string }) {
   const citations = parseCitations(content);
 
   if (citations.length === 0) {
-    return <Citation />;
+    return null;
   }
 
   return (
@@ -1114,6 +1114,14 @@ function CitationList({ content }: { content: string }) {
 }
 
 function SourcesCard({ sections }: { sections: ReportSection[] }) {
+  const sectionsWithCitations = sections.filter(
+    (section) => parseCitations(section.content).length > 0
+  );
+
+  if (sectionsWithCitations.length === 0) {
+    return null;
+  }
+
   return (
     <article className="rounded-[2rem] border border-teal-200/15 bg-teal-200/[0.045] p-5 shadow-xl shadow-black/30">
       <div className="flex items-start gap-4">
@@ -1128,9 +1136,9 @@ function SourcesCard({ sections }: { sections: ReportSection[] }) {
             Sources
           </h3>
           <div className="mt-4 space-y-5">
-            {sections.map((section) => (
+            {sectionsWithCitations.map((section) => (
               <div key={section.title} className="border-t border-white/10 pt-4 first:border-t-0 first:pt-0">
-                {sections.length > 1 ? (
+                {sectionsWithCitations.length > 1 ? (
                   <p className="mb-2 text-sm font-semibold text-zinc-100">
                     {section.title}
                   </p>
@@ -1334,20 +1342,18 @@ function formatPdfCitationContent(content: string) {
   const citations = parseCitations(content);
 
   if (citations.length === 0) {
-    return "Source unavailable";
+    return "";
   }
 
   return citations
     .slice(0, 8)
     .map((citation) => {
-      const year =
-        citation.publicationYear === "Year unavailable"
-          ? "Year unavailable"
-          : citation.publicationYear;
+      const year = citation.publicationYear ? ` (${citation.publicationYear})` : "";
+      const confidence = citation.confidence ? `\n  Confidence: ${citation.confidence}` : "";
 
       return [
-        `• ${citation.organization} — ${citation.sourceTitle} (${year})`,
-        `  Confidence: ${citation.confidence}`,
+        `• ${citation.organization} — ${citation.sourceTitle}${year}`,
+        confidence,
       ].join("\n");
     })
     .join("\n");
@@ -1466,7 +1472,7 @@ function MiniProgressCircle({
   label: string;
   value: number | null;
 }) {
-  const displayValue = value === null ? "TBD" : `${value}%`;
+  const displayValue = value === null ? "—" : `${value}%`;
   const degrees = (value ?? 0) * 3.6;
 
   return (
@@ -1508,7 +1514,7 @@ function ExecutiveSummaryVisual({ section }: { section: ReportSection }) {
   const kpis = [
     {
       label: "Investment Score",
-      value: score === null ? "TBD" : `${score}/100`,
+      value: score === null ? "—" : `${score}/100`,
       accent: "from-teal-200/25 to-cyan-200/5",
     },
     {
@@ -1629,7 +1635,7 @@ function ExecutiveInsightBanner({ section }: { section: ReportSection }) {
           </p>
         </div>
         <div className="shrink-0 rounded-full border border-white/10 bg-black/30 px-3 py-1.5 text-xs font-semibold text-zinc-300">
-          Confidence {confidence === null ? "TBD" : `${confidence}%`}
+          Confidence {confidence === null ? "—" : `${confidence}%`}
         </div>
       </div>
     </div>
@@ -1873,7 +1879,7 @@ function PremiumSectionVisual({ section }: { section: ReportSection }) {
             <div key={metric} className="bg-zinc-950/80 p-4">
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">{metric}</p>
               <p className="mt-3 line-clamp-2 text-lg font-semibold text-white">
-                {extractMetricValue(section.content, metric) || "Assumption"}
+                {extractMetricValue(section.content, metric) || "Planning input"}
               </p>
             </div>
           ))}
@@ -1952,7 +1958,7 @@ function PremiumSectionVisual({ section }: { section: ReportSection }) {
                 </div>
                 <div className="mt-4 min-w-0">
                   <p className="line-clamp-2 break-words text-[clamp(1.15rem,2.2vw,1.65rem)] font-semibold leading-tight tracking-tight text-white">
-                    {value || "TBD"}
+                    {value || "—"}
                   </p>
                   <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-white/10">
                     <div
@@ -2013,7 +2019,7 @@ function PremiumSectionVisual({ section }: { section: ReportSection }) {
                   <div key={metric} className="flex items-start justify-between gap-3 border-t border-white/10 pt-2 first:border-t-0 first:pt-0">
                     <span className="text-xs uppercase tracking-[0.14em] text-zinc-500">{metric}</span>
                     <span className="max-w-40 text-right text-sm font-medium text-zinc-200">
-                      {extractMetricValue(snippet, metric) || "TBD"}
+                      {extractMetricValue(snippet, metric) || "—"}
                     </span>
                   </div>
                 ))}
@@ -2050,10 +2056,10 @@ function PremiumSectionVisual({ section }: { section: ReportSection }) {
     const selected = detectRecommendation(section.content);
     const decisions = ["GO", "NO GO", "WAIT", "PIVOT", "RAISE", "BOOTSTRAP"];
     const recommendationMetrics = [
-      ["Confidence", extractConfidence(section.content) ? `${extractConfidence(section.content)}%` : "TBD"],
-      ["Investment Needed", extractMetricValue(section.content, "Investment Needed") || "TBD"],
-      ["Next Action", extractMetricValue(section.content, "Next Action") || extractMetricValue(section.content, "Next Critical Action") || "TBD"],
-      ["Main Risk", extractMetricValue(section.content, "Main Risk") || "TBD"],
+      ["Confidence", extractConfidence(section.content) ? `${extractConfidence(section.content)}%` : "—"],
+      ["Investment Needed", extractMetricValue(section.content, "Investment Needed") || "—"],
+      ["Next Action", extractMetricValue(section.content, "Next Action") || extractMetricValue(section.content, "Next Critical Action") || "—"],
+      ["Main Risk", extractMetricValue(section.content, "Main Risk") || "—"],
     ];
 
     return (
@@ -2064,7 +2070,7 @@ function PremiumSectionVisual({ section }: { section: ReportSection }) {
               Executive Recommendation
             </p>
             <p className="mt-2 text-5xl font-semibold tracking-tight text-white">
-              {selected || "TBD"}
+              {selected || "Review"}
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -3273,8 +3279,8 @@ const ReportPanel = memo(function ReportPanel({
           );
 
           const recItems = [
-            ["Confidence", confidence === null ? "TBD" : `${confidence}%`],
-            ["Investment", investmentNeeded || "Assumption"],
+            ["Confidence", confidence === null ? "—" : `${confidence}%`],
+            ["Investment", investmentNeeded || "Planning input"],
             ["Main Risk", mainRisk || "See risk section"],
             ["Next Action", nextAction || "Validate critical proof point"],
           ];
@@ -3451,6 +3457,11 @@ const ReportPanel = memo(function ReportPanel({
 
         const visualHeight = getPdfVisualHeight(section);
         const sectionBodyContent = formatPdfReadableContent(section);
+
+        if (isSourceLikeSection(section) && !sectionBodyContent.trim()) {
+          return;
+        }
+
         const bodyLines = splitPdfReadableLines(sectionBodyContent, bodyWidth);
         const hasBodyText = sectionBodyContent.trim().length > 0;
         const safeBodyLines = bodyLines.length > 0 ? bodyLines : [""];
