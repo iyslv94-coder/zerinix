@@ -17,39 +17,6 @@ export function getSupabasePublishableKey() {
   );
 }
 
-export function getSupabaseConfigSource() {
-  return {
-    url:
-      readEnv("SUPABASE_URL") !== undefined
-        ? "SUPABASE_URL"
-        : readEnv("NEXT_PUBLIC_SUPABASE_URL") !== undefined
-          ? "NEXT_PUBLIC_SUPABASE_URL"
-          : "missing",
-    key:
-      readEnv("SUPABASE_PUBLISHABLE_KEY") !== undefined
-        ? "SUPABASE_PUBLISHABLE_KEY"
-        : readEnv("SUPABASE_ANON_KEY") !== undefined
-          ? "SUPABASE_ANON_KEY"
-          : readEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY") !== undefined
-            ? "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"
-            : readEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY") !== undefined
-              ? "NEXT_PUBLIC_SUPABASE_ANON_KEY"
-              : "missing",
-  };
-}
-
-export function getSupabaseRuntimeDebugConfig() {
-  return {
-    loaded: getSupabaseConfigSource(),
-    values: {
-      SUPABASE_URL: readEnv("SUPABASE_URL") ?? "missing",
-      NEXT_PUBLIC_SUPABASE_URL: readEnv("NEXT_PUBLIC_SUPABASE_URL") ?? "missing",
-    },
-    finalUrl: getSupabaseUrl() ?? "missing",
-    keyLoaded: Boolean(getSupabasePublishableKey()),
-  };
-}
-
 export function hasSupabaseConfig() {
   return Boolean(getSupabaseUrl() && getSupabasePublishableKey());
 }

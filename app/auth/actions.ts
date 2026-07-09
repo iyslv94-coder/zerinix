@@ -3,10 +3,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/app/lib/supabase/server";
 import {
-  getSupabaseRuntimeDebugConfig,
-  getSupabaseUrl,
-} from "@/app/lib/supabase/env";
-import {
   checkRateLimit,
   getServerActionClientIp,
 } from "@/app/lib/security/rate-limit";
@@ -135,7 +131,6 @@ function serializeSignupError(error: unknown) {
 
 function logSignupError(scope: string, error: unknown) {
   console.error(scope, {
-    supabase: getSupabaseRuntimeDebugConfig(),
     error: serializeSignupError(error),
   });
 }
@@ -157,13 +152,6 @@ export async function signUpWithPassword(formData: FormData) {
   let supabase: Awaited<ReturnType<typeof createClient>>;
 
   try {
-    const supabaseUrl = getSupabaseUrl();
-
-    console.info("[auth:signup:supabase_config]", {
-      ...getSupabaseRuntimeDebugConfig(),
-      actionUrl: supabaseUrl ?? "missing",
-    });
-
     supabase = await createClient();
   } catch (error) {
     logSignupError("[auth:signup:supabase_config]", error);
