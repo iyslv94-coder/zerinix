@@ -34,17 +34,17 @@ import {
 const fieldPrompts = {
   executiveSummary: {
     prompt:
-      "Write an investor-grade Executive Summary with one job only: market verdict. Cover market attractiveness, demand signal, competitive intensity, entry timing, strategic gap, and the founder's most important market decision. Do not repeat TAM/SAM/SOM, SWOT, Porter, competitor, entry-plan, KPI, or source detail. Do not write a heading. Max 115 words.",
+      "Write an investor-grade Executive Summary with one job only: market verdict. It must read like a partner-level investment memo opening, not an AI answer. Cover market attractiveness, demand signal, competitive intensity, entry timing, strategic gap, and the founder's most important market decision. Do not repeat TAM/SAM/SOM, SWOT, Porter, competitor, entry-plan, KPI, or source detail. Do not use internal labels or confidence tags. Do not write a heading. Max 115 words.",
     maxTokens: 1000,
   },
   marketOverview: {
     prompt:
-      "Analyze only the market overview: category definition, maturity, growth drivers, buyer behavior, adoption barriers, demand signals, and timing. Do not repeat TAM/SAM/SOM numbers, competitor mapping, customer pain points, or entry strategy. Use one evidence/confidence note only if it changes the verdict. Do not write a heading. Max 165 words.",
+      "Analyze only the market overview: category definition, maturity, growth drivers, buyer behavior, adoption barriers, demand signals, and timing. Do not repeat TAM/SAM/SOM numbers, competitor mapping, customer pain points, or entry strategy. Use polished investor memo prose without internal evidence or confidence labels. Do not write a heading. Max 165 words.",
     maxTokens: 1800,
   },
   tamSamSom: {
     prompt:
-      "Estimate only TAM, SAM, and SOM using transparent assumptions and clear sizing logic. Explain market boundaries, reachable segments, adoption constraints, and validation data needed. Do not repeat competitor analysis, customer pain, trends, or entry strategy. Do not invent precision. Do not write a heading. Max 145 words.",
+      "Estimate only TAM, SAM, and SOM using concise, readable sizing logic. State the market boundary, reachable segment, obtainable wedge, and one validation input needed. Keep it easy to scan: three compact lines plus one short interpretation. Do not repeat competitor analysis, customer pain, trends, or entry strategy. Do not invent precision or use internal confidence labels. Do not write a heading. Max 130 words.",
     maxTokens: 1400,
   },
   industryTrends: {
@@ -89,12 +89,12 @@ const fieldPrompts = {
   },
   unitEconomics: {
     prompt:
-      "Analyze only Unit Economics implied by the market as a compact explainable table. Include likely ARPA/ACV, gross margin, CAC, LTV, payback period, retention/churn assumptions, and the one assumption that most affects viability. For each key metric show value, formula, assumption, confidence, and benchmark source in compressed form. Use numbers, ranges, and explicit assumptions only; avoid product, market, or GTM prose. Do not write a heading. Max 140 words.",
+      "Analyze only Unit Economics implied by the market as a compact explainable table. Include likely ARPA/ACV, gross margin, CAC, LTV, payback period, retention/churn planning inputs, and the one input that most affects viability. For each key metric show value, formula, planning input, evidence strength, and reference basis in compressed professional language. Use numbers and ranges only where defensible; avoid product, market, or GTM prose. Do not write a heading. Max 140 words.",
     maxTokens: 1200,
   },
   financialDashboard: {
     prompt:
-      "Create only high-level market-derived financial KPI cards. Use compact lines for ARR, MRR, Revenue, Expenses, Gross Margin, CAC, LTV, Payback Period, Burn Rate, Runway, EBITDA, Break-even Month, and Investment Needed. Each line must include value plus tiny formula/assumption/confidence/benchmark-source cues. Summarize CAC/LTV/payback if already covered by Unit Economics; do not explain again. No generic commentary. Do not write a heading. Max 145 words.",
+      "Create only high-level market-derived financial KPI cards. Use compact lines for ARR, MRR, Revenue, Expenses, Gross Margin, CAC, LTV, Payback Period, Burn Rate, Runway, EBITDA, Break-even Month, and Investment Needed. Each line must include value plus tiny formula, planning-input, evidence-strength, and reference-basis cues. Summarize CAC/LTV/payback if already covered by Unit Economics; do not explain again. No generic commentary or internal labels. Do not write a heading. Max 145 words.",
     maxTokens: 1300,
   },
   scenarioAnalysis: {
@@ -109,7 +109,7 @@ const fieldPrompts = {
   },
   executiveRecommendation: {
     prompt:
-      "Write only final investment decision. Include exactly five elements: selected decision, confidence level, biggest risks, next actions, and why the calculated Decision Engine supports it. Select exactly one option and no second option: GO, WAIT, or PASS. Confidence must align with evidence quality and the Investment Scoring Engine. Do not restate market overview, SWOT, entry plan, or financial dashboard. Do not write a heading. Max 95 words.",
+      "Write only final investment decision in investment-committee language. Include exactly five elements: selected decision, conviction level, biggest risks, next actions, and why the calculated decision model supports it. Select exactly one visible option and no second option: Proceed, Hold for validation, or Decline. Do not use internal recommendation codes, confidence-label jargon, or internal scoring terminology. Do not restate market overview, SWOT, entry plan, or financial dashboard. Do not write a heading. Max 95 words.",
     maxTokens: 850,
   },
   entryStrategy: {
@@ -134,12 +134,12 @@ const fieldPrompts = {
   },
   sourcesAssumptions: {
     prompt:
-      "List only sources and evidence assumptions. Separate real evidence, inferred assumptions, and missing data. Do not repeat market or financial analysis. Do not write vague source claims such as 'industry reports' unless a specific source is named. Use phrases such as 'Assumption based on comparable sector benchmarks', 'Needs validation with primary research', or 'Low confidence until verified'. Do not write a heading. Max 160 words.",
+      "List only sources, evidence basis, planning inputs, and missing data. Do not repeat market or financial analysis. Do not write vague source claims such as 'industry reports' unless a specific source is named. Use polished phrases such as 'Based on comparable sector patterns', 'Requires primary customer validation', or 'Evidence remains directional until verified'. Do not use internal confidence tiers, source-model labels, or grading jargon. Do not write a heading. Max 160 words.",
     maxTokens: 1300,
   },
   sources: {
     prompt:
-      "List only 4-6 reliable sources used or most relevant for validating this market. Name specific sources when available. Do not use generic phrases such as 'industry reports' as verified evidence. For each source, state the specific evidence it supports and confidence level. If a source is missing, label the item as an assumption needing primary research. Do not repeat analysis. Do not write a heading.",
+      "List only 4-6 reliable sources used or most relevant for validating this market. Name specific sources when available. Do not use generic phrases such as 'industry reports' as verified evidence. For each source, state the specific market question it supports and how decision-useful it is. If a source is missing, describe the required primary research without internal labels. Do not repeat analysis. Do not write a heading.",
     maxTokens: 1400,
   },
 } as const;
@@ -266,6 +266,24 @@ const fieldLabelsByLanguage: Record<
   },
 };
 
+const marketReportTermReplacements: Array<[RegExp, string]> = [
+  [/\bLow[\s-]+Confidence\b/gi, "Early evidence"],
+  [/\bMedium[\s-]+Confidence\b/gi, "Developing evidence"],
+  [/\bHigh[\s-]+Confidence\b/gi, "Strong evidence"],
+  [/\bIndustry[\s-]+Estimate\b/gi, "Sector view"],
+  [/\bAI[\s-]+Assumptions?\b/gi, "Planning inputs"],
+  [/\bBenchmarks?\b/gi, "Market references"],
+  [/\bAssumptions?\b/gi, "Planning inputs"],
+  [/\bWAIT\b/g, "Hold for validation"],
+];
+
+function sanitizeMarketReportContent(value: string) {
+  return marketReportTermReplacements.reduce(
+    (content, [pattern, replacement]) => content.replace(pattern, replacement),
+    value
+  );
+}
+
 function detectLanguage(value: string): ResponseLanguage {
   const normalized = value.toLowerCase();
   const turkishSignals = [
@@ -289,7 +307,7 @@ function createReportChunk(field: MarketReportField, content: string): MarketRep
 }
 
 function serializeReportChunk(field: MarketReportField, content: string) {
-  return `${JSON.stringify(createReportChunk(field, content))}\n`;
+  return `${JSON.stringify(createReportChunk(field, sanitizeMarketReportContent(content)))}\n`;
 }
 
 function serializeWarningChunk(warning: MarketReportWarningChunk) {
@@ -389,7 +407,7 @@ function parseFullMarketReport(
       continue;
     }
 
-    report[field] = content.trim();
+    report[field] = sanitizeMarketReportContent(content.trim());
   }
 
   return { report, missingFields, invalidFields };
@@ -530,36 +548,36 @@ function buildLanguageInstructions(language: ResponseLanguage) {
     "Do not switch languages. Do not ask questions or request clarification.",
     "Be current, analytical, evidence-weighted, and decision-oriented for an early-stage founder.",
     "Generate a dedicated market analysis, not a business plan.",
-    "The user's exact submitted market/business idea is the anchor for the whole report. Every section must name or clearly reference that idea through industry-specific competitors, customer segments, market trends, risks, assumptions, and validation actions rather than reusable template paragraphs.",
+    "The user's exact submitted market/business idea is the anchor for the whole report. Every section must name or clearly reference that idea through industry-specific competitors, customer segments, market trends, risks, planning inputs, and validation actions rather than reusable template paragraphs.",
     "Prioritize market overview, TAM/SAM/SOM, industry trends, competitors, gap analysis, customer pain, opportunities, threats, SWOT, Porter's Five Forces, entry strategy, validation, metrics, sources, and an investment-style verdict.",
-    "Use evidence and confidence only where they materially affect a decision. Do not attach Evidence, Confidence, or Decision implication labels to every paragraph.",
-    "Avoid repeated label patterns. Prefer concise analyst prose; use Evidence/Confidence labels sparingly and only when uncertainty is important.",
+    "Write in polished investment memo prose. Do not attach internal evidence tags, confidence tiers, market-source labels, or decision-implication labels to paragraphs.",
+    "Avoid repeated label patterns. Prefer concise analyst prose with natural language about evidence strength only when uncertainty changes the decision.",
     "Do not use generic AI phrases such as 'It is important to', 'Businesses should', 'This strategy can help', 'In today's market', or 'By leveraging'.",
     "Each report section must contribute a unique market diligence job. Do not restate conclusions, paragraphs, metrics, or examples already assigned to another section.",
     "Respect strict section ownership: Executive Summary = market verdict only; Market Overview = category and demand context only; TAM/SAM/SOM = market sizing only; Industry Trends = timing forces only; Target Customer = ICP only; Competitor Analysis = competitors only; Customer Pain Points = pain only; Opportunities and Threats = distinct market openings/risks only; SWOT = non-duplicative matrix only; Porter's Five Forces = industry forces only; Unit Economics = unit metrics only; Financial Dashboard = high-level KPIs only; Scenario Analysis = future scenarios only; KPI Dashboard/Key Metrics = operating validation metrics only; Executive Recommendation = final investment decision only; Entry Strategy = market entry only; Validation Plan = tests only; Founder Roadmap = execution sequence only; Sources / Assumptions and Sources = sources only.",
     "Never repeat the same metric more than once unless necessary. If a metric appears in Unit Economics, later financial sections may summarize it but must not explain it again.",
-    "Use one consistent financial assumption set across Unit Economics, Financial Dashboard, Scenario Analysis, and Executive Recommendation. Reuse exact ASP, MRR, CAC, LTV, payback, burn, runway, and investment values unless explicitly updating the scenario.",
+    "Use one consistent financial planning-input set across Unit Economics, Financial Dashboard, Scenario Analysis, and Executive Recommendation. Reuse exact ASP, MRR, CAC, LTV, payback, burn, runway, and investment values unless explicitly updating the scenario.",
     "The Data-Driven Financial Analysis Engine block in the user input contains the calculated base-case financial model. Use those values as the source of truth.",
-    "The Investment Scoring Engine block in the user input contains the calculated investment score, GO/WAIT/PASS recommendation, estimated valuation, funding stage, decision scores, strengths, weaknesses, top risks, and next critical action. Use those values as the source of truth.",
+    "The Investment Scoring Engine block in the user input contains the calculated investment score, internal recommendation, estimated valuation, funding stage, decision scores, strengths, weaknesses, top risks, and next critical action. Use those values as the source of truth, but translate the visible decision into Proceed, Hold for validation, or Decline.",
     "Unit Economics, KPI Dashboard, Financial Dashboard, Scenario Analysis, Financial Assumptions, and Executive Recommendation must reference the same calculated financial model whenever financial metrics appear.",
-    "For ARR, MRR, CAC, LTV, Gross Margin, Burn, Runway, EBITDA, and Break-even, financial sections must show value, formula, assumptions, confidence, and benchmark source. If confidence is Low, label it as an assumption needing validation instead of presenting it as a verified benchmark.",
-    "Important claims may use one concise evidence label from this controlled set: Real Evidence, Benchmark, Industry Estimate, AI Assumption, Low Confidence, High Confidence. Do not over-label ordinary sentences.",
+    "For ARR, MRR, CAC, LTV, Gross Margin, Burn, Runway, EBITDA, and Break-even, financial sections must show value, formula, planning input, evidence strength, and reference basis without internal labels.",
+    "Do not expose internal grading labels, source-model labels, or internal recommendation codes anywhere in the final report.",
     "Make reasoning deeply industry-specific for SaaS, AI, Cybersecurity, Healthcare, Logistics, Restaurant, Drone, Marketplace, FinTech, E-commerce, EV Charging, and other detected sectors. KPIs, risks, roadmap logic, and financial interpretation must reflect that sector's economics.",
-    "Keep payback, LTV:CAC, CAC, and runway realistic for the sector and capital intensity. If a result looks unusually strong, label it as a sensitivity or low-confidence assumption rather than a base case.",
-    "Recommendation confidence must match evidence quality and the Investment Scoring Engine. GO requires strong score/evidence, WAIT means validation gaps remain, and PASS means economics or execution risk are not investable yet.",
-    "Do not fake source authority. If a precise source is unavailable, use assumption language such as 'Assumption based on comparable sector benchmarks', 'Needs validation with primary research', or 'Low confidence until verified'.",
+    "Keep payback, LTV:CAC, CAC, and runway realistic for the sector and capital intensity. If a result looks unusually strong, describe it as a sensitivity case requiring validation rather than a base case.",
+    "Recommendation conviction must match evidence quality and the Investment Scoring Engine. Use Proceed for strong evidence, Hold for validation when validation gaps remain, and Decline when economics or execution risk are not investable yet.",
+    "Do not fake source authority. If a precise source is unavailable, use language such as 'Based on comparable sector patterns', 'Needs validation with primary research', or 'Directional until verified'.",
     "Every section must end with a complete sentence or complete bullet. Never end mid-sentence.",
-    "Distinguish facts, assumptions, and hypotheses. Never present guesses as facts.",
-    "Be honest about assumptions and uncertainty; do not invent precise figures.",
+    "Distinguish facts, planning inputs, and hypotheses. Never present guesses as facts.",
+    "Be honest about uncertainty; do not invent precise figures.",
     "Do not give generic advice. State what the founder should decide, why, what evidence supports it, and what could disprove it.",
     "Before writing any visible output, silently build one Integrated Market Strategy Model for the whole opportunity. Do not reveal this internal model directly.",
-    "The hidden Integrated Market Strategy Model must contain: Business Model, Customer, ICP, Market, Competition, TAM/SAM/SOM, Pricing, Revenue, GTM, Risks, Financial assumptions, and Founder priorities.",
+    "The hidden Integrated Market Strategy Model must contain: Business Model, Customer, ICP, Market, Competition, TAM/SAM/SOM, Pricing, Revenue, GTM, Risks, Financial planning inputs, and Founder priorities.",
     "Every section must be derived from that same hidden model. No section may be written as a standalone independent answer.",
     "Maintain dependency logic across the analysis: Problem changes Solution; Solution changes Pricing; Pricing changes Financial; Financial changes Runway; Runway changes Risk; Risk changes CEO Recommendation.",
     "Where financial market implications appear, reason through Revenue -> MRR -> Gross Margin -> CAC -> LTV -> Payback -> Burn -> Runway -> EBITDA.",
-    "Use real data first when available. If data is missing, create an explicit assumption, explain why it is reasonable, and assign confidence.",
-    "When writing Executive Recommendation, select exactly one of: GO, WAIT, PASS.",
-    "Where score or KPI dashboards appear, make them investor-readable with explicit thresholds and confidence.",
+    "Use real data first when available. If data is missing, create an explicit planning input, explain why it is reasonable, and describe the evidence strength in natural language.",
+    "When writing Executive Recommendation, select exactly one visible decision: Proceed, Hold for validation, or Decline.",
+    "Where score or KPI dashboards appear, make them investor-readable with explicit thresholds and natural evidence-strength language.",
     "Founder Roadmap must include Tomorrow, This Week, 30 Days, 90 Days, 180 Days, and 12 Months, with each step dependent on the prior proof point.",
   ].join("\n");
 }
@@ -708,19 +726,19 @@ Before writing visible output, silently construct the full Integrated Market Str
 Derive this section only from that model so market size, ICP, competitors, pricing, GTM, financial implications, risks, and recommendation stay consistent.
 Write the section as an investor-grade market diligence note with practical market-entry recommendations for the founder.
 Do not lead every section with the same decision-implication formula. Use it only where the section's job requires it.
-Use Evidence, Confidence, and Decision implication labels sparingly; do not repeat those labels in every paragraph or bullet.
-Avoid generic filler. Use assumptions explicitly when evidence is limited and state what would change the verdict.
+Do not use internal evidence tags, confidence tiers, market-source labels, planning-input labels, or decision-implication labels.
+Avoid generic filler. Use planning inputs explicitly when evidence is limited and state what would change the verdict.
 Follow the section ownership contract exactly; do not borrow content assigned to another section.
 Do not repeat ideas, metrics, examples, or conclusions that belong to other sections; this section must add unique value.
 Remove filler phrases such as "It is important to", "Businesses should", "This strategy can help", "In today's market", and "By leveraging".
-Maintain exact financial consistency with the same assumption set across Unit Economics, Financial Dashboard, Scenario Analysis, and Executive Recommendation.
+Maintain exact financial consistency with the same planning-input set across Unit Economics, Financial Dashboard, Scenario Analysis, and Executive Recommendation.
 Use the Data-Driven Financial Analysis Engine block as the calculated base-case model for TAM, SAM, SOM, ARPA, CAC, LTV, Gross Margin, MRR, ARR, Payback, Burn Rate, Runway, EBITDA, Break-even Month, Investment Needed, ROI, and Revenue Forecast.
-Use the Investment Scoring Engine block as the calculated source for Investment Score, GO/WAIT/PASS recommendation, confidence, estimated valuation, funding stage, decision scores, strengths, weaknesses, top risks, and next critical action.
-Reuse that single calculated model everywhere. Do not create conflicting financial values in separate sections. If a value is low-confidence, warn that it needs validation and explain why.
-Align recommendation confidence with evidence quality and the calculated Investment Scoring Engine; avoid extreme confidence values unless the evidence clearly supports them.
-Use evidence labels sparingly from this exact set when useful: Real Evidence, Benchmark, Industry Estimate, AI Assumption, Low Confidence, High Confidence.
+Use the Investment Scoring Engine block as the calculated source for Investment Score, internal recommendation, conviction, estimated valuation, funding stage, decision scores, strengths, weaknesses, top risks, and next critical action.
+Reuse that single calculated model everywhere. Do not create conflicting financial values in separate sections. If a value is directional, say it needs validation and explain why.
+Align recommendation conviction with evidence quality and the calculated Investment Scoring Engine; avoid extreme conviction unless the evidence clearly supports it.
+Do not expose internal grading labels, source-model labels, or internal recommendation codes anywhere in the final report.
 Make examples, KPIs, risks, roadmap actions, and financial interpretation specific to the detected industry instead of using generic startup templates.
-Use honest assumption language instead of vague source claims such as "industry reports".
+Use honest planning-input language instead of vague source claims such as "industry reports".
 Finish with a complete sentence or complete bullet. Do not end mid-sentence.
 Use structured markdown inside the section when useful: short paragraphs, bullets, or compact tables.
 Write only the content for this section. Do not write a JSON object, field name, braces, markdown code block, heading, or any other report section.
@@ -916,9 +934,11 @@ Derive every section only from that model so market size, ICP, competitors, pric
 Follow the section ownership contract exactly; do not borrow content assigned to another section.
 Do not repeat ideas, metrics, examples, or conclusions across sections.
 Use the Data-Driven Financial Analysis Engine block as the calculated base-case model for TAM, SAM, SOM, ARPA, CAC, LTV, Gross Margin, MRR, ARR, Payback, Burn Rate, Runway, EBITDA, Break-even Month, Investment Needed, ROI, and Revenue Forecast.
-Reuse that single calculated model everywhere. Do not create conflicting financial values in separate sections. If a value is low-confidence, warn that it needs validation and explain why.
-Align recommendation confidence with evidence quality; avoid extreme confidence values unless the evidence clearly supports them.
-Use honest assumption language instead of vague source claims such as "industry reports".
+Reuse that single calculated model everywhere. Do not create conflicting financial values in separate sections. If a value is directional, state that it needs validation and explain why.
+Translate any internal recommendation into exactly one visible decision: Proceed, Hold for validation, or Decline.
+Do not expose internal grading labels, source-model labels, or internal recommendation codes anywhere in the final report.
+Align recommendation conviction with evidence quality; avoid extreme conviction values unless the evidence clearly supports them.
+Use honest planning-input language instead of vague source claims such as "industry reports".
 Finish every section with a complete sentence or complete bullet. Never end mid-sentence.
 Do not generate business-plan sections here. Do not suggest website URLs, domain names, brand names, or site ideas for the product.
 Do not include markdown code fences, braces inside string values, or commentary outside JSON.`;
