@@ -1310,6 +1310,85 @@ function removeDuplicateVisualText(title: string, content: string) {
   return normalizePdfText(content);
 }
 
+function splitPdfSentences(content: string) {
+  return (
+    normalizePdfText(content)
+      .replace(/\n+/g, " ")
+      .match(/[^.!?]+[.!?]+|[^.!?]+$/g) || []
+  )
+    .map((sentence) => sentence.trim())
+    .filter(Boolean);
+}
+
+function isSourceLikeSection(section: Pick<ReportSection, "field" | "title">) {
+  return (
+    section.field === "sources" ||
+    section.field === "sourcesAssumptions" ||
+    /^(sources|references|kaynaklar|sources \/ assumptions|kaynaklar \/ varsayımlar)$/i.test(
+      section.title.trim()
+    )
+  );
+}
+
+function formatPdfCitationContent(content: string) {
+  const citations = parseCitations(content);
+
+  if (citations.length === 0) {
+    return "Source unavailable";
+  }
+
+  return citations
+    .slice(0, 8)
+    .map((citation) => {
+      const year =
+        citation.publicationYear === "Year unavailable"
+          ? "Year unavailable"
+          : citation.publicationYear;
+
+      return [
+        `• ${citation.organization} — ${citation.sourceTitle} (${year})`,
+        `  Confidence: ${citation.confidence}`,
+      ].join("\n");
+    })
+    .join("\n");
+}
+
+function formatPdfReadableContent(section: ReportSection) {
+  if (isSourceLikeSection(section)) {
+    return formatPdfCitationContent(section.content);
+  }
+
+  const content = removeDuplicateVisualText(section.title, section.content);
+  const normalized = normalizePdfText(content);
+
+  if (!normalized) {
+    return "";
+  }
+
+  const lines = normalized
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const alreadyStructured =
+    lines.some((line) => /^[-*•]\s+/.test(line) || /^\|/.test(line)) ||
+    lines.length >= 4;
+
+  if (normalized.length < 520 || alreadyStructured) {
+    return normalized;
+  }
+
+  const sentences = splitPdfSentences(normalized);
+
+  if (sentences.length <= 4) {
+    return normalized;
+  }
+
+  const executiveParagraph = sentences.slice(0, 2).join(" ");
+  const insightBullets = sentences.slice(2, 7).map((sentence) => `• ${sentence}`);
+
+  return [executiveParagraph, "Key insights", ...insightBullets].join("\n");
+}
+
 function dedupePdfSections<T extends { title: string; content: string }>(sections: T[]) {
   const seen = new Set<string>();
 
@@ -2812,9 +2891,9 @@ const ReportPanel = memo(function ReportPanel({
       const contentWidth = pageWidth - margin * 2;
       const bodyX = margin + 20;
       const bodyWidth = contentWidth - 28;
-      const bodyLineHeight = 5.25;
-      const cardHeaderHeight = 24;
-      const cardBottomPadding = 9;
+      const bodyLineHeight = 5.85;
+      const cardHeaderHeight = 25;
+      const cardBottomPadding = 11;
       const businessIdea = normalizePdfText(sourcePrompt || reportTitle);
       const tocEntries: Array<{ title: string; page: number }> = [];
       let y = margin;
@@ -2884,6 +2963,23 @@ const ReportPanel = memo(function ReportPanel({
         pdf.setTextColor("#ccfbf1");
         pdf.text(label, x + 4, tagY + 6.4, { maxWidth: width - 8 });
       };
+
+      const splitPdfReadableLines = (content: string, width: number) =>
+        content.split("\n").flatMap((rawLine) => {
+          const line = normalizePdfText(rawLine);
+
+          if (!line) {
+            return [""];
+          }
+
+          const isBullet = /^[-*•]\s+/.test(line);
+          const availableWidth = isBullet ? width - 4 : width;
+          const wrapped = pdf.splitTextToSize(line, availableWidth) as string[];
+
+          return wrapped.map((wrappedLine, index) =>
+            isBullet && index > 0 ? `  ${wrappedLine}` : wrappedLine
+          );
+        });
 
       const drawCoverPage = () => {
         paintPage();
@@ -3028,7 +3124,11 @@ const ReportPanel = memo(function ReportPanel({
         }
 
         if (section.field === "financialDashboard") {
-          return 52;
+          return 112;
+        }
+
+        if (section.field === "unitEconomics") {
+          return 32;
         }
 
         if (section.field === "swotAnalysis") {
@@ -3044,7 +3144,7 @@ const ReportPanel = memo(function ReportPanel({
         }
 
         if (section.field === "tamSamSom") {
-          return 22;
+          return 28;
         }
 
         if (section.field === "executiveRecommendation") {
@@ -3067,19 +3167,22 @@ const ReportPanel = memo(function ReportPanel({
           ["TAM", "SAM", "SOM"].forEach((label, index) => {
             const width = funnelWidths[index];
             const x = bodyX + (visualWidth - width) / 2;
-            const rowY = visualY + index * 6;
+            const rowY = visualY + index * 7;
             const value = extractMetricValue(section.content, label);
+            const valueWidth = Math.min(46, Math.max(24, width - 16));
+            const valueX = Math.max(x + 15, x + width - valueWidth - 3);
 
             pdf.setFillColor(index === 0 ? "#134e4a" : index === 1 ? "#115e59" : "#5eead4");
-            pdf.roundedRect(x, rowY, width, 4, 1.5, 1.5, "F");
+            pdf.roundedRect(x, rowY, width, 4.6, 1.5, 1.5, "F");
             pdf.setFontSize(6.5);
             pdf.setTextColor(index === 2 ? "#000000" : "#ccfbf1");
-            pdf.text(label, x + 3, rowY + 3);
+            pdf.text(label, x + 3, rowY + 3.2);
             if (value) {
-              pdf.text(value, x + width - 34, rowY + 3, { maxWidth: 30 });
+              pdf.setFontSize(5.8);
+              pdf.text(value, valueX, rowY + 3.2, { maxWidth: valueWidth });
             }
           });
-          return 22;
+          return 28;
         }
 
         if (section.field === "swotAnalysis") {
@@ -3282,8 +3385,8 @@ const ReportPanel = memo(function ReportPanel({
           pdf.text(label, x + 2, itemY + 3.2, { maxWidth: itemWidth - 4 });
           if (section.field === "financialDashboard" && value) {
             pdf.setTextColor("#f4f4f5");
-            pdf.setFontSize(8);
-            pdf.text(pdf.splitTextToSize(value, itemWidth - 4).slice(0, 2), x + 2, itemY + 8.1, {
+            pdf.setFontSize(7.4);
+            pdf.text(pdf.splitTextToSize(value, itemWidth - 4).slice(0, 1), x + 2, itemY + 8.4, {
               lineHeightFactor: 1.12,
               maxWidth: itemWidth - 4,
             });
@@ -3347,11 +3450,8 @@ const ReportPanel = memo(function ReportPanel({
         }
 
         const visualHeight = getPdfVisualHeight(section);
-        const sectionBodyContent = removeDuplicateVisualText(section.title, section.content);
-        const bodyLines = pdf.splitTextToSize(
-          sectionBodyContent,
-          bodyWidth
-        ) as string[];
+        const sectionBodyContent = formatPdfReadableContent(section);
+        const bodyLines = splitPdfReadableLines(sectionBodyContent, bodyWidth);
         const hasBodyText = sectionBodyContent.trim().length > 0;
         const safeBodyLines = bodyLines.length > 0 ? bodyLines : [""];
         let lineIndex = 0;
@@ -3416,8 +3516,8 @@ const ReportPanel = memo(function ReportPanel({
             pdf.setFont("Geist", "normal");
             pdf.setFontSize(8.8);
             pdf.setTextColor("#d4d4d8");
-            pdf.text(lines, bodyX, y + 24 + drawnVisualHeight, {
-              lineHeightFactor: 1.3,
+            pdf.text(lines, bodyX, y + 25 + drawnVisualHeight, {
+              lineHeightFactor: 1.45,
               maxWidth: bodyWidth,
             });
           }
