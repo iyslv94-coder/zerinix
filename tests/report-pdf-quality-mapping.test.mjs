@@ -113,6 +113,8 @@ test("PDF text normalization protects inline abbreviations", () => {
     assert.equal(source.includes("(e.g.,"), true);
     assert.equal(source.includes("i\\.\\s*,"), true);
     assert.equal(source.includes("i.e.,"), true);
+    assert.equal(source.includes("previousLine.trimEnd()}g.${current}"), true);
+    assert.equal(source.includes("previousLine.trimEnd()}e.${current}"), true);
     assert.equal(source.includes("e\\.g\\.|i\\.e\\.|vs\\.|etc\\.|No\\.|Mr\\.|Dr\\."), true);
     assert.equal(source.includes("U\\.\\s*S\\."), true);
     assert.equal(source.includes("E\\.\\s*U\\."), true);
@@ -180,6 +182,7 @@ test("PDF wrapped line repair rejoins numeric and abbreviation fragments", () =>
     assert.match(source, /municipal\|permit\|sector\|revenue\|market/);
     assert.equal(source.includes("^[.,)]$"), true);
     assert.equal(source.includes("[€$₺]?\\d+"), true);
+    assert.equal(source.includes("[kKmMbB%]"), true);
     assert.equal(source.includes("repaired[repaired.length - 1]?.trim() === line.trim()"), true);
   }
 });

@@ -610,6 +610,8 @@ function shouldJoinPdfLineFragment(previousLine: string, currentLine: string) {
   ) || (
     /\b(?:e|i|v|N|M|D)\.$/.test(previous) && /^(?:g|e|s|o|r)\.$/i.test(current)
   ) || (
+    /(?:\(|\b)(?:e|i)\.$/i.test(previous) && /^,\s*\S/.test(current)
+  ) || (
     /\b(?:e\.g\.|i\.e\.|vs\.|etc\.|No\.|Mr\.|Dr\.)$/i.test(previous) && /^[.,)]$/.test(current)
   ) || (
     /[€$₺(]$/.test(previous) && /^\d/.test(current)
@@ -620,6 +622,15 @@ function shouldJoinPdfLineFragment(previousLine: string, currentLine: string) {
 
 function joinPdfLineFragment(previousLine: string, currentLine: string) {
   const current = cleanPdfContinuationFragment(currentLine);
+
+  if (/(?:\(|\b)e\.$/i.test(previousLine.trim()) && /^,\s*\S/.test(current)) {
+    return preservePdfInlineTokens(`${previousLine.trimEnd()}g.${current}`);
+  }
+
+  if (/(?:\(|\b)i\.$/i.test(previousLine.trim()) && /^,\s*\S/.test(current)) {
+    return preservePdfInlineTokens(`${previousLine.trimEnd()}e.${current}`);
+  }
+
   const separator =
     /(?:[€$₺]?\d+(?:[.,]\d+)*[.,]|[€$₺(]|\b(?:e|i|v|N|M|D)\.)$/i.test(previousLine.trim()) ||
     /^[.,)]/.test(current)
