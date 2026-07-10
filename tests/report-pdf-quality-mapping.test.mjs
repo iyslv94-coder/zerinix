@@ -75,11 +75,12 @@ test("PDF text normalization repairs malformed month expressions", () => {
     assert.equal(source.includes("(\\d{1,2})(\\d{2})\\s*months?"), true);
     assert.equal(source.includes("$1–$2\\u00a0months"), true);
     assert.equal(source.includes("(\\d{1,2})(\\d{2})-month"), true);
-    assert.equal(source.includes("$1–$2-month"), true);
+    assert.equal(source.includes("$1–$2\\u00a0month"), true);
+    assert.equal(source.includes("(\\d{2})2month"), true);
     assert.equal(source.includes("(\\d{1,2})(\\d{2})\\s*days?"), true);
     assert.equal(source.includes("$1–$2\\u00a0days"), true);
-    assert.equal(source.includes("1\\s*[-–]\\s*80\\s+days?"), true);
-    assert.equal(source.includes("180\\u00a0days"), true);
+    assert.equal(source.includes("1\\s*[-–]\\s*80\\s+days?"), false);
+    assert.equal(source.includes("180\\u00a0days"), false);
     assert.equal(source.includes("100\\s*[-–]\\s*3\\s*[-–]\\s*00\\s+scooters?"), true);
     assert.equal(source.includes("100–300\\u00a0scooters"), true);
     assert.equal(source.includes("(\\d{1,2})(\\d{2})\\s+(days?|months?|scooters?|rides\\/day|rides)"), true);
@@ -140,6 +141,9 @@ test("PDF text normalization preserves hyphenated and restored-space expressions
     assert.equal(source.includes("public)(?=sector"), true);
     assert.equal(source.includes("private)(?=sector"), true);
     assert.equal(source.includes("last)(?=mile"), true);
+    assert.equal(source.includes("third)(?=party"), true);
+    assert.equal(source.includes("one)(?=pager"), true);
+    assert.equal(source.includes("post)(?=\\d{4}"), true);
     assert.match(source, /municipal\|public\|private\|corporate\|enterprise/);
   }
 });
