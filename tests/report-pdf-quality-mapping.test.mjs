@@ -151,6 +151,7 @@ test("PDF text normalization preserves hyphenated and restored-space expressions
     assert.equal(source.includes("last)(?=mile"), true);
     assert.equal(source.includes("third)(?=party"), true);
     assert.equal(source.includes("one)(?=pager"), true);
+    assert.equal(source.includes("well)(?=funded"), true);
     assert.equal(source.includes("post)(?=\\d{4}"), true);
     assert.match(source, /municipal\|public\|private\|corporate\|enterprise/);
   }

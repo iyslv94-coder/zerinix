@@ -91,6 +91,7 @@ function preservePdfInlineTokens(value: string) {
     .replace(/\b(last)(?=mile\b)/gi, "$1-")
     .replace(/\b(third)(?=party\b)/gi, "$1-")
     .replace(/\b(one)(?=pager\b)/gi, "$1-")
+    .replace(/\b(well)(?=funded\b)/gi, "$1-")
     .replace(/\b(post)(?=\d{4}\b)/gi, "$1-")
     .replace(/(\d)\s+([kKmMbB%])/g, "$1$2")
     .replace(/(\d(?:[.,]\d+)*)\s*([kKmMbB])\b/g, "$1$2")
