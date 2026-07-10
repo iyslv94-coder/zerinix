@@ -59,16 +59,21 @@ function normalizePdfText(value: string) {
 function preservePdfInlineTokens(value: string) {
   return value
     .replace(/([€$₺])\s+(?=\d)/g, "$1")
-    .replace(/>\s+([€$₺]?\d)/g, ">$1")
+    .replace(/([<>])\s+([€$₺]?\d)/g, "$1$2")
     .replace(/\b(\d{1,2})\s*[-–]\s*(\d{1,2})\s*months?\b/gi, "$1–$2\u00a0months")
     .replace(/\b(\d{1,2})(\d{2})\s*months?\b/gi, "$1–$2\u00a0months")
     .replace(/\b(\d{1,2})\s*[-–]\s*(\d{1,2})\s*days?\b/gi, "$1–$2\u00a0days")
     .replace(/\b(\d{1,2})(\d{2})\s*days?\b/gi, "$1–$2\u00a0days")
+    .replace(/\b(\d{1,2})(\d{2})\s+(days?|months?|scooters?|rides\/day|rides)\b/gi, "$1–$2\u00a0$3")
+    .replace(/\b(\d{3})(\d{3})\s+(scooters?|rides\/day|rides)\b/gi, "$1–$2\u00a0$3")
+    .replace(/\b(\d{1,2})\s*[-–]\s*(\d{1,2})\s*(?:rides\/day|rides)\b/gi, "$1–$2\u00a0rides/day")
     .replace(/\b(\d{1,2})\s*[-–]\s*(\d{1,2})\s*scooters?\b/gi, "$1–$2\u00a0scooters")
     .replace(/\b(\d{1,2})(\d{2})\s*%\b/g, "$1–$2%")
-    .replace(/\b(\d+(?:[.,]\d+)*)\s*month\b/gi, "$1\u00a0months")
-    .replace(/\b(\d+(?:[.,]\d+)*)\s*months\b/gi, "$1\u00a0months")
     .replace(/\b(\d+(?:[.,]\d+)*)\s*-\s*month\b/gi, "$1-month")
+    .replace(/\b(\d+(?:[.,]\d+)*)month\b/gi, "$1-month")
+    .replace(/\b(\d+(?:[.,]\d+)*)months\b/gi, "$1\u00a0months")
+    .replace(/\b(\d+(?:[.,]\d+)*)\s+month\b/gi, "$1\u00a0month")
+    .replace(/\b(\d+(?:[.,]\d+)*)\s+months\b/gi, "$1\u00a0months")
     .replace(/\b(\d+)(?=(?:municipal|public|private|corporate|enterprise|customer|customers|user|users|month|months|day|days|scooter|scooters)\b)/gi, "$1 ")
     .replace(/\b(minimum)(?=revenue\b)/gi, "$1 ")
     .replace(/\b(public)(?=sector\b)/gi, "$1 ")
@@ -81,6 +86,12 @@ function preservePdfInlineTokens(value: string) {
     .replace(/([€$₺])(\d(?:[.,]\d+)*)\s*([kKmMbB])\b/g, "$1$2$3")
     .replace(/(\d(?:[.,]\d+)*)\s+(months?|ay|gün|days?|weeks?|hafta|years?|yıl|scooters?)\b/gi, "$1\u00a0$2")
     .replace(/\bYear\s+(\d+)\b/gi, "Year\u00a0$1")
+    .replace(/\bYear(\d+)\b/gi, "Year\u00a0$1")
+    .replace(/\bMonth\s+(\d+)\b/gi, "Month\u00a0$1")
+    .replace(/\bMonth(\d+)\b/gi, "Month\u00a0$1")
+    .replace(/\(e\.\s*,/gi, "(e.g.,")
+    .replace(/\be\.\s*,/gi, "e.g.,")
+    .replace(/\bi\.\s*,/gi, "i.e.,")
     .replace(/\be\.\s*g\./gi, "e.g.")
     .replace(/\bi\.\s*e\./gi, "i.e.")
     .replace(/\bv\.\s*s\./gi, "vs.")
@@ -606,6 +617,10 @@ function repairPdfLineFragments(lines: string[]) {
     }
 
     if (isOrphanBulletText(withoutBullet)) {
+      return repaired;
+    }
+
+    if (repaired[repaired.length - 1]?.trim() === line.trim()) {
       return repaired;
     }
 

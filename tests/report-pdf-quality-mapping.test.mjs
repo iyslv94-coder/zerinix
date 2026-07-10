@@ -76,12 +76,16 @@ test("PDF text normalization repairs malformed month expressions", () => {
     assert.equal(source.includes("$1–$2\\u00a0months"), true);
     assert.equal(source.includes("(\\d{1,2})(\\d{2})\\s*days?"), true);
     assert.equal(source.includes("$1–$2\\u00a0days"), true);
+    assert.equal(source.includes("(\\d{1,2})(\\d{2})\\s+(days?|months?|scooters?|rides\\/day|rides)"), true);
     assert.equal(source.includes("\\s*scooters?"), true);
     assert.equal(source.includes("$1–$2\\u00a0scooters"), true);
+    assert.equal(source.includes("rides/day"), true);
     assert.equal(source.includes("(\\d{1,2})(\\d{2})\\s*%"), true);
     assert.equal(source.includes("$1–$2%"), true);
-    assert.equal(source.includes("\\s*month\\b"), true);
-    assert.equal(source.includes("\\s*months\\b"), true);
+    assert.equal(source.includes(")month\\b"), true);
+    assert.equal(source.includes(")months\\b"), true);
+    assert.equal(source.includes("\\s+month\\b"), true);
+    assert.equal(source.includes("\\s+months\\b"), true);
     assert.equal(source.includes("$1\\u00a0months"), true);
     assert.equal(source.includes("$1-month"), true);
   }
@@ -98,6 +102,8 @@ test("PDF text normalization protects inline abbreviations", () => {
     assert.equal(source.includes("M\\.\\s*r\\."), true);
     assert.equal(source.includes("D\\.\\s*r\\."), true);
     assert.equal(source.includes("etc\\."), true);
+    assert.equal(source.includes("(e\\.\\s*,"), true);
+    assert.equal(source.includes("(e.g.,"), true);
     assert.equal(source.includes("e\\.g\\.|i\\.e\\.|vs\\.|etc\\.|No\\.|Mr\\.|Dr\\."), true);
     assert.equal(source.includes("U\\.\\s*S\\."), true);
     assert.equal(source.includes("E\\.\\s*U\\."), true);
@@ -116,6 +122,9 @@ test("PDF text normalization preserves hyphenated and restored-space expressions
     const source = readFileSync(file, "utf8");
 
     assert.equal(source.includes("$1-month"), true);
+    assert.equal(source.includes("([<>])\\s+([€$₺]?\\d)"), true);
+    assert.equal(source.includes("Year(\\d+)"), true);
+    assert.equal(source.includes("Month(\\d+)"), true);
     assert.equal(source.includes("minimum)(?=revenue"), true);
     assert.equal(source.includes("public)(?=sector"), true);
     assert.equal(source.includes("private)(?=sector"), true);
@@ -154,6 +163,7 @@ test("PDF wrapped line repair rejoins numeric and abbreviation fragments", () =>
     assert.match(source, /municipal\|permit\|sector\|revenue\|market/);
     assert.equal(source.includes("^[.,)]$"), true);
     assert.equal(source.includes("[€$₺]?\\d+"), true);
+    assert.equal(source.includes("repaired[repaired.length - 1]?.trim() === line.trim()"), true);
   }
 });
 
