@@ -43,10 +43,14 @@ export function preservePdfInlineTokens(value) {
     .replace(/\b(minimum)(?=revenue\b)/gi, "$1 ")
     .replace(/\b(public)(?=sector\b)/gi, "$1 ")
     .replace(/\b(private)(?=sector\b)/gi, "$1 ")
-    .replace(/\b(last)(?=mile\b)/gi, "$1 ")
+    .replace(/\b(last)(?=mile\b)/gi, "$1-")
+    .replace(/\blast\s+mile\b/gi, "last-mile")
     .replace(/\b(third)(?=party\b)/gi, "$1-")
+    .replace(/\bthird\s+party\b/gi, "third-party")
     .replace(/\b(one)(?=pager\b)/gi, "$1-")
-    .replace(/\b(well)(?=funded\b)/gi, "$1 ")
+    .replace(/\bone\s+pager\b/gi, "one-pager")
+    .replace(/\b(well)(?=funded\b)/gi, "$1-")
+    .replace(/\bwell\s+funded\b/gi, "well-funded")
     .replace(/\b(post)(?=\d{4}\b)/gi, "$1-")
     .replace(/(\d)\s+([kKmMbB%])\b/g, "$1$2")
     .replace(/(\d(?:[.,]\d+)*)\s*([kKmMbB])\b/g, "$1$2")
@@ -106,6 +110,8 @@ export function shouldJoinPdfLineFragment(previousLine, currentLine) {
     /[€$₺(]$/.test(previous) && /^\d/.test(current)
   ) || (
     /[a-zçğıöşü]$/i.test(previous) && /^(?:municipal|permit|sector|revenue|market|customer|customers|user|users|month|months|scooters?|pilot|validation)\b/i.test(current)
+  ) || (
+    !/[.!?:;)]$/.test(previous) && /^(?:mile|funded|revenue|sector|pager|party|month|months|pilot|validation|\d{1,3})$/i.test(current)
   ) || /^[.,)]$/.test(current);
 }
 

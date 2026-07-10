@@ -167,10 +167,10 @@ test("PDF OCR normalizer covers final production token examples", () => {
 test("PDF OCR normalizer fixes final production artifact list", () => {
   const normalize = (value) => normalizePdfText(value).replace(/\u00a0/g, " ");
 
-  assert.equal(normalize("lastmile delivery"), "last mile delivery");
+  assert.equal(normalize("lastmile delivery"), "last-mile delivery");
   assert.equal(normalize("publicsector procurement"), "public sector procurement");
   assert.equal(normalize("minimumrevenue guarantee"), "minimum revenue guarantee");
-  assert.equal(normalize("wellfunded incumbent"), "well funded incumbent");
+  assert.equal(normalize("wellfunded incumbent"), "well-funded incumbent");
   assert.equal(normalize("onepager brief"), "one-pager brief");
   assert.equal(normalize("thirdparty operator"), "third-party operator");
   assert.equal(normalize("EScooter permits"), "E-Scooter permits");
@@ -255,10 +255,10 @@ test("PDF final rendered text path applies shared OCR normalization before orpha
 
   assert.match(output, /Year 1/);
   assert.match(output, /Month 12/);
-  assert.match(output, /last mile/);
+  assert.match(output, /last-mile/);
   assert.match(output, /public sector/);
   assert.match(output, /minimum revenue/);
-  assert.match(output, /well funded/);
+  assert.match(output, /well-funded/);
   assert.match(output, /one-pager/);
   assert.match(output, /post-2026/);
   assert.match(output, /2 municipal/);
@@ -274,6 +274,30 @@ test("PDF final rendered text path applies shared OCR normalization before orpha
   assert.doesNotMatch(output, /4\.\n6/);
   assert.doesNotMatch(output, /\$2\.\n6M/);
   assert.doesNotMatch(output, /e\.\ng\./);
+});
+
+test("PDF wrapped line repair rejoins isolated OCR continuation words", () => {
+  const output = repairPdfLineFragments([
+    "last",
+    "mile",
+    "well",
+    "funded",
+    "minimum",
+    "revenue",
+    "one",
+    "pager",
+    "third",
+    "party",
+  ]).join("\n");
+
+  assert.match(output, /last-mile/);
+  assert.match(output, /well-funded/);
+  assert.match(output, /minimum revenue/);
+  assert.match(output, /one-pager/);
+  assert.match(output, /third-party/);
+  assert.doesNotMatch(output, /\nmile\b/);
+  assert.doesNotMatch(output, /\nfunded\b/);
+  assert.doesNotMatch(output, /\nrevenue\b/);
 });
 
 test("PDF SWOT extraction stops at each quadrant label independently", () => {
