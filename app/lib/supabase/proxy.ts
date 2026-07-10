@@ -1,7 +1,29 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { getAuthRouteRedirectPath } from "@/app/auth/route-access.mjs";
 import { requireSupabaseConfig } from "./env";
 import { logServerError } from "@/app/lib/security/errors";
+
+function isAuthRoute(pathname: string) {
+  return pathname === "/login" || pathname === "/register";
+}
+
+function hasSupabaseAuthCookies(request: NextRequest) {
+  return request.cookies.getAll().some((cookie) => cookie.name.startsWith("sb-"));
+}
+
+function preventAuthRouteCaching(response: NextResponse, pathname: string) {
+  if (!isAuthRoute(pathname)) {
+    return;
+  }
+
+  response.headers.set(
+    "Cache-Control",
+    "private, no-cache, no-store, max-age=0, must-revalidate"
+  );
+  response.headers.set("Pragma", "no-cache");
+  response.headers.set("Expires", "0");
+}
 
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({
@@ -51,10 +73,38 @@ export async function updateSession(request: NextRequest) {
   );
 
   try {
-    await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    const authCookiesPresent = hasSupabaseAuthCookies(request);
+    const redirectPath = getAuthRouteRedirectPath(
+      request.nextUrl.pathname,
+      user
+    );
+
+    if (isAuthRoute(request.nextUrl.pathname)) {
+      console.log("[auth-guard:proxy]", {
+        pathname: request.nextUrl.pathname,
+        authCookiesPresent,
+        userEmail: user?.email ?? null,
+        branch: redirectPath ? "redirect_dashboard" : "continue",
+      });
+    }
+
+    if (redirectPath) {
+      const redirectResponse = NextResponse.redirect(
+        new URL(redirectPath, request.url)
+      );
+
+      preventAuthRouteCaching(redirectResponse, request.nextUrl.pathname);
+
+      return redirectResponse;
+    }
   } catch (error) {
     logServerError("supabase:proxy:get_user", error);
   }
+
+  preventAuthRouteCaching(response, request.nextUrl.pathname);
 
   return response;
 }

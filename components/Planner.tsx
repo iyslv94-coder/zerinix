@@ -2897,6 +2897,7 @@ function ConversationSidebar({
       <div className="mt-4 hidden rounded-3xl border border-white/10 bg-white/[0.03] p-3 md:block">
         <Link
           href="/login"
+          prefetch={false}
           className="flex items-center justify-between rounded-2xl px-3 py-2 text-sm text-zinc-400 transition hover:bg-white/[0.05] hover:text-white"
         >
           <span className="inline-flex items-center gap-2">

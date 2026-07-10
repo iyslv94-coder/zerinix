@@ -146,6 +146,7 @@ export default function Home() {
 
           <Link
             href="/login?next=/plan"
+            prefetch={false}
             className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/[0.04] px-4 py-2 text-sm font-semibold text-zinc-100 transition hover:border-teal-200/40 hover:bg-white/[0.08]"
           >
             <LockKeyhole className="h-4 w-4 text-teal-200" />
@@ -175,6 +176,7 @@ export default function Home() {
             <WaitlistForm />
             <Link
               href="/login?next=/plan"
+              prefetch={false}
               className="inline-flex items-center justify-center gap-2 rounded-full border border-white/12 bg-white/[0.045] px-6 py-3 text-sm font-semibold text-white transition hover:border-white/30 hover:bg-white/[0.08] sm:w-auto"
             >
               Developer Login
@@ -456,7 +458,11 @@ export default function Home() {
               Security
             </a>
             <span>/</span>
-            <Link href="/login?next=/plan" className="transition hover:text-white">
+            <Link
+              href="/login?next=/plan"
+              prefetch={false}
+              className="transition hover:text-white"
+            >
               Developer Login
             </Link>
           </div>

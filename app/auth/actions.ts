@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/app/lib/supabase/server";
 import {
@@ -48,6 +49,8 @@ export async function loginWithPassword(
     };
   }
 
+  revalidatePath("/login");
+  revalidatePath("/register");
   redirect("/plan");
 }
 
@@ -75,6 +78,8 @@ export async function signInWithPassword(formData: FormData) {
     redirect("/login?auth_error=invalid_credentials");
   }
 
+  revalidatePath("/login");
+  revalidatePath("/register");
   redirect("/plan");
 }
 

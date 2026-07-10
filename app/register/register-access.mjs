@@ -1,3 +1,7 @@
+import { getAuthRouteState } from "../auth/route-access.mjs";
+
 export function getRegisterRouteState(user) {
-  return user ? "redirect_dashboard" : "private_beta";
+  return getAuthRouteState(user) === "redirect_dashboard"
+    ? "redirect_dashboard"
+    : "private_beta";
 }

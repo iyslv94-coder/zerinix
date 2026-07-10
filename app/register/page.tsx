@@ -1,17 +1,8 @@
-import { redirect } from "next/navigation";
 import AuthShell from "@/components/AuthShell";
-import { createClient } from "@/app/lib/supabase/server";
-import { getRegisterRouteState } from "./register-access.mjs";
+import { redirectAuthenticatedUserFromAuthPage } from "@/app/auth/server-guard";
 
 export default async function RegisterPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (getRegisterRouteState(user) === "redirect_dashboard") {
-    redirect("/dashboard");
-  }
+  await redirectAuthenticatedUserFromAuthPage("/register");
 
   return (
     <AuthShell

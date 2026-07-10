@@ -72,7 +72,11 @@ export default function AuthShell({
 
             <p className="mt-6 text-center text-sm text-gray-500">
               {footerText}{" "}
-              <Link href={footerHref} className="font-medium text-white">
+              <Link
+                href={footerHref}
+                prefetch={false}
+                className="font-medium text-white"
+              >
                 {footerLinkText}
               </Link>
             </p>
