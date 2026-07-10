@@ -346,13 +346,42 @@ function preservePdfInlineTokens(value: string) {
   return value
     .replace(/([€$₺])\s+(?=\d)/g, "$1")
     .replace(/>\s+([€$₺]?\d)/g, ">$1")
+    .replace(/\b(\d{1,2})\s*[-–]\s*(\d{1,2})\s*months?\b/gi, "$1–$2\u00a0months")
+    .replace(/\b(\d{1,2})(\d{2})\s*months?\b/gi, "$1–$2\u00a0months")
+    .replace(/\b(\d{1,2})\s*[-–]\s*(\d{1,2})\s*days?\b/gi, "$1–$2\u00a0days")
+    .replace(/\b(\d{1,2})(\d{2})\s*days?\b/gi, "$1–$2\u00a0days")
+    .replace(/\b(\d{1,2})\s*[-–]\s*(\d{1,2})\s*scooters?\b/gi, "$1–$2\u00a0scooters")
+    .replace(/\b(\d{1,2})(\d{2})\s*%\b/g, "$1–$2%")
+    .replace(/\b(\d+(?:[.,]\d+)*)\s*month\b/gi, "$1\u00a0months")
+    .replace(/\b(\d+(?:[.,]\d+)*)\s*months\b/gi, "$1\u00a0months")
+    .replace(/\b(\d+(?:[.,]\d+)*)\s*-\s*month\b/gi, "$1-month")
+    .replace(/\b(\d+)(?=(?:municipal|public|private|corporate|enterprise|customer|customers|user|users|month|months|day|days|scooter|scooters)\b)/gi, "$1 ")
+    .replace(/\b(minimum)(?=revenue\b)/gi, "$1 ")
+    .replace(/\b(public)(?=sector\b)/gi, "$1 ")
+    .replace(/\b(private)(?=sector\b)/gi, "$1 ")
+    .replace(/\b(last)(?=mile\b)/gi, "$1-")
     .replace(/(\d)\s+([kKmMbB%])/g, "$1$2")
+    .replace(/(\d(?:[.,]\d+)*)\s*([kKmMbB])\b/g, "$1$2")
+    .replace(/(\d(?:[.,]\d+)*)\s*%/g, "$1%")
     .replace(/([kKmMbB%])\s+([€$₺])/g, "$1$2")
-    .replace(/(\d(?:[.,]\d+)*)\s+(months?|ay|gün|days?|weeks?|hafta|years?|yıl)\b/gi, "$1\u00a0$2")
+    .replace(/([€$₺])(\d(?:[.,]\d+)*)\s*([kKmMbB])\b/g, "$1$2$3")
+    .replace(/(\d(?:[.,]\d+)*)\s+(months?|ay|gün|days?|weeks?|hafta|years?|yıl|scooters?)\b/gi, "$1\u00a0$2")
     .replace(/\bYear\s+(\d+)\b/gi, "Year\u00a0$1")
     .replace(/\be\.\s*g\./gi, "e.g.")
     .replace(/\bi\.\s*e\./gi, "i.e.")
+    .replace(/\bv\.\s*s\./gi, "vs.")
+    .replace(/\bN\.\s*o\./g, "No.")
+    .replace(/\bM\.\s*r\./g, "Mr.")
+    .replace(/\bD\.\s*r\./g, "Dr.")
+    .replace(/\betc\./gi, "etc.")
+    .replace(/\b(e\.g\.|i\.e\.|vs\.|etc\.|No\.|Mr\.|Dr\.)\s+(?=\S)/g, "$1\u00a0")
+    .replace(/\bU\.\s*S\./gi, "U.S.")
+    .replace(/\bE\.\s*U\./gi, "E.U.")
     .replace(/\bB\s*2\s*B\b/gi, "B2B")
+    .replace(/\bB\s*2\s*G\b/gi, "B2G")
+    .replace(/\bA\s*R\s*P\s*A\b/gi, "ARPA")
+    .replace(/\bC\s*A\s*C\b/gi, "CAC")
+    .replace(/\bL\s*T\s*V\b/gi, "LTV")
     .replace(/\bE\s*B\s*I\s*T\s*D\s*A\b/gi, "EBITDA")
     .replace(/(\d)\.\s*(\d)/g, "$1.$2")
     .replace(/(\d),\s*(\d{3})/g, "$1,$2");
@@ -1186,11 +1215,15 @@ function parseCitations(content: string): CitationData[] {
   const unique = new Map<string, CitationData>();
 
   citations.forEach((citation) => {
-    const key = [
-      normalizePdfText(citation.organization).toLowerCase().replace(/\W+/g, " ").trim(),
-      normalizePdfText(citation.sourceTitle).toLowerCase().replace(/\W+/g, " ").trim(),
-      citation.publicationYear || "",
-    ].join("|");
+    const normalizedUrl = citation.url?.trim().toLowerCase().replace(/\/+$/, "");
+    const key = normalizedUrl
+      ? `url:${normalizedUrl}`
+      : [
+          "source",
+          normalizePdfText(citation.organization).toLowerCase().replace(/\W+/g, " ").trim(),
+          normalizePdfText(citation.sourceTitle).toLowerCase().replace(/\W+/g, " ").trim(),
+          citation.publicationYear || "",
+        ].join("|");
     const existing = unique.get(key);
 
     unique.set(key, {
@@ -1526,6 +1559,10 @@ function extractSectionSnippet(content: string, title: string) {
   return match?.[1]?.trim() || "";
 }
 
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 const swotLabelAliases: Record<string, string[]> = {
   Strengths: ["Strengths", "Güçlü Yönler", "Güçlü Yanlar", "Avantajlar"],
   Weaknesses: ["Weaknesses", "Zayıf Yönler", "Zayıflıklar", "Eksikler"],
@@ -1539,7 +1576,48 @@ const scenarioLabelAliases: Record<string, string[]> = {
   Best: ["Best", "Best Case", "İyi", "Iyi", "İyi Senaryo", "Iyi Senaryo"],
 };
 
-function extractAliasedSectionSnippet(content: string, labels: string[]) {
+function extractAliasedSectionSnippet(
+  content: string,
+  labels: string[],
+  stopLabels: string[] = labels
+) {
+  const normalizedContent = normalizePdfText(content);
+  const labelPattern = labels.map(escapeRegExp).join("|");
+  const stopPattern = stopLabels
+    .filter((label) => !labels.includes(label))
+    .map(escapeRegExp)
+    .join("|");
+
+  if (labelPattern) {
+    const lineMatch = normalizedContent.match(
+      new RegExp(
+        `(?:^|\\n)\\s*(?:#{1,6}\\s*)?(?:[-*•]\\s*)?(?:\\*\\*)?(?:${labelPattern})(?:\\*\\*)?\\s*(?:case|senaryo)?\\s*[:\\-–—]\\s*([\\s\\S]*?)(?=${stopPattern ? `\\n\\s*(?:#{1,6}\\s*)?(?:[-*•]\\s*)?(?:\\*\\*)?(?:${stopPattern})(?:\\*\\*)?\\s*(?:case|senaryo)?\\s*[:\\-–—]` : "$"}|$)`,
+        "i"
+      )
+    );
+
+    if (lineMatch?.[1]?.trim()) {
+      return lineMatch[1].trim();
+    }
+
+    if (stopPattern) {
+      const inlineMatch = normalizedContent.match(
+        new RegExp(
+          `(?:${labelPattern})\\s*(?:case|senaryo)?\\s*[:\\-–—]\\s*([\\s\\S]*?)(?=\\s+(?:${stopPattern})\\s*(?:case|senaryo)?\\s*[:\\-–—]|$)`,
+          "i"
+        )
+      );
+
+      if (inlineMatch?.[1]?.trim()) {
+        return inlineMatch[1].trim();
+      }
+    }
+  }
+
+  if (stopLabels !== labels) {
+    return "";
+  }
+
   for (const label of labels) {
     const snippet = extractSectionSnippet(content, label);
 
@@ -1552,9 +1630,64 @@ function extractAliasedSectionSnippet(content: string, labels: string[]) {
 }
 
 function isOrphanBulletText(value: string) {
-  return /^(strengths|weaknesses|opportunities|threats|güçlü yönler|güçlü yanlar|zayıf yönler|zayıflıklar|fırsatlar|tehditler)$/i.test(
+  return /^(swot analysis|strengths|weaknesses|opportunities|threats|güçlü yönler|güçlü yanlar|zayıf yönler|zayıflıklar|fırsatlar|tehditler)$/i.test(
     value.trim()
-  );
+  ) || /^[a-zçğıöşü]\.$/i.test(value.trim()) || /^\d+[.)]?$/.test(value.trim()) || /^[€$₺.,()]$/.test(value.trim()) || /^\d+(?:[.,]\d+)?\s*(?:[kKmMbB%]|months?|ay|gün|days?)$/i.test(value.trim());
+}
+
+function cleanPdfContinuationFragment(value: string) {
+  return preservePdfInlineTokens(value.trim().replace(/^[-*•]\s*/, ""));
+}
+
+function shouldJoinPdfLineFragment(previousLine: string, currentLine: string) {
+  const previous = previousLine.trim();
+  const current = cleanPdfContinuationFragment(currentLine);
+
+  if (!previous || !current) {
+    return false;
+  }
+
+  return (
+    /(?:[€$₺]?\d+(?:[.,]\d+)*[.,]|[€$₺]?\d+)$/.test(previous) &&
+      /^(?:\d+(?:[.,]\d+)?(?:[kKmMbB%])?|[kKmMbB%]|months?|days?|ay|gün|scooters?)\b/i.test(current)
+  ) || (
+    /\b(?:e|i|v|N|M|D)\.$/.test(previous) && /^(?:g|e|s|o|r)\.$/i.test(current)
+  ) || (
+    /\b(?:e\.g\.|i\.e\.|vs\.|etc\.|No\.|Mr\.|Dr\.)$/i.test(previous) && /^[.,)]$/.test(current)
+  ) || (
+    /[€$₺(]$/.test(previous) && /^\d/.test(current)
+  ) || (
+    /[a-zçğıöşü]$/i.test(previous) && /^(?:municipal|permit|sector|revenue|market|customer|customers|user|users|month|months|scooters?|pilot|validation)\b/i.test(current)
+  ) || /^[.,)]$/.test(current);
+}
+
+function joinPdfLineFragment(previousLine: string, currentLine: string) {
+  const current = cleanPdfContinuationFragment(currentLine);
+  const separator =
+    /(?:[€$₺]?\d+(?:[.,]\d+)*[.,]|[€$₺(]|\b(?:e|i|v|N|M|D)\.)$/i.test(previousLine.trim()) ||
+    /^[.,)]/.test(current)
+      ? ""
+      : " ";
+
+  return preservePdfInlineTokens(`${previousLine.trimEnd()}${separator}${current}`);
+}
+
+function repairPdfLineFragments(lines: string[]) {
+  return lines.reduce<string[]>((repaired, line) => {
+    const withoutBullet = cleanPdfContinuationFragment(line);
+
+    if (repaired.length > 0 && shouldJoinPdfLineFragment(repaired[repaired.length - 1], line)) {
+      repaired[repaired.length - 1] = joinPdfLineFragment(repaired[repaired.length - 1], line);
+      return repaired;
+    }
+
+    if (isOrphanBulletText(withoutBullet)) {
+      return repaired;
+    }
+
+    repaired.push(line);
+    return repaired;
+  }, []);
 }
 
 function extractBullets(content: string, fallback: string) {
@@ -1587,7 +1720,8 @@ function extractBullets(content: string, fallback: string) {
 
 function extractSwotBullets(content: string, label: string, fallbackContent = content) {
   const aliases = swotLabelAliases[label] || [label];
-  const snippet = extractAliasedSectionSnippet(content, aliases);
+  const allSwotAliases = Object.values(swotLabelAliases).flat();
+  const snippet = extractAliasedSectionSnippet(content, aliases, allSwotAliases);
   const direct = extractBullets(snippet, label);
 
   if (direct.length > 0) {
@@ -1607,7 +1741,7 @@ function extractSwotBullets(content: string, label: string, fallbackContent = co
   }
 
   const fallbackSnippet =
-    extractAliasedSectionSnippet(fallbackContent, aliases) ||
+    extractAliasedSectionSnippet(fallbackContent, aliases, allSwotAliases) ||
     extractKeywordInsight(
       fallbackContent,
       label === "Strengths"
@@ -1624,13 +1758,13 @@ function extractSwotBullets(content: string, label: string, fallbackContent = co
 
 function extractScenarioSnippet(content: string, scenario: string) {
   const aliases = scenarioLabelAliases[scenario] || [scenario];
-  const sectionSnippet = extractAliasedSectionSnippet(content, aliases);
+  const allAliases = Object.values(scenarioLabelAliases).flat();
+  const sectionSnippet = extractAliasedSectionSnippet(content, aliases, allAliases);
 
   if (sectionSnippet) {
     return sectionSnippet;
   }
 
-  const allAliases = Object.values(scenarioLabelAliases).flat();
   for (const alias of aliases) {
     const escapedAlias = alias.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const stopLabels = allAliases
@@ -3537,27 +3671,29 @@ const ReportPanel = memo(function ReportPanel({
       };
 
       const splitPdfReadableLines = (content: string, width: number) =>
-        content.split("\n").flatMap((rawLine) => {
-          const line = normalizePdfText(rawLine);
+        repairPdfLineFragments(
+          content.split("\n").flatMap((rawLine) => {
+            const line = normalizePdfText(rawLine);
 
-          if (!line) {
-            return [""];
-          }
+            if (!line) {
+              return [""];
+            }
 
-          const withoutBullet = line.replace(/^[-*•]\s+/, "").trim();
+            const withoutBullet = line.replace(/^[-*•]\s+/, "").trim();
 
-          if (isOrphanBulletText(withoutBullet)) {
-            return [];
-          }
+            if (isOrphanBulletText(withoutBullet)) {
+              return [];
+            }
 
-          const isBullet = /^[-*•]\s+/.test(line);
-          const availableWidth = isBullet ? width - 4 : width;
-          const wrapped = pdf.splitTextToSize(line, availableWidth) as string[];
+            const isBullet = /^[-*•]\s+/.test(line);
+            const availableWidth = isBullet ? width - 4 : width;
+            const wrapped = pdf.splitTextToSize(line, availableWidth) as string[];
 
-          return wrapped.map((wrappedLine, index) =>
-            isBullet && index > 0 ? `  ${wrappedLine}` : wrappedLine
-          );
-        });
+            return wrapped.map((wrappedLine, index) =>
+              isBullet && index > 0 ? `  ${wrappedLine}` : wrappedLine
+            );
+          })
+        );
 
       const drawCoverPage = () => {
         paintPage();
