@@ -336,6 +336,9 @@ function normalizePdfText(value: string) {
     .replace(/\r/g, "\n")
     .replace(/\t/g, "  ")
     .replace(/[ \u00a0]+/g, " ")
+    .replace(/\bEScooter\b/g, "E-Scooter")
+    .replace(/([.!?])\s+\1/g, "$1")
+    .replace(/\s+([,.;:)])/g, "$1")
     .replace(/(\d)\.\s+(\d)(\s*[kKmMbB%])?/g, "$1.$2$3")
     .replace(/(\d),\s+(\d{3})/g, "$1,$2")
     .replace(/\n{3,}/g, "\n\n")
@@ -348,6 +351,8 @@ function preservePdfInlineTokens(value: string) {
     .replace(/([<>])\s+([€$₺]?\d)/g, "$1$2")
     .replace(/\b(\d{1,2})\s*[-–]\s*(\d{1,2})\s*months?\b/gi, "$1–$2\u00a0months")
     .replace(/\b(\d{1,2})(\d{2})\s*months?\b/gi, "$1–$2\u00a0months")
+    .replace(/\b1\s*[-–]\s*80\s+days?\b/gi, "180\u00a0days")
+    .replace(/\b100\s*[-–]\s*3\s*[-–]\s*00\s+scooters?\b/gi, "100–300\u00a0scooters")
     .replace(/\b(\d{1,2})\s*[-–]\s*(\d{1,2})\s*days?\b/gi, "$1–$2\u00a0days")
     .replace(/\b(\d{1,2})(\d{2})\s*days?\b/gi, "$1–$2\u00a0days")
     .replace(/\b(\d{1,2})(\d{2})\s+(days?|months?|scooters?|rides\/day|rides)\b/gi, "$1–$2\u00a0$3")
@@ -355,6 +360,7 @@ function preservePdfInlineTokens(value: string) {
     .replace(/\b(\d{1,2})\s*[-–]\s*(\d{1,2})\s*(?:rides\/day|rides)\b/gi, "$1–$2\u00a0rides/day")
     .replace(/\b(\d{1,2})\s*[-–]\s*(\d{1,2})\s*scooters?\b/gi, "$1–$2\u00a0scooters")
     .replace(/\b(\d{1,2})(\d{2})\s*%\b/g, "$1–$2%")
+    .replace(/\b(\d{1,2})(\d{2})-month\b/gi, "$1–$2-month")
     .replace(/\b(\d+(?:[.,]\d+)*)\s*-\s*month\b/gi, "$1-month")
     .replace(/\b(\d+(?:[.,]\d+)*)month\b/gi, "$1-month")
     .replace(/\b(\d+(?:[.,]\d+)*)months\b/gi, "$1\u00a0months")
@@ -1646,6 +1652,18 @@ function isOrphanBulletText(value: string) {
   ) || /^[a-zçğıöşü]\.$/i.test(value.trim()) || /^\d+[.)]?$/.test(value.trim()) || /^[€$₺.,()]$/.test(value.trim()) || /^\d+(?:[.,]\d+)?\s*(?:[kKmMbB%]|months?|ay|gün|days?)$/i.test(value.trim());
 }
 
+function containsOtherSwotLabel(value: string, currentLabel: string) {
+  return Object.entries(swotLabelAliases).some(([label, aliases]) => {
+    if (label === currentLabel) {
+      return false;
+    }
+
+    return aliases.some((alias) =>
+      new RegExp(`(?:^|\\b)${escapeRegExp(alias)}\\s*[:\\-–—]`, "i").test(value)
+    );
+  });
+}
+
 function cleanPdfContinuationFragment(value: string) {
   return preservePdfInlineTokens(value.trim().replace(/^[-*•]\s*/, ""));
 }
@@ -1737,7 +1755,9 @@ function extractSwotBullets(content: string, label: string, fallbackContent = co
   const aliases = swotLabelAliases[label] || [label];
   const allSwotAliases = Object.values(swotLabelAliases).flat();
   const snippet = extractAliasedSectionSnippet(content, aliases, allSwotAliases);
-  const direct = extractBullets(snippet, label);
+  const direct = extractBullets(snippet, label).filter(
+    (bullet) => !containsOtherSwotLabel(bullet, label)
+  );
 
   if (direct.length > 0) {
     return direct;
@@ -1751,7 +1771,9 @@ function extractSwotBullets(content: string, label: string, fallbackContent = co
     const inline = content.match(labelPattern)?.[1]?.trim() || "";
 
     if (inline && !new RegExp(`^${alias}$`, "i").test(inline)) {
-      return extractBullets(inline, label);
+      return extractBullets(inline, label).filter(
+        (bullet) => !containsOtherSwotLabel(bullet, label)
+      );
     }
   }
 
@@ -1768,7 +1790,9 @@ function extractSwotBullets(content: string, label: string, fallbackContent = co
             : ["threat", "risk", "regulation", "competition", "substitute", "tehdit"]
     );
 
-  return extractBullets(fallbackSnippet, label).slice(0, 2);
+  return extractBullets(fallbackSnippet, label)
+    .filter((bullet) => !containsOtherSwotLabel(bullet, label))
+    .slice(0, 2);
 }
 
 function extractScenarioSnippet(content: string, scenario: string) {

@@ -74,8 +74,14 @@ test("PDF text normalization repairs malformed month expressions", () => {
 
     assert.equal(source.includes("(\\d{1,2})(\\d{2})\\s*months?"), true);
     assert.equal(source.includes("$1–$2\\u00a0months"), true);
+    assert.equal(source.includes("(\\d{1,2})(\\d{2})-month"), true);
+    assert.equal(source.includes("$1–$2-month"), true);
     assert.equal(source.includes("(\\d{1,2})(\\d{2})\\s*days?"), true);
     assert.equal(source.includes("$1–$2\\u00a0days"), true);
+    assert.equal(source.includes("1\\s*[-–]\\s*80\\s+days?"), true);
+    assert.equal(source.includes("180\\u00a0days"), true);
+    assert.equal(source.includes("100\\s*[-–]\\s*3\\s*[-–]\\s*00\\s+scooters?"), true);
+    assert.equal(source.includes("100–300\\u00a0scooters"), true);
     assert.equal(source.includes("(\\d{1,2})(\\d{2})\\s+(days?|months?|scooters?|rides\\/day|rides)"), true);
     assert.equal(source.includes("\\s*scooters?"), true);
     assert.equal(source.includes("$1–$2\\u00a0scooters"), true);
@@ -104,6 +110,8 @@ test("PDF text normalization protects inline abbreviations", () => {
     assert.equal(source.includes("etc\\."), true);
     assert.equal(source.includes("(e\\.\\s*,"), true);
     assert.equal(source.includes("(e.g.,"), true);
+    assert.equal(source.includes("i\\.\\s*,"), true);
+    assert.equal(source.includes("i.e.,"), true);
     assert.equal(source.includes("e\\.g\\.|i\\.e\\.|vs\\.|etc\\.|No\\.|Mr\\.|Dr\\."), true);
     assert.equal(source.includes("U\\.\\s*S\\."), true);
     assert.equal(source.includes("E\\.\\s*U\\."), true);
@@ -125,6 +133,9 @@ test("PDF text normalization preserves hyphenated and restored-space expressions
     assert.equal(source.includes("([<>])\\s+([€$₺]?\\d)"), true);
     assert.equal(source.includes("Year(\\d+)"), true);
     assert.equal(source.includes("Month(\\d+)"), true);
+    assert.equal(source.includes("EScooter"), true);
+    assert.equal(source.includes("E-Scooter"), true);
+    assert.equal(source.includes("([.!?])\\s+\\1"), true);
     assert.equal(source.includes("minimum)(?=revenue"), true);
     assert.equal(source.includes("public)(?=sector"), true);
     assert.equal(source.includes("private)(?=sector"), true);
@@ -138,7 +149,9 @@ test("PDF bullet wrapping removes orphan SWOT heading bullets", () => {
     const source = readFileSync(file, "utf8");
 
     assert.match(source, /function isOrphanBulletText/);
+    assert.match(source, /function containsOtherSwotLabel/);
     assert.match(source, /isOrphanBulletText\(withoutBullet\)/);
+    assert.match(source, /containsOtherSwotLabel\(bullet, label\)/);
     assert.match(source, /güçlü yönler\|güçlü yanlar\|zayıf yönler/);
     assert.match(source, /swot analysis/);
     assert.match(source, /\^\[a-zçğıöşü\]\\\.\$/);
