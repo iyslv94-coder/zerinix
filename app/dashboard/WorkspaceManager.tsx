@@ -3,6 +3,7 @@ import {
   FileText,
   Folder,
   FolderPlus,
+  Inbox,
   Pencil,
   Trash2,
 } from "lucide-react";
@@ -12,6 +13,18 @@ import {
   deleteWorkspace,
   renameWorkspace,
 } from "./actions";
+
+function formatWorkspaceDate(value: string) {
+  if (!value) {
+    return "No updates yet";
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "2-digit",
+    year: "numeric",
+  }).format(new Date(value));
+}
 
 export default function WorkspaceManager({
   workspaces,
@@ -44,9 +57,30 @@ export default function WorkspaceManager({
         </div>
       </form>
 
+      {workspaces.length === 0 ? (
+        <section className="mt-6 rounded-3xl border border-white/10 bg-zinc-950/80 p-10 text-center shadow-2xl shadow-black/30">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/5">
+            <Inbox className="h-6 w-6 text-teal-200" />
+          </div>
+          <p className="mt-5 text-xs font-semibold uppercase tracking-[0.24em] text-teal-200/70">
+            Empty Workspace System
+          </p>
+          <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">
+            Create your first workspace
+          </h2>
+          <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-zinc-500">
+            Start with a focused workspace for a venture, market, customer
+            segment or investment theme. Reports created in ZERINIX will stay
+            organized here.
+          </p>
+        </section>
+      ) : null}
+
       <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {workspaces.map((workspace) => {
           const isDeleteDisabled = workspace.reportCount > 0;
+          const statusLabel = workspace.reportCount > 0 ? "Active" : "Ready";
+          const activityDate = workspace.updatedAt || workspace.createdAt;
 
           return (
             <article
@@ -58,13 +92,31 @@ export default function WorkspaceManager({
                   <Folder className="h-5 w-5 text-teal-200" />
                 </div>
                 <span className="rounded-full border border-teal-300/20 bg-teal-300/10 px-3 py-1 text-xs font-medium text-teal-100">
-                  {workspace.reportCount} reports
+                  {statusLabel}
                 </span>
               </div>
 
               <h2 className="mt-5 line-clamp-2 text-xl font-semibold tracking-tight text-white">
                 {workspace.name}
               </h2>
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                <div className="rounded-2xl border border-white/10 bg-black/30 p-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
+                    Reports
+                  </p>
+                  <p className="mt-1 text-lg font-semibold text-white">
+                    {workspace.reportCount}
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-black/30 p-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
+                    Updated
+                  </p>
+                  <p className="mt-1 truncate text-sm font-medium text-zinc-200">
+                    {formatWorkspaceDate(activityDate)}
+                  </p>
+                </div>
+              </div>
 
               <Link
                 href={`/dashboard/workspaces/${workspace.id}`}

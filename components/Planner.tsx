@@ -248,6 +248,36 @@ const modeEmptyState: Record<ChatMode, { title: string; description: string; pla
     },
   };
 
+const modeCards: Array<{
+  mode: ChatMode;
+  label: string;
+  description: string;
+  output: string;
+  icon: LucideIcon;
+}> = [
+  {
+    mode: "plan",
+    label: "AI Plan",
+    description: "Structured investor-grade business plan.",
+    output: "PDF-ready strategic report",
+    icon: BriefcaseBusiness,
+  },
+  {
+    mode: "market",
+    label: "Market Analysis",
+    description: "Market sizing, competition, risks and entry logic.",
+    output: "Market intelligence memo",
+    icon: BarChart3,
+  },
+  {
+    mode: "chat",
+    label: "AI Chat",
+    description: "Fast conversational advisor with memory.",
+    output: "Streaming markdown answer",
+    icon: Bot,
+  },
+];
+
 let pdfFontPromise: Promise<string> | null = null;
 
 function arrayBufferToBase64(buffer: ArrayBuffer) {
@@ -6099,6 +6129,49 @@ export default function Planner({
                     ? `AI Chat · ${chatModelOptions.find((option) => option.value === chatModelPreference)?.label || "Fast"} model`
                     : "Structured report mode"}
                 </span>
+              </div>
+              <div className="mb-3 grid gap-2 md:grid-cols-3">
+                {modeCards.map((modeCard) => {
+                  const Icon = modeCard.icon;
+                  const selected = activeMode === modeCard.mode;
+
+                  return (
+                    <button
+                      key={modeCard.mode}
+                      type="button"
+                      onClick={() => setActiveMode(modeCard.mode)}
+                      className={`rounded-2xl border p-3 text-left transition ${
+                        selected
+                          ? "border-teal-200/35 bg-teal-200/10 shadow-lg shadow-teal-950/20"
+                          : "border-white/10 bg-black/25 hover:border-white/20 hover:bg-white/[0.055]"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04]">
+                          <Icon className="h-4 w-4 text-teal-200" />
+                        </span>
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] ${
+                            selected
+                              ? "bg-teal-200 text-black"
+                              : "border border-white/10 text-zinc-500"
+                          }`}
+                        >
+                          {selected ? "Active" : "Select"}
+                        </span>
+                      </div>
+                      <p className="mt-3 text-sm font-semibold text-white">
+                        {modeCard.label}
+                      </p>
+                      <p className="mt-1 line-clamp-2 text-xs leading-5 text-zinc-500">
+                        {modeCard.description}
+                      </p>
+                      <p className="mt-2 text-[11px] font-medium text-teal-100/80">
+                        {modeCard.output}
+                      </p>
+                    </button>
+                  );
+                })}
               </div>
               <textarea
                 ref={composerRef}
