@@ -157,6 +157,27 @@ test("PDF text normalization preserves hyphenated and restored-space expressions
   }
 });
 
+test("PDF OCR normalizer covers final production token examples", () => {
+  for (const file of pdfSurfaceFiles) {
+    const source = readFileSync(file, "utf8");
+
+    assert.equal(source.includes("Year(\\d+)"), true);
+    assert.equal(source.includes("Month(\\d+)"), true);
+    assert.equal(source.includes("last)(?=mile"), true);
+    assert.equal(source.includes("public)(?=sector"), true);
+    assert.equal(source.includes("minimum)(?=revenue"), true);
+    assert.equal(source.includes("one)(?=pager"), true);
+    assert.equal(source.includes("post)(?=\\d{4}"), true);
+    assert.equal(source.includes("well)(?=funded"), true);
+    assert.equal(source.includes("(\\d+(?:[.,]\\d+)*)month"), true);
+    assert.equal(source.includes("(\\d+(?:[.,]\\d+)*)months"), true);
+    assert.equal(source.includes("(\\d+)(?=(?:municipal"), true);
+    assert.equal(source.includes("(\\d{1,2})(\\d{2})-month"), true);
+    assert.equal(source.includes("100\\s*[-–]\\s*3\\s*[-–]\\s*00"), true);
+    assert.equal(source.includes("1\\s*[-–]\\s*80\\s+days?"), true);
+  }
+});
+
 test("PDF bullet wrapping removes orphan SWOT heading bullets", () => {
   for (const file of pdfSurfaceFiles) {
     const source = readFileSync(file, "utf8");
