@@ -44,7 +44,7 @@ export default function LoginForm() {
         />
       </label>
 
-      <div className="flex items-center justify-between text-sm">
+      <div className="flex items-center text-sm">
         <label className="flex items-center gap-2 text-gray-400">
           <input
             type="checkbox"
@@ -53,10 +53,6 @@ export default function LoginForm() {
           />
           Beni hatırla
         </label>
-
-        <a href="#" className="text-gray-300 transition hover:text-white">
-          Şifremi unuttum
-        </a>
       </div>
 
       <button

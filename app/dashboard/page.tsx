@@ -6,7 +6,6 @@ import {
   FileText,
   Folder,
   Plus,
-  Settings,
 } from "lucide-react";
 import { createClient } from "@/app/lib/supabase/server";
 import DashboardSidebar from "./DashboardSidebar";
@@ -142,19 +141,6 @@ export default async function DashboardPage() {
           ) : null}
 
           <WorkspaceManager workspaces={workspaces} />
-
-          <div
-            id="settings"
-            className="mt-8 rounded-3xl border border-white/10 bg-zinc-950/60 p-5"
-          >
-            <div className="flex items-center gap-3">
-              <Settings className="h-5 w-5 text-teal-200" />
-              <h2 className="text-lg font-semibold text-white">Settings</h2>
-            </div>
-            <p className="mt-3 text-sm leading-6 text-zinc-500">
-              Hesap ve çalışma alanı ayarları sonraki sürümde burada yönetilecek.
-            </p>
-          </div>
         </section>
       </div>
     </main>

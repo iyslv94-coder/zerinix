@@ -1188,16 +1188,16 @@ function renderInlineMarkdown(text: string) {
       );
     });
 
-  return parts.map((part) => {
+  return parts.map((part, partIndex) => {
     if (part.startsWith("**") && part.endsWith("**")) {
       return (
-        <strong key={part} className="font-semibold text-white">
+        <strong key={`strong-${partIndex}-${part}`} className="font-semibold text-white">
           {part.slice(2, -2)}
         </strong>
       );
     }
 
-    return renderTextPart(part, part);
+    return renderTextPart(part, `${partIndex}-${part}`);
   });
 }
 
@@ -1328,7 +1328,7 @@ function CitationList({ content }: { content: string }) {
     <div className="space-y-3">
       {citations.map((citation, index) => (
         <CitationCard
-          key={`${citation.organization}-${citation.sourceTitle}-${index}`}
+          key={`${citation.organization}-${citation.sourceTitle}-${citation.publicationYear || ""}-${citation.url || ""}-${index}`}
           citation={citation}
         />
       ))}
@@ -1359,8 +1359,8 @@ function ReportText({ content }: { content: string }) {
         if (isList) {
           return (
             <ul key={`list-${blockIndex}`} className="space-y-2.5 text-zinc-300">
-              {lines.map((line) => (
-                <li key={line} className="flex gap-3">
+              {lines.map((line, lineIndex) => (
+                <li key={`line-${blockIndex}-${lineIndex}-${line}`} className="flex gap-3">
                   <span className="mt-3 h-1.5 w-1.5 shrink-0 rounded-full bg-teal-200/80" />
                   <span>{renderInlineMarkdown(line.replace(/^[-*]\s+/, ""))}</span>
                 </li>
@@ -1385,8 +1385,8 @@ function ReportText({ content }: { content: string }) {
               <table className="w-full border-collapse text-left text-sm">
                 <thead className="bg-white/[0.06] text-xs uppercase tracking-[0.18em] text-zinc-400">
                   <tr>
-                    {headerRow?.map((cell) => (
-                      <th key={cell} className="px-4 py-3 font-semibold">
+                    {headerRow?.map((cell, cellIndex) => (
+                      <th key={`header-${blockIndex}-${cellIndex}-${cell}`} className="px-4 py-3 font-semibold">
                         {cell}
                       </th>
                     ))}
@@ -1453,12 +1453,17 @@ export default async function ReportDetailPage({
     notFound();
   }
 
-  const visibleSections = report.sections.filter(
+  const uniqueReportSections = Array.from(
+    new Map(report.sections.map((section) => [section.field || section.title, section])).values()
+  );
+  const visibleSections = uniqueReportSections.filter(
     (section) => !isSourceSectionTitle(section.title)
   );
-  const sourceSections = report.sections.filter(
+  const sourceSections = uniqueReportSections.filter(
     (section) => isSourceSectionTitle(section.title) && section.content.trim()
   );
+  const getReportSectionKey = (section: (typeof report.sections)[number]) =>
+    `${report.id}:${section.field || section.title}`;
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-black text-white">
@@ -1547,7 +1552,7 @@ export default async function ReportDetailPage({
 
               return (
               <article
-                key={section.title}
+                key={getReportSectionKey(section)}
                 className={getReportArticleClass(section.title)}
               >
                 <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-teal-200/30 to-transparent" />
@@ -1611,7 +1616,7 @@ export default async function ReportDetailPage({
                       <div className="mt-4 space-y-5">
                         {sourceSections.map((section) => (
                           <div
-                            key={section.title}
+                            key={getReportSectionKey(section)}
                             className="border-t border-white/10 pt-4 first:border-t-0 first:pt-0"
                           >
                             <CitationList content={section.content} />

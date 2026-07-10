@@ -80,6 +80,12 @@ export async function signInWithPassword(formData: FormData) {
 
 function redirectWithSignupError(error: unknown): never {
   const serializedError = serializeSignupError(error);
+  const isDevelopment = process.env.NODE_ENV !== "production";
+
+  if (!isDevelopment) {
+    redirect("/register?auth_error=registration_failed");
+  }
+
   const details = [
     `message=${serializedError.message}`,
     serializedError.code ? `code=${String(serializedError.code)}` : "",

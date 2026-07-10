@@ -541,6 +541,7 @@ function serializeReportSections(
   fields: ReportFieldDefinition[]
 ) {
   const sections = fields.map(({ field, title }) => ({
+    field,
     title,
     content: sanitizeReportFieldContent(field, reportData[field] || ""),
   }));
@@ -905,8 +906,8 @@ function MarkdownTable({ lines }: { lines: string[] }) {
       <table className="w-full min-w-[520px] border-collapse text-left text-sm">
         <thead className="bg-white/[0.04] text-zinc-200">
           <tr>
-            {header.map((cell) => (
-              <th key={cell} className="border-b border-white/10 px-4 py-3 font-semibold">
+            {header.map((cell, cellIndex) => (
+              <th key={`header-${cellIndex}-${cell}`} className="border-b border-white/10 px-4 py-3 font-semibold">
                 <InlineMarkdown text={cell} />
               </th>
             ))}
@@ -914,7 +915,7 @@ function MarkdownTable({ lines }: { lines: string[] }) {
         </thead>
         <tbody className="divide-y divide-white/10 text-zinc-300">
           {bodyRows.map((row, rowIndex) => (
-            <tr key={row.join("-") || rowIndex}>
+            <tr key={`row-${rowIndex}-${row.join("-")}`}>
               {row.map((cell, cellIndex) => (
                 <td key={`${cell}-${cellIndex}`} className="px-4 py-3 align-top">
                   <InlineMarkdown text={cell} />
@@ -996,8 +997,8 @@ function MarkdownRenderer({
               key={`list-${blockIndex}-${elements.length}`}
               className="space-y-2.5 text-zinc-300"
             >
-              {list.map((item) => (
-                <li key={item} className="flex gap-3">
+              {list.map((item, itemIndex) => (
+                <li key={`item-${blockIndex}-${itemIndex}-${item}`} className="flex gap-3">
                   <span className="mt-3 h-1.5 w-1.5 shrink-0 rounded-full bg-teal-200/80" />
                   <span>
                     <InlineMarkdown text={item.replace(/^[-*]\s+/, "")} />
@@ -1201,7 +1202,7 @@ function CitationList({ content }: { content: string }) {
     <div className="space-y-3">
       {citations.map((citation, index) => (
         <Citation
-          key={`${citation.organization}-${citation.sourceTitle}-${index}`}
+          key={`${citation.organization}-${citation.sourceTitle}-${citation.publicationYear || ""}-${citation.url || ""}-${index}`}
           citation={citation}
         />
       ))}
@@ -1233,7 +1234,7 @@ function SourcesCard({ sections }: { sections: ReportSection[] }) {
           </h3>
           <div className="mt-4 space-y-5">
             {sectionsWithCitations.map((section) => (
-              <div key={section.title} className="border-t border-white/10 pt-4 first:border-t-0 first:pt-0">
+              <div key={section.field || section.title} className="border-t border-white/10 pt-4 first:border-t-0 first:pt-0">
                 {sectionsWithCitations.length > 1 ? (
                   <p className="mb-2 text-sm font-semibold text-zinc-100">
                     {section.title}
@@ -4201,7 +4202,7 @@ const ReportPanel = memo(function ReportPanel({
 
           return (
             <article
-              key={section.title}
+              key={section.field}
               className={getReportArticleClass(section)}
               style={{ contain: section.content === waitingMessage ? "layout paint" : undefined }}
             >
@@ -4251,9 +4252,11 @@ const ReportPanel = memo(function ReportPanel({
             <button
               key={action.label}
               type="button"
-              className="flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-zinc-900 px-4 py-3 text-sm font-semibold text-zinc-200 transition hover:border-white/20 hover:bg-zinc-800"
+              disabled
+              title="Included in the generated report."
+              className="flex cursor-not-allowed items-center justify-center gap-2 rounded-2xl border border-white/10 bg-zinc-900 px-4 py-3 text-sm font-semibold text-zinc-500 opacity-60"
             >
-              <Icon className="h-4 w-4 text-teal-200" />
+              <Icon className="h-4 w-4 text-zinc-500" />
               {action.label}
             </button>
           );

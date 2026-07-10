@@ -356,8 +356,8 @@ function MarkdownTable({ lines }: { lines: string[] }) {
       <table className="w-full min-w-[520px] border-collapse text-left text-sm">
         <thead className="bg-white/[0.04] text-zinc-200">
           <tr>
-            {header.map((cell) => (
-              <th key={cell} className="border-b border-white/10 px-4 py-3 font-semibold">
+            {header.map((cell, cellIndex) => (
+              <th key={`header-${cellIndex}-${cell}`} className="border-b border-white/10 px-4 py-3 font-semibold">
                 <InlineMarkdown text={cell} />
               </th>
             ))}
@@ -365,7 +365,7 @@ function MarkdownTable({ lines }: { lines: string[] }) {
         </thead>
         <tbody className="divide-y divide-white/10 text-zinc-300">
           {bodyRows.map((row, rowIndex) => (
-            <tr key={row.join("-") || rowIndex}>
+            <tr key={`row-${rowIndex}-${row.join("-")}`}>
               {row.map((cell, cellIndex) => (
                 <td key={`${cell}-${cellIndex}`} className="px-4 py-3 align-top">
                   <InlineMarkdown text={cell} />
@@ -441,8 +441,8 @@ function MarkdownRenderer({
 
           elements.push(
             <ul key={`list-${blockIndex}-${elements.length}`} className="space-y-2.5">
-              {list.map((item) => (
-                <li key={item} className="flex gap-3 text-zinc-300">
+              {list.map((item, itemIndex) => (
+                <li key={`item-${blockIndex}-${itemIndex}-${item}`} className="flex gap-3 text-zinc-300">
                   <span className="mt-3 h-1.5 w-1.5 shrink-0 rounded-full bg-teal-200/80" />
                   <span>
                     <InlineMarkdown text={item.replace(/^[-*]\s+/, "")} />

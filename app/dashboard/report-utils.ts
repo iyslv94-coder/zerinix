@@ -10,6 +10,7 @@ export type DashboardReport = {
   type: "Business Plan" | "Market Analysis";
   status: string;
   sections: Array<{
+    field?: string;
     title: string;
     content: string;
   }>;
@@ -114,11 +115,25 @@ function isSectionRecord(value: unknown): value is ReportSection {
   );
 }
 
+function inferSectionFieldFromTitle(title: string) {
+  const normalizedTitle = title.trim().toLowerCase().replace(/\s+/g, " ");
+  const match = Object.entries(sectionLabels).find(
+    ([, label]) => label.toLowerCase().replace(/\s+/g, " ") === normalizedTitle
+  );
+
+  return match?.[0] || "";
+}
+
 function normalizeJsonSections(value: unknown) {
   if (Array.isArray(value)) {
     const sections = value
       .filter(isSectionRecord)
       .map((section) => ({
+        field:
+          typeof (section as ReportRow).field === "string" &&
+          ((section as ReportRow).field as string).trim()
+            ? ((section as ReportRow).field as string).trim()
+            : inferSectionFieldFromTitle(section.title),
         title: section.title.trim(),
         content: section.content.trim(),
       }))
@@ -159,6 +174,7 @@ function normalizeSections(row: ReportRow) {
       }
 
       return {
+        field,
         title: sectionLabels[field],
         content: content.trim(),
       };

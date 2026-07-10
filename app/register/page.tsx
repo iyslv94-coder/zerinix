@@ -9,6 +9,10 @@ type RegisterPageProps = {
 
 export default async function RegisterPage({ searchParams }: RegisterPageProps) {
   const { auth_error: authError } = await searchParams;
+  const authErrorMessage =
+    authError === "registration_failed"
+      ? "Kayıt tamamlanamadı. Bilgilerini kontrol edip tekrar dene."
+      : authError;
 
   return (
     <AuthShell
@@ -24,9 +28,9 @@ export default async function RegisterPage({ searchParams }: RegisterPageProps) 
         <h2 className="mt-2 text-3xl font-bold text-white">Yeni hesap oluştur</h2>
       </div>
 
-      {authError && (
+      {authErrorMessage && (
         <p className="mt-6 rounded-2xl border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm text-red-100">
-          {authError}
+          {authErrorMessage}
         </p>
       )}
 
