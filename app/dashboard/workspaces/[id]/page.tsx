@@ -34,33 +34,35 @@ export default async function WorkspaceReportsPage({
         <DashboardSidebar />
 
         <section className="flex-1 px-5 py-6 sm:px-8 lg:px-10 lg:py-8">
-          <div className="flex flex-col gap-5 border-b border-white/10 pb-8 md:flex-row md:items-end md:justify-between">
-            <div>
-              <Link
-                href="/dashboard"
-                className="inline-flex items-center gap-2 text-sm font-medium text-zinc-400 transition hover:text-white"
-              >
-                <ArrowLeft className="h-4 w-4" />
-                Back to Workspaces
-              </Link>
-              <p className="mt-6 text-xs font-semibold tracking-[0.35em] text-teal-300/70">
-                WORKSPACE
-              </p>
-              <h1 className="mt-3 text-4xl font-bold tracking-tight text-white md:text-5xl">
-                {data.workspace.name}
-              </h1>
-              <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-400">
-                Bu workspace içindeki raporları ara, aç ve dışa aktar.
-              </p>
-            </div>
+          <div className="overflow-hidden rounded-[2rem] border border-white/10 bg-zinc-950/75 p-6 shadow-2xl shadow-black/35 sm:p-8">
+            <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
+              <div>
+                <Link
+                  href="/dashboard"
+                  className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.035] px-3 py-2 text-sm font-medium text-zinc-400 transition duration-200 hover:border-teal-300/25 hover:text-white"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                  Back to Workspaces
+                </Link>
+                <p className="mt-6 text-xs font-semibold tracking-[0.35em] text-teal-300/70">
+                  WORKSPACE
+                </p>
+                <h1 className="mt-3 text-4xl font-bold tracking-tight text-white md:text-5xl">
+                  {data.workspace.name}
+                </h1>
+                <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-400">
+                  Bu workspace içindeki raporları ara, aç ve dışa aktar.
+                </p>
+              </div>
 
-            <Link
-              href="/plan"
-              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-black transition hover:bg-zinc-200"
-            >
-              <Plus className="h-4 w-4" />
-              Create New Report
-            </Link>
+              <Link
+                href="/plan"
+                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-black shadow-lg shadow-white/5 transition duration-200 hover:-translate-y-0.5 hover:bg-zinc-200"
+              >
+                <Plus className="h-4 w-4" />
+                Create New Report
+              </Link>
+            </div>
           </div>
 
           {data.error ? (

@@ -2,10 +2,12 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
   Activity,
+  BadgeCheck,
   Clock3,
   FileText,
   Folder,
   Plus,
+  Sparkles,
 } from "lucide-react";
 import { createClient } from "@/app/lib/supabase/server";
 import DashboardSidebar from "./DashboardSidebar";
@@ -52,24 +54,28 @@ export default async function DashboardPage() {
       value: String(workspaces.length),
       detail: `${activeWorkspaces} active`,
       icon: Folder,
+      tone: "teal",
     },
     {
       label: "Reports",
       value: String(totalReports),
       detail: "Saved intelligence assets",
       icon: FileText,
+      tone: "white",
     },
     {
       label: "System Status",
       value: error ? "Review" : "Ready",
       detail: error ? "Workspace sync needs attention" : "Workspace sync healthy",
       icon: Activity,
+      tone: error ? "amber" : "emerald",
     },
     {
       label: "Latest Activity",
       value: formatDashboardDate(latestWorkspaceUpdate || ""),
       detail: latestWorkspaceUpdate ? "Last workspace update" : "Create your first report",
       icon: Clock3,
+      tone: "zinc",
     },
   ];
 
@@ -80,43 +86,68 @@ export default async function DashboardPage() {
         <DashboardSidebar />
 
         <section className="flex-1 px-5 py-6 sm:px-8 lg:px-10 lg:py-8">
-          <div className="flex flex-col gap-5 border-b border-white/10 pb-8 md:flex-row md:items-end md:justify-between">
-            <div>
-              <p className="text-xs font-semibold tracking-[0.35em] text-teal-300/70">
-                USER DASHBOARD
-              </p>
-              <h1 className="mt-3 text-4xl font-bold tracking-tight text-white md:text-5xl">
-                Workspace Merkezi
-              </h1>
-              <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-400">
-                ZERINIX raporlarını workspace&apos;lere ayır, ekipli düşün ve iş
-                kararlarını düzenli bir rapor sistemi içinde yönet.
-              </p>
-            </div>
+          <div className="overflow-hidden rounded-[2rem] border border-white/10 bg-zinc-950/75 shadow-2xl shadow-black/35">
+            <div className="relative p-6 sm:p-8 lg:p-9">
+              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(94,234,212,0.16),transparent_34%),linear-gradient(135deg,rgba(255,255,255,0.07),transparent_44%)]" />
+              <div className="relative flex flex-col gap-7 md:flex-row md:items-end md:justify-between">
+                <div>
+                  <div className="inline-flex items-center gap-2 rounded-full border border-teal-300/20 bg-teal-300/10 px-3 py-1 text-xs font-semibold tracking-[0.24em] text-teal-100">
+                    <Sparkles className="h-3.5 w-3.5" />
+                    USER DASHBOARD
+                  </div>
+                  <h1 className="mt-4 text-4xl font-bold tracking-tight text-white md:text-5xl">
+                    Workspace Merkezi
+                  </h1>
+                  <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-400">
+                    ZERINIX raporlarını workspace&apos;lere ayır, ekipli düşün ve iş
+                    kararlarını düzenli bir rapor sistemi içinde yönet.
+                  </p>
+                </div>
 
-            <Link
-              href="/plan"
-              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-black transition hover:bg-zinc-200"
-            >
-              <Plus className="h-4 w-4" />
-              Create New Report
-            </Link>
+                <Link
+                  href="/plan"
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-black shadow-lg shadow-white/5 transition duration-200 hover:-translate-y-0.5 hover:bg-zinc-200"
+                >
+                  <Plus className="h-4 w-4" />
+                  Create New Report
+                </Link>
+              </div>
+
+              <div className="relative mt-7 grid gap-3 border-t border-white/10 pt-5 sm:grid-cols-3">
+                {["Workspace reports", "Live sync", "PDF export"].map((item) => (
+                  <div key={item} className="flex items-center gap-2 text-sm text-zinc-400">
+                    <BadgeCheck className="h-4 w-4 text-teal-200" />
+                    {item}
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
 
-          <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             {dashboardStats.map((stat) => {
               const Icon = stat.icon;
+              const accentClass =
+                stat.tone === "emerald"
+                  ? "border-emerald-300/20 bg-emerald-300/10"
+                  : stat.tone === "amber"
+                    ? "border-amber-300/20 bg-amber-300/10"
+                    : stat.tone === "white"
+                      ? "border-white/15 bg-white/[0.06]"
+                      : stat.tone === "teal"
+                        ? "border-teal-300/20 bg-teal-300/10"
+                        : "border-zinc-400/15 bg-white/[0.04]";
 
               return (
                 <article
                   key={stat.label}
-                  className="rounded-3xl border border-white/10 bg-zinc-950/75 p-5 shadow-2xl shadow-black/25"
+                  className="group rounded-[1.5rem] border border-white/10 bg-zinc-950/75 p-5 shadow-2xl shadow-black/25 transition duration-200 hover:-translate-y-0.5 hover:border-teal-300/25 hover:bg-zinc-900/80"
                 >
                   <div className="flex items-center justify-between gap-4">
-                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/5">
+                    <div className={`flex h-11 w-11 items-center justify-center rounded-2xl border ${accentClass}`}>
                       <Icon className="h-5 w-5 text-teal-200" />
                     </div>
-                    <span className="rounded-full border border-teal-300/15 bg-teal-300/10 px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.16em] text-teal-100/80">
+                    <span className="rounded-full border border-white/10 bg-black/25 px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.16em] text-zinc-500 transition group-hover:text-teal-100">
                       Live
                     </span>
                   </div>

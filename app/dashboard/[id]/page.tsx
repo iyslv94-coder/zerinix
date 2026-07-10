@@ -1472,44 +1472,46 @@ export default async function ReportDetailPage({
         <DashboardSidebar />
 
         <section className="flex-1 px-5 py-6 sm:px-8 lg:px-10 lg:py-8">
-          <div className="flex flex-col gap-5 border-b border-white/10 pb-8 md:flex-row md:items-start md:justify-between">
-            <div className="min-w-0">
-              <Link
-                href="/dashboard"
-                className="inline-flex items-center gap-2 text-sm font-medium text-zinc-400 transition hover:text-white"
-              >
-                <ArrowLeft className="h-4 w-4" />
-                Back to Dashboard
-              </Link>
-              <p className="mt-6 text-xs font-semibold tracking-[0.35em] text-teal-300/70">
-                ZERINIX REPORT
-              </p>
-              <h1 className="mt-3 max-w-4xl text-4xl font-bold tracking-tight text-white md:text-5xl">
-                {report.title}
-              </h1>
-            </div>
+          <div className="rounded-[2rem] border border-white/10 bg-white/[0.035] p-5 shadow-2xl shadow-black/30 backdrop-blur-xl sm:p-7">
+            <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
+              <div className="min-w-0">
+                <Link
+                  href="/dashboard"
+                  className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/25 px-3 py-2 text-sm font-medium text-zinc-400 transition duration-200 hover:-translate-y-0.5 hover:border-teal-200/25 hover:text-white"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                  Back to Dashboard
+                </Link>
+                <p className="mt-6 text-xs font-semibold tracking-[0.35em] text-teal-300/70">
+                  ZERINIX REPORT
+                </p>
+                <h1 className="mt-3 max-w-4xl text-4xl font-bold tracking-tight text-white md:text-5xl">
+                  {report.title}
+                </h1>
+              </div>
 
-            <div className="flex flex-row items-center gap-3 md:shrink-0">
-              <ReportPdfButton report={report} />
-              <Link
-                href="/plan"
-                className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-black transition hover:bg-zinc-200"
-              >
-                <Plus className="h-4 w-4" />
-                Create New Report
-              </Link>
+              <div className="flex flex-row items-center gap-3 md:shrink-0">
+                <ReportPdfButton report={report} />
+                <Link
+                  href="/plan"
+                  className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-black shadow-lg shadow-white/10 transition duration-200 hover:-translate-y-0.5 hover:bg-zinc-200"
+                >
+                  <Plus className="h-4 w-4" />
+                  Create New Report
+                </Link>
+              </div>
             </div>
           </div>
 
           <div className="mt-6 grid gap-4 md:grid-cols-3">
-            <div className="rounded-3xl border border-white/10 bg-zinc-950/80 p-5">
+            <div className="rounded-[1.5rem] border border-white/10 bg-zinc-950/80 p-5 shadow-xl shadow-black/20 transition duration-200 hover:-translate-y-0.5 hover:border-teal-200/20">
               <div className="flex items-center gap-3">
                 <Sparkles className="h-5 w-5 text-teal-200" />
                 <p className="text-sm text-zinc-500">Report Type</p>
               </div>
               <p className="mt-3 text-lg font-semibold text-white">{report.type}</p>
             </div>
-            <div className="rounded-3xl border border-white/10 bg-zinc-950/80 p-5">
+            <div className="rounded-[1.5rem] border border-white/10 bg-zinc-950/80 p-5 shadow-xl shadow-black/20 transition duration-200 hover:-translate-y-0.5 hover:border-teal-200/20">
               <div className="flex items-center gap-3">
                 <CalendarDays className="h-5 w-5 text-teal-200" />
                 <p className="text-sm text-zinc-500">Created</p>
@@ -1518,7 +1520,7 @@ export default async function ReportDetailPage({
                 {formatDate(report.createdAt)}
               </p>
             </div>
-            <div className="rounded-3xl border border-white/10 bg-zinc-950/80 p-5">
+            <div className="rounded-[1.5rem] border border-white/10 bg-zinc-950/80 p-5 shadow-xl shadow-black/20 transition duration-200 hover:-translate-y-0.5 hover:border-teal-200/20">
               <div className="flex items-center gap-3">
                 <CheckCircle2 className="h-5 w-5 text-teal-200" />
                 <p className="text-sm text-zinc-500">Status</p>

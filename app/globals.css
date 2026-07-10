@@ -29,11 +29,32 @@ body {
 
 html {
   scroll-behavior: smooth;
+  scrollbar-color: rgba(94, 234, 212, 0.32) rgba(24, 24, 27, 0.68);
+  scrollbar-width: thin;
 }
 
 ::selection {
   background: rgba(94, 234, 212, 0.32);
   color: #ffffff;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: rgba(24, 24, 27, 0.68);
+}
+
+*::-webkit-scrollbar-thumb {
+  border: 2px solid rgba(9, 9, 11, 0.85);
+  border-radius: 999px;
+  background: rgba(94, 234, 212, 0.32);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(94, 234, 212, 0.5);
 }
 
 @keyframes landing-fade-up {

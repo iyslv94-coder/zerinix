@@ -93,7 +93,7 @@ export default async function UsageDashboardPage() {
         <DashboardSidebar />
 
         <section className="flex-1 px-5 py-6 sm:px-8 lg:px-10 lg:py-8">
-          <div className="border-b border-white/10 pb-8">
+          <div className="overflow-hidden rounded-[2rem] border border-white/10 bg-zinc-950/75 p-6 shadow-2xl shadow-black/35 sm:p-8">
             <p className="text-xs font-semibold tracking-[0.35em] text-teal-300/70">
               AI OPERATIONS
             </p>
@@ -113,14 +113,14 @@ export default async function UsageDashboardPage() {
             </div>
           ) : null}
 
-          <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {cards.map((card) => {
               const Icon = card.icon;
 
               return (
                 <article
                   key={card.label}
-                  className="rounded-3xl border border-white/10 bg-zinc-950/70 p-6 shadow-2xl shadow-black/30"
+                  className="rounded-[1.5rem] border border-white/10 bg-zinc-950/70 p-6 shadow-2xl shadow-black/30 transition duration-200 hover:-translate-y-0.5 hover:border-teal-300/25 hover:bg-zinc-900/80"
                 >
                   <div className="flex items-center justify-between gap-4">
                     <div className="rounded-2xl border border-teal-300/20 bg-teal-300/10 p-3">
@@ -142,7 +142,7 @@ export default async function UsageDashboardPage() {
             })}
           </div>
 
-          <div className="mt-8 rounded-3xl border border-white/10 bg-white/[0.03] p-6">
+          <div className="mt-8 rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-6 shadow-2xl shadow-black/20">
             <h2 className="text-lg font-semibold text-white">
               Queue-Ready Architecture
             </h2>
@@ -154,7 +154,7 @@ export default async function UsageDashboardPage() {
           </div>
 
           {adminSummary ? (
-            <div className="mt-8 rounded-3xl border border-teal-300/15 bg-teal-300/[0.035] p-6">
+            <div className="mt-8 rounded-[1.5rem] border border-teal-300/15 bg-teal-300/[0.035] p-6 shadow-2xl shadow-black/25">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.28em] text-teal-200/75">
