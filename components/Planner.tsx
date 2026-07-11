@@ -648,7 +648,7 @@ function serializeReportSections(
     throw new Error(
       invalidSection.content && isReportGenerationFailureText(invalidSection.content)
         ? invalidSection.content
-        : "Report generation failed before every section completed."
+        : `Report section "${invalidSection.title}" was empty after sanitization.`
     );
   }
 
@@ -700,9 +700,9 @@ function getLanguageCopy(language: ResponseLanguage) {
       preparingPlan: "## Business Plan Report\n\nPreparing the first sections...",
       preparingMarket: "## Business Intelligence Report\n\nPreparing live market research...",
       waitingSection: "This section is waiting for AI output.",
-      sectionFallback: "AI output could not be received for this section.",
+      sectionFallback: "The report service returned no content for this section.",
       genericError: "Something went wrong.",
-      retryError: "Something went wrong. Please try again.",
+      retryError: "The report request failed before a usable response was returned.",
       marketError: "Something went wrong during market analysis.",
       marketRetryError: "Something went wrong during market analysis. Please try again.",
       planClarification:
@@ -718,9 +718,9 @@ function getLanguageCopy(language: ResponseLanguage) {
     preparingPlan: "## Business Plan Report\n\nPreparing the first sections...",
     preparingMarket: "## Business Intelligence Report\n\nPreparing live market research...",
     waitingSection: "This section is waiting for AI output.",
-    sectionFallback: "AI output could not be received for this section.",
+    sectionFallback: "The report service returned no content for this section.",
     genericError: "Something went wrong.",
-    retryError: "Something went wrong. Please try again.",
+    retryError: "The report request failed before a usable response was returned.",
     marketError: "Something went wrong during market analysis.",
     marketRetryError: "Something went wrong during market analysis. Please try again.",
     planClarification:
@@ -1553,7 +1553,7 @@ function extractMarketSizeValue(content: string, label: string) {
 }
 
 function isMobilityReportContent(content: string) {
-  return /\b(scooter|micromobility|micro mobility|shared mobility|bike sharing|bikeshare|per-ride|urban riders|commuters|fleet utilization|rental)\b/i.test(
+  return /\b(scooter|micromobility|micro mobility|shared mobility|bike sharing|bikeshare|per-ride|urban riders|commuters|fleet utilization|rental|rider cac|rider ltv|active riders|yearly revenue|monthly revenue)\b/i.test(
     content
   );
 }
@@ -5903,7 +5903,7 @@ export default function Planner({
         } catch (error) {
           throw error instanceof Error
             ? error
-            : new Error("Report generation failed before every section completed.");
+            : new Error("Report stream contained malformed section JSON.");
         }
       }
     };
@@ -5928,7 +5928,7 @@ export default function Planner({
       } catch (error) {
         throw error instanceof Error
           ? error
-          : new Error("Report generation failed before every section completed.");
+          : new Error("Report stream ended with malformed section JSON.");
       }
     }
   }

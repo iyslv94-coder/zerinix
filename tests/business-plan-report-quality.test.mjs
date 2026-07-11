@@ -48,6 +48,29 @@ test("Business Plan route repairs missing Sources / Assumptions without failing 
   assert.match(planRouteSource, /createSourcesAssumptionsFallback\(parsed\)/);
 });
 
+test("Business Plan route normalizes critical report sections from the canonical model", () => {
+  assert.match(planRouteSource, /function normalizeFullPlanReport/);
+  assert.match(planRouteSource, /buildCanonicalTamSamSom\(context\)/);
+  assert.match(planRouteSource, /buildCanonicalUnitEconomics\(context\)/);
+  assert.match(planRouteSource, /buildCanonicalFinancialDashboard\(context\)/);
+  assert.match(planRouteSource, /buildCanonicalScenarioAnalysis\(context\)/);
+  assert.match(planRouteSource, /buildCanonicalKpiDashboard\(context\)/);
+  assert.match(planRouteSource, /buildCanonicalSwot\(context, parsed\)/);
+  assert.match(planRouteSource, /buildCanonicalExecutiveRecommendation\(context\)/);
+});
+
+test("Business Plan API logs stage-specific failures instead of returning generic failures", () => {
+  assert.match(planRouteSource, /function logPlanStage/);
+  assert.match(planRouteSource, /fullReportStage/);
+  assert.match(planRouteSource, /Plan report generation failed at \$\{fullReportStage\}/);
+  assert.doesNotMatch(planRouteSource, /\{ error: "Report generation failed\. Please try again later\." \}/);
+});
+
+test("Business Plan renderers recognize non-SaaS financial labels", () => {
+  assert.match(plannerSource, /rider cac\|rider ltv\|active riders\|yearly revenue\|monthly revenue/);
+  assert.match(dashboardPdfSource, /rider cac\|rider ltv\|active riders\|yearly revenue\|monthly revenue/);
+});
+
 test("PDF cover Business Idea does not render raw saved prompt text", () => {
   for (const source of [plannerSource, dashboardPdfSource]) {
     assert.match(source, /deriveBusinessDescriptionFromSections/);

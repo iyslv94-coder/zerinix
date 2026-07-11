@@ -24,6 +24,7 @@ import { createAiJobDescriptor } from "@/app/lib/ai/queue";
 import {
   createCanonicalFinancialAssumptions,
   formatCanonicalFinancialAssumptions,
+  type AiFinancialModelContext,
 } from "@/app/lib/ai/financial-assumptions";
 import { isReportGenerationFailureText } from "@/app/lib/report-errors";
 import {
@@ -178,6 +179,21 @@ const MAX_AI_CALLS_PER_PLAN_REPORT = 1;
 const FULL_REPORT_MAX_OUTPUT_TOKENS = 12_000;
 
 type ResponseLanguage = "English" | "Turkish";
+type PlanGenerationStage =
+  | "request_validation"
+  | "authentication"
+  | "memory"
+  | "quota"
+  | "cache_read"
+  | "ai_call_budget"
+  | "provider_call"
+  | "response_status"
+  | "response_extraction"
+  | "json_parse"
+  | "report_normalization"
+  | "cache_write"
+  | "usage_write"
+  | "stream_response";
 
 const englishPlanFieldLabels: Record<PlanReportField, string> = {
   executiveSummary: "Executive Summary",
@@ -245,6 +261,16 @@ function serializePlanReportChunks(report: Record<PlanReportField, string>) {
   return planFields.map((field) => serializePlanChunk(field, report[field])).join("");
 }
 
+function logPlanStage(
+  stage: PlanGenerationStage,
+  metadata: Record<string, unknown> = {}
+) {
+  console.info("[api:plan] stage", {
+    stage,
+    ...metadata,
+  });
+}
+
 function createMockPlanReport(prompt: string, language: ResponseLanguage) {
   const labels = planFieldLabels[language];
   const cleanDescription = createReportBusinessDescription(prompt);
@@ -305,6 +331,8 @@ function sanitizeVisibleReportContent(content: string) {
     .split("\n")
     .filter((line) => !internalLinePatterns.some((pattern) => pattern.test(line)))
     .join("\n")
+    .replace(/^\s*(?:[-*•]\s*)?(?:Market view|Solution continued|See risk section|Validate critical proof point)\.?\s*$/gim, "")
+    .replace(/\bPayback\s*[:\-–—]\s*1\.(?=\s|$)/gi, "")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
@@ -519,7 +547,243 @@ function createSourcesAssumptionsFallback(parsed: Record<string, unknown>) {
     .join("\n");
 }
 
-function parseFullPlanReport(value: string): Record<PlanReportField, string> {
+function dedupeReportParagraphs(content: string) {
+  const seen = new Set<string>();
+
+  return content
+    .split(/\n{2,}/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean)
+    .filter((paragraph) => {
+      const key = paragraph.toLowerCase().replace(/\s+/g, " ");
+
+      if (seen.has(key)) {
+        return false;
+      }
+
+      seen.add(key);
+      return true;
+    })
+    .join("\n\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function ensureCompleteReportText(content: string) {
+  const cleanContent = dedupeReportParagraphs(content)
+    .split("\n")
+    .map((line) => line.trimEnd())
+    .filter((line) => line.trim())
+    .join("\n")
+    .trim();
+
+  if (!cleanContent) {
+    return "";
+  }
+
+  if (/[.!?)]$/.test(cleanContent)) {
+    return cleanContent;
+  }
+
+  return `${cleanContent}.`;
+}
+
+function metricLine(metric: AiFinancialModelContext["metrics"][keyof AiFinancialModelContext["metrics"]]) {
+  return [
+    `${metric.label}: ${metric.displayValue}`,
+    `formula=${metric.formula}`,
+    `assumptions=${metric.assumptions.join("; ")}`,
+    `benchmark=${metric.benchmarkComparison}`,
+    `confidence=${metric.confidence}`,
+  ].join(" | ");
+}
+
+function formatPlanUsd(value: number) {
+  const abs = Math.abs(value);
+  const sign = value < 0 ? "-" : "";
+
+  if (abs >= 1_000_000_000) return `${sign}$${(abs / 1_000_000_000).toFixed(1)}B`;
+  if (abs >= 1_000_000) return `${sign}$${(abs / 1_000_000).toFixed(1)}M`;
+  if (abs >= 1_000) return `${sign}$${Math.round(abs / 1_000).toLocaleString("en-US")}k`;
+
+  return `${sign}$${Math.round(abs).toLocaleString("en-US")}`;
+}
+
+function buildCanonicalTamSamSom(context: AiFinancialModelContext) {
+  return [
+    metricLine(context.metrics.tam),
+    metricLine(context.metrics.sam),
+    metricLine(context.metrics.som),
+  ].join("\n");
+}
+
+function buildCanonicalUnitEconomics(context: AiFinancialModelContext) {
+  return [
+    metricLine(context.metrics.arpa),
+    metricLine(context.metrics.grossMargin),
+    metricLine(context.metrics.cac),
+    metricLine(context.metrics.ltv),
+    metricLine(context.metrics.cacPayback),
+  ].join("\n");
+}
+
+function buildCanonicalFinancialDashboard(context: AiFinancialModelContext) {
+  return [
+    metricLine(context.metrics.arr),
+    metricLine(context.metrics.mrr),
+    metricLine(context.metrics.grossMargin),
+    metricLine(context.metrics.cac),
+    metricLine(context.metrics.ltv),
+    metricLine(context.metrics.cacPayback),
+    metricLine(context.metrics.monthlyBurn),
+    metricLine(context.metrics.runway),
+    metricLine(context.metrics.ebitda),
+    metricLine(context.metrics.breakEvenMonth),
+    metricLine(context.metrics.investmentNeeded),
+  ].join("\n");
+}
+
+function buildCanonicalScenarioAnalysis(context: AiFinancialModelContext) {
+  const { metrics, revenueForecast, investmentScore } = context;
+  const baseRevenue = metrics.arr.value;
+  const baseRunway = metrics.runway.value;
+  const worstRevenue = baseRevenue * 0.55;
+  const bestRevenue = baseRevenue * 1.45;
+
+  return [
+    `Worst Case: Revenue ${metrics.arr.displayValue} base falls to approximately $${Math.round(worstRevenue / 1_000).toLocaleString("en-US")}k if acquisition is slower and CAC rises. Burn ${metrics.monthlyBurn.displayValue}; runway compresses to ${Math.max(1, Math.round(baseRunway * 0.7))} months. Risk: ${investmentScore.topRisks[0] || "execution risk"}. Decision: hold spend until proof points improve.`,
+    `Base Case: Revenue ${metrics.arr.displayValue}; ${metrics.mrr.label} ${metrics.mrr.displayValue}; burn ${metrics.monthlyBurn.displayValue}; runway ${metrics.runway.displayValue}. Risk: ${investmentScore.topRisks[1] || "validation risk"}. Decision: ${investmentScore.recommendation}.`,
+    `Best Case: Revenue expands toward ${formatPlanUsd(bestRevenue)} with stronger conversion and retention. Year 3 revenue reaches ${revenueForecast[2] ? formatPlanUsd(revenueForecast[2].revenue) : metrics.arr.displayValue}. Burn remains tied to the model; runway extends to ${Math.round(baseRunway * 1.2)} months. Decision: accelerate the validated channel.`,
+  ].join("\n");
+}
+
+function buildCanonicalKpiDashboard(context: AiFinancialModelContext) {
+  const { metrics, revenueForecast } = context;
+  const yearOne = revenueForecast[0];
+  const yearTwo = revenueForecast[1];
+  const customerLabel =
+    context.inputs.industryKey === "mobility" ? "active riders" : "customers";
+
+  return [
+    `Acquisition: ${yearOne.customers.toLocaleString("en-US")} ${customerLabel} by Month 12 | Target: ${Math.ceil(yearOne.customers / 12).toLocaleString("en-US")} net new ${customerLabel}/month | Status: Model target`,
+    `Activation: ${Math.max(25, Math.min(70, Math.round(metrics.grossMargin.value * 100)))}% | Target: validate paid activation before scaling | Status: Validation required`,
+    `Retention: ${Math.max(55, Math.min(92, Math.round(100 - metrics.cacPayback.value * 3)))}% | Target: keep payback at ${metrics.cacPayback.displayValue} or better | Status: Watch`,
+    `Pipeline: ${Math.max(10, Math.round(yearOne.customers * 0.35)).toLocaleString("en-US")} qualified opportunities | Target: 3x coverage of Month-12 customer goal | Status: Build`,
+    `Revenue Signal: ${metrics.mrr.displayValue} monthly / ${metrics.arr.displayValue} yearly | Target: Base-case forecast | Status: Model target`,
+    `Growth: ${yearTwo.customers.toLocaleString("en-US")} ${customerLabel} in Year 2 | Target: ${metrics.revenueGrowth.displayValue} annual growth | Status: Watch`,
+  ].join("\n");
+}
+
+function buildCanonicalExecutiveRecommendation(context: AiFinancialModelContext) {
+  const score = context.investmentScore;
+  const confidenceLabel =
+    score.confidence >= 75 ? "High" : score.confidence >= 55 ? "Medium" : "Low";
+
+  return [
+    `Decision: ${score.recommendation}`,
+    `Confidence: ${score.confidence}% (${confidenceLabel})`,
+    `Investment Recommendation: ${score.recommendation === "GO" ? "Proceed with controlled validation capital" : score.recommendation === "PASS" ? "Do not invest until the model is redesigned" : "Hold for validation before scaling"}`,
+    `Main Risk: ${score.topRisks[0] || "Primary risk requires validation."}`,
+    `Next Action: ${score.nextCriticalAction}`,
+    `Why: The decision engine scores ${score.totalScore}/100, with financial health, execution risk, and capital efficiency weighted against the calculated ${context.metrics.runway.displayValue} runway and ${context.metrics.cacPayback.displayValue} payback.`,
+  ].join("\n");
+}
+
+function buildCanonicalFounderScore(context: AiFinancialModelContext) {
+  const score = context.investmentScore;
+
+  return [
+    `Overall Score: ${score.totalScore}/100`,
+    `Market Score: ${score.decisionEngine.marketScore.score}/${score.decisionEngine.marketScore.maximumScore} - ${score.decisionEngine.marketScore.explanation}`,
+    `Financial Score: ${score.decisionEngine.financialScore.score}/${score.decisionEngine.financialScore.maximumScore} - ${score.decisionEngine.financialScore.explanation}`,
+    `Founder Score: ${score.decisionEngine.founderScore.score}/${score.decisionEngine.founderScore.maximumScore} - ${score.decisionEngine.founderScore.explanation}`,
+    `Execution Score: ${score.decisionEngine.executionScore.score}/${score.decisionEngine.executionScore.maximumScore} - ${score.decisionEngine.executionScore.explanation}`,
+    `Risk Score: ${score.decisionEngine.riskScore.score}/${score.decisionEngine.riskScore.maximumScore} - ${score.decisionEngine.riskScore.explanation}`,
+    `Competition Score: ${score.decisionEngine.competitionScore.score}/${score.decisionEngine.competitionScore.maximumScore} - ${score.decisionEngine.competitionScore.explanation}`,
+    `Technology Score: ${score.decisionEngine.technologyScore.score}/${score.decisionEngine.technologyScore.maximumScore} - ${score.decisionEngine.technologyScore.explanation}`,
+  ].join("\n");
+}
+
+function buildCanonicalSwot(context: AiFinancialModelContext, parsed: Record<string, unknown>) {
+  const score = context.investmentScore;
+  const opportunity =
+    typeof parsed.marketOpportunity === "string"
+      ? sanitizeVisibleReportContent(parsed.marketOpportunity).split(/[.\n]/)[0]
+      : "";
+  const threat =
+    typeof parsed.risks === "string"
+      ? sanitizeVisibleReportContent(parsed.risks).split(/[.\n]/)[0]
+      : "";
+
+  return [
+    "Strengths:",
+    ...score.strengths.slice(0, 3).map((item) => `- ${item}`),
+    "Weaknesses:",
+    ...score.weaknesses.slice(0, 3).map((item) => `- ${item}`),
+    "Opportunities:",
+    `- ${opportunity || `Market opportunity is sized from ${context.benchmark.label} benchmarks and depends on validating obtainable demand.`}`,
+    `- ${context.metrics.som.displayValue} SOM provides a focused near-term capture target if the beachhead ICP converts.`,
+    "Threats:",
+    `- ${threat || score.topRisks[0] || "Execution and validation risk remain the primary threats."}`,
+    `- ${score.topRisks[1] || "Capital efficiency can deteriorate if CAC or payback misses the model."}`,
+  ].join("\n");
+}
+
+function buildCanonicalFinancialAssumptions(context: AiFinancialModelContext) {
+  return [
+    "User-provided facts:",
+    `- Business context: ${context.normalizedBusinessIdea}`,
+    "Market-derived estimates:",
+    `- Benchmark basis: ${context.benchmark.basis}`,
+    `- TAM/SAM/SOM: ${context.metrics.tam.displayValue} / ${context.metrics.sam.displayValue} / ${context.metrics.som.displayValue}`,
+    "AI assumptions:",
+    `- Pricing model: ${context.inputs.pricingModel}`,
+    `- Business model: ${context.inputs.businessModel}`,
+    `- Target customer: ${context.inputs.targetCustomer}`,
+    `- Gross Margin: ${context.metrics.grossMargin.displayValue}`,
+    `- CAC: ${context.metrics.cac.displayValue}`,
+    `- LTV: ${context.metrics.ltv.displayValue}`,
+    `- Payback: ${context.metrics.cacPayback.displayValue}`,
+    `- Monthly Burn: ${context.metrics.monthlyBurn.displayValue}`,
+    `- Runway: ${context.metrics.runway.displayValue}`,
+    `- EBITDA: ${context.metrics.ebitda.displayValue}`,
+    `- Break-even: ${context.metrics.breakEvenMonth.displayValue}`,
+    `- Investment Needed: ${context.metrics.investmentNeeded.displayValue}`,
+  ].join("\n");
+}
+
+function normalizeFullPlanReport(
+  report: Record<PlanReportField, string>,
+  context?: AiFinancialModelContext,
+  parsed: Record<string, unknown> = report
+) {
+  const normalized = { ...report };
+
+  for (const field of planFields) {
+    normalized[field] = ensureCompleteReportText(normalized[field]);
+  }
+
+  if (!context) {
+    return normalized;
+  }
+
+  normalized.tamSamSom = buildCanonicalTamSamSom(context);
+  normalized.unitEconomics = buildCanonicalUnitEconomics(context);
+  normalized.financialDashboard = buildCanonicalFinancialDashboard(context);
+  normalized.scenarioAnalysis = buildCanonicalScenarioAnalysis(context);
+  normalized.kpiDashboard = buildCanonicalKpiDashboard(context);
+  normalized.executiveRecommendation = buildCanonicalExecutiveRecommendation(context);
+  normalized.founderScore = buildCanonicalFounderScore(context);
+  normalized.swotAnalysis = buildCanonicalSwot(context, parsed);
+  normalized.financialAssumptions = buildCanonicalFinancialAssumptions(context);
+
+  return normalized;
+}
+
+function parseFullPlanReport(
+  value: string,
+  context?: AiFinancialModelContext
+): Record<PlanReportField, string> {
   let parsed: Record<string, unknown>;
 
   try {
@@ -582,7 +846,7 @@ function parseFullPlanReport(value: string): Record<PlanReportField, string> {
     );
   }
 
-  return report;
+  return normalizeFullPlanReport(report, context, parsed);
 }
 
 async function countAiCallsForReport({
@@ -918,7 +1182,15 @@ Write only the content for this section. Do not write a JSON object, field name,
           cacheHit: true,
         });
 
-        const parsedCachedReport = parseFullPlanReport(cachedFullReport.responseText);
+        logPlanStage("cache_read", {
+          reportField: FULL_REPORT_FIELD,
+          reportRequestId: reportRequestId || null,
+          cacheHit: true,
+        });
+        const parsedCachedReport = parseFullPlanReport(
+          cachedFullReport.responseText,
+          canonicalFinancialAssumptions
+        );
 
         await recordAiUsage(supabase, {
           userId: user.id,
@@ -1024,8 +1296,10 @@ Report quality rules:
         model,
       });
       const startedAt = Date.now();
+      let fullReportStage: PlanGenerationStage = "provider_call";
 
       try {
+        fullReportStage = "provider_call";
         logOperationalInfo("[api:plan] provider call started", {
           reportField: FULL_REPORT_FIELD,
           reportRequestId: reportRequestId || null,
@@ -1060,10 +1334,17 @@ Report quality rules:
           },
           { signal: req.signal }
         );
+        fullReportStage = "response_status";
+        logPlanStage(fullReportStage, {
+          reportField: FULL_REPORT_FIELD,
+          reportRequestId: reportRequestId || null,
+          status: getOpenAiResponseStatusDetails(response).status,
+        });
         const tokenUsage = extractTokenUsage(response);
         const estimatedCostUsd = estimateAiCostUsd(model, tokenUsage);
         const responseTimeMs = Date.now() - startedAt;
         assertCompletedOpenAiResponse(response);
+        fullReportStage = "response_extraction";
         const responseText = extractResponseText(response);
         if (!responseText.trim()) {
           const details = getOpenAiResponseStatusDetails(response);
@@ -1071,10 +1352,15 @@ Report quality rules:
             `OpenAI response completed without output_text. status=${details.status} outputLength=0`
           );
         }
-        const parsedReport = parseFullPlanReport(responseText);
+        fullReportStage = "json_parse";
+        const parsedReport = parseFullPlanReport(
+          responseText,
+          canonicalFinancialAssumptions
+        );
         const cacheResponseText = JSON.stringify(parsedReport);
 
         if (!isReportGenerationFailureText(cacheResponseText)) {
+          fullReportStage = "cache_write";
           await storeCachedAiResponse(supabase, {
             userId: user.id,
             cacheKey: fullReportCacheKey,
@@ -1090,6 +1376,7 @@ Report quality rules:
           });
         }
 
+        fullReportStage = "usage_write";
         await recordAiUsage(supabase, {
           userId: user.id,
           endpoint: "/api/plan",
@@ -1121,6 +1408,7 @@ Report quality rules:
           quotaConsumed: !productionLimit.quotaAlreadyCharged,
         });
 
+        fullReportStage = "stream_response";
         return new Response(encoder.encode(serializePlanReportChunks(parsedReport)), {
           headers: {
             "Content-Type": "application/x-ndjson; charset=utf-8",
@@ -1168,10 +1456,22 @@ Report quality rules:
           failureReason:
             error instanceof Error && error.message ? error.message : "GenerationFailed",
         });
+        const errorMessage =
+          error instanceof Error && error.message.trim()
+            ? error.message
+            : "GenerationFailed";
+        console.error("[api:plan] full report failed", {
+          reportField: FULL_REPORT_FIELD,
+          reportRequestId: reportRequestId || null,
+          model,
+          stage: fullReportStage,
+          message: errorMessage,
+          stack: error instanceof Error ? error.stack : null,
+        });
         logServerError("api:plan:full-report", error);
 
         return NextResponse.json(
-          { error: "Report generation failed. Please try again later." },
+          { error: `Plan report generation failed at ${fullReportStage}: ${errorMessage}` },
           { status: 502 }
         );
       }
