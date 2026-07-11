@@ -28,6 +28,12 @@ export type UserMemoryOperation =
       content: string;
     };
 
+export type UserMemoryApplyResult = {
+  remembered: number;
+  forgotten: number;
+  failed: number;
+};
+
 type UserMemoryRow = {
   id: string;
   memory_type: UserMemoryType;
@@ -63,7 +69,7 @@ function cleanMemoryContent(value: string) {
 function inferMemoryType(content: string): UserMemoryType {
   const normalized = content.toLowerCase();
 
-  if (/\b(name|call me|i am|i'm)\b/.test(normalized)) {
+  if (/\b(name|call me|my name is|i am|i'm)\b/.test(normalized)) {
     return "name";
   }
 
@@ -218,13 +224,23 @@ export function buildUserMemoryContext(memories: UserMemory[]) {
     .join("\n");
 }
 
+export function getUserNameFromMemories(memories: UserMemory[]) {
+  return memories.find((memory) => memory.type === "name")?.content || "";
+}
+
 export async function applyUserMemoryOperations(
   supabase: SupabaseClient,
   userId: string,
   operations: UserMemoryOperation[]
-) {
+): Promise<UserMemoryApplyResult> {
+  const result: UserMemoryApplyResult = {
+    remembered: 0,
+    forgotten: 0,
+    failed: 0,
+  };
+
   if (!operations.length) {
-    return;
+    return result;
   }
 
   for (const operation of operations) {
@@ -241,6 +257,7 @@ export async function applyUserMemoryOperations(
           message: existingError.message,
           code: existingError.code,
         });
+        result.failed += 1;
         continue;
       }
 
@@ -267,6 +284,9 @@ export async function applyUserMemoryOperations(
           message: error.message,
           code: error.code,
         });
+        result.failed += 1;
+      } else {
+        result.remembered += 1;
       }
 
       continue;
@@ -282,6 +302,7 @@ export async function applyUserMemoryOperations(
         message: selectError.message,
         code: selectError.code,
       });
+      result.failed += 1;
       continue;
     }
 
@@ -317,6 +338,11 @@ export async function applyUserMemoryOperations(
         message: error.message,
         code: error.code,
       });
+      result.failed += 1;
+    } else {
+      result.forgotten += idsToDelete.length;
     }
   }
+
+  return result;
 }

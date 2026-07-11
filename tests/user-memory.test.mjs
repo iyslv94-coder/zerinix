@@ -29,6 +29,8 @@ test("memory extraction only reacts to explicit durable-memory phrases", () => {
   assert.match(helperSource, /forget this/);
   assert.match(helperSource, /always/);
   assert.match(helperSource, /MAX_MEMORY_CONTENT_LENGTH/);
+  assert.match(helperSource, /UserMemoryApplyResult/);
+  assert.match(helperSource, /getUserNameFromMemories/);
 });
 
 test("AI Chat loads, updates, and injects persistent user memories", () => {
@@ -38,8 +40,18 @@ test("AI Chat loads, updates, and injects persistent user memories", () => {
   assert.match(chatRouteSource, /buildUserMemoryContext/);
   assert.match(chatRouteSource, /Persistent user memories for stable personalization/);
   assert.match(chatRouteSource, /Persistent user memory context/);
+  assert.match(chatRouteSource, /persistent memory operation/);
+  assert.match(chatRouteSource, /persistent memory loaded/);
+  assert.match(chatRouteSource, /memoryApplyResult\.failed > 0/);
   assert.match(chatRouteSource, /user_memory_used/);
   assert.match(chatRouteSource, /memory_operation_count/);
+});
+
+test("AI Chat can answer identity questions directly from persistent name memory", () => {
+  assert.match(chatRouteSource, /isUserIdentityQuestion/);
+  assert.match(chatRouteSource, /rememberedName/);
+  assert.match(chatRouteSource, /answered from persistent memory/);
+  assert.match(chatRouteSource, /Your name is \$\{rememberedName\}/);
 });
 
 test("AI Chat cache is disabled when persistent memory affects the response", () => {

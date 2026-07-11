@@ -32,6 +32,7 @@ import {
   applyUserMemoryOperations,
   buildUserMemoryContext,
   extractExplicitMemoryOperations,
+  getUserNameFromMemories,
   loadUserMemories,
 } from "@/app/lib/ai/user-memory";
 
@@ -528,6 +529,12 @@ function isBusinessAdvisorRequest(prompt: string) {
   ].some((pattern) => pattern.test(normalized));
 }
 
+function isUserIdentityQuestion(prompt: string) {
+  return /^(?:who am i|what is my name|do you know my name|who do you know me as)\??$/i.test(
+    prompt.trim()
+  );
+}
+
 function isBusinessAdvisorConversation(messages: ChatInputMessage[], prompt: string) {
   if (isBusinessAdvisorRequest(prompt)) {
     return true;
@@ -972,13 +979,39 @@ export async function POST(req: Request) {
     const chatProfile = normalizeProfile(profileData);
     const profileContext = buildProfileContext(chatProfile);
     const memoryOperations = extractExplicitMemoryOperations(prompt);
+    const memoryApplyResult = memoryOperations.length > 0
+      ? await applyUserMemoryOperations(supabase, user.id, memoryOperations)
+      : { remembered: 0, forgotten: 0, failed: 0 };
 
     if (memoryOperations.length > 0) {
-      await applyUserMemoryOperations(supabase, user.id, memoryOperations);
+      logOperationalInfo("[api:chat] persistent memory operation", {
+        userId: user.id,
+        conversationId: conversationId || null,
+        operationCount: memoryOperations.length,
+        remembered: memoryApplyResult.remembered,
+        forgotten: memoryApplyResult.forgotten,
+        failed: memoryApplyResult.failed,
+      });
+    }
+
+    if (memoryApplyResult.failed > 0) {
+      return textStream(
+        "I could not update persistent memory right now. Please try again after the memory database migration is applied."
+      );
     }
 
     const userMemories = await loadUserMemories(supabase, user.id);
     const userMemoryContext = buildUserMemoryContext(userMemories);
+    const rememberedName = getUserNameFromMemories(userMemories);
+
+    logOperationalInfo("[api:chat] persistent memory loaded", {
+      userId: user.id,
+      conversationId: conversationId || null,
+      memoryCount: userMemories.length,
+      memoryContextAttached: Boolean(userMemoryContext),
+      hasRememberedName: Boolean(rememberedName),
+    });
+
     const loadedReport = reportId ? await loadUserReport(supabase, user, reportId) : null;
     const reportMemory = buildReportMemoryContext(loadedReport);
     const reportMemoryDebugReason = reportMemory
@@ -1007,6 +1040,17 @@ export async function POST(req: Request) {
       advisorRequest
     );
     const responseLanguage = detectResponseLanguage(prompt);
+
+    if (isUserIdentityQuestion(prompt) && rememberedName) {
+      logOperationalInfo("[api:chat] answered from persistent memory", {
+        endpoint: "/api/chat",
+        mode: requestKind,
+        providerCalled: false,
+        memoryContextAttached: true,
+      });
+
+      return textStream(`Your name is ${rememberedName}.`);
+    }
 
     if (isAiTestMode()) {
       logAiExecution({
