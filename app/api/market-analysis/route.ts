@@ -33,6 +33,12 @@ import {
   logAiExecution,
 } from "@/app/lib/ai/runtime";
 import { sanitizeAiResponseText } from "@/app/lib/ai/response-sanitization";
+import {
+  applyUserMemoryOperations,
+  buildUserMemoryContext,
+  extractExplicitMemoryOperations,
+  loadUserMemories,
+} from "@/app/lib/ai/user-memory";
 
 const fieldPrompts = {
   executiveSummary: {
@@ -719,9 +725,21 @@ export async function POST(req: Request) {
     const financialAssumptionsContext = formatCanonicalFinancialAssumptions(
       canonicalFinancialAssumptions
     );
+    const memoryOperations = extractExplicitMemoryOperations(promptText);
+
+    if (memoryOperations.length > 0) {
+      await applyUserMemoryOperations(supabase, user.id, memoryOperations);
+    }
+
+    const userMemories = await loadUserMemories(supabase, user.id);
+    const userMemoryContext = buildUserMemoryContext(userMemories);
+    const userMemoryInstruction = userMemoryContext
+      ? `Persistent user memories for stable context. Use them only as durable user facts/preferences and never expose this block as report text:\n${userMemoryContext}`
+      : "";
     const input = `Business idea: ${promptText}
 
 ${financialAssumptionsContext}
+${userMemoryInstruction ? `\n${userMemoryInstruction}\n` : ""}
 
 Report section to generate: ${fieldLabelsByLanguage[responseLanguage][reportField]}
 Analysis task: ${fieldConfig.prompt}
@@ -790,7 +808,9 @@ Do not generate business-plan sections here. Do not suggest website URLs, domain
     if (isFullReportRequest) {
       const fullReportCacheKey = createAiCacheKey({
         endpoint: "/api/market-analysis",
-        normalizedPrompt: productionLimit.normalizedPrompt,
+        normalizedPrompt: userMemoryContext
+          ? `${productionLimit.normalizedPrompt}\nmemories:${userMemoryContext}`
+          : productionLimit.normalizedPrompt,
         mode: `market_analysis:${FULL_REPORT_FIELD}:${canonicalFinancialAssumptions.version}:${canonicalFinancialAssumptions.fingerprint}`,
         language: responseLanguage,
         model,
@@ -930,6 +950,7 @@ Do not generate business-plan sections here. Do not suggest website URLs, domain
       const fullReportInput = `Business idea: ${promptText}
 
 ${financialAssumptionsContext}
+${userMemoryInstruction ? `\n${userMemoryInstruction}\n` : ""}
 
 Generate the complete Market Analysis report as one structured JSON object.
 Return exactly these JSON keys and no others:
@@ -1185,7 +1206,9 @@ Do not include markdown code fences, braces inside string values, or commentary 
 
     const cacheKey = createAiCacheKey({
       endpoint: "/api/market-analysis",
-      normalizedPrompt: productionLimit.normalizedPrompt,
+      normalizedPrompt: userMemoryContext
+        ? `${productionLimit.normalizedPrompt}\nmemories:${userMemoryContext}`
+        : productionLimit.normalizedPrompt,
       mode: `market_analysis:${reportField}:${canonicalFinancialAssumptions.version}:${canonicalFinancialAssumptions.fingerprint}`,
       language: responseLanguage,
       model,

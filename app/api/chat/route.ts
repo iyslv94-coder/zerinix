@@ -28,6 +28,12 @@ import {
   logAiExecution,
 } from "@/app/lib/ai/runtime";
 import { sanitizeAiResponseText } from "@/app/lib/ai/response-sanitization";
+import {
+  applyUserMemoryOperations,
+  buildUserMemoryContext,
+  extractExplicitMemoryOperations,
+  loadUserMemories,
+} from "@/app/lib/ai/user-memory";
 
 type ChatInputMessage = {
   role: "user" | "assistant";
@@ -484,10 +490,12 @@ function shouldUseChatCache(input: {
   messages: ChatInputMessage[];
   requestKind: AiRequestKind;
   reportMemory: ReportMemoryContext | null;
+  userMemoryContext: string;
 }) {
   return (
     input.attachments.length === 0 &&
     !input.reportMemory &&
+    !input.userMemoryContext &&
     input.requestKind !== "file_analysis" &&
     input.messages.length <= 2
   );
@@ -963,6 +971,14 @@ export async function POST(req: Request) {
 
     const chatProfile = normalizeProfile(profileData);
     const profileContext = buildProfileContext(chatProfile);
+    const memoryOperations = extractExplicitMemoryOperations(prompt);
+
+    if (memoryOperations.length > 0) {
+      await applyUserMemoryOperations(supabase, user.id, memoryOperations);
+    }
+
+    const userMemories = await loadUserMemories(supabase, user.id);
+    const userMemoryContext = buildUserMemoryContext(userMemories);
     const loadedReport = reportId ? await loadUserReport(supabase, user, reportId) : null;
     const reportMemory = buildReportMemoryContext(loadedReport);
     const reportMemoryDebugReason = reportMemory
@@ -1052,10 +1068,13 @@ export async function POST(req: Request) {
       messages,
       requestKind,
       reportMemory,
+      userMemoryContext,
     });
     const chatCacheKey = createAiCacheKey({
       endpoint: "/api/chat",
-      normalizedPrompt: normalizeAiPrompt(prompt),
+      normalizedPrompt: normalizeAiPrompt(
+        userMemoryContext ? `${prompt}\n\nUser memories:\n${userMemoryContext}` : prompt
+      ),
       mode: `chat:${requestKind}:${selectedIntent}:${selectedExpert}`,
       language: responseLanguage,
       model,
@@ -1102,6 +1121,9 @@ export async function POST(req: Request) {
             selected_expert: selectedExpert,
             request_kind: requestKind,
             profile_used: Boolean(profileContext),
+            user_memory_used: Boolean(userMemoryContext),
+            user_memory_count: userMemories.length,
+            memory_operation_count: memoryOperations.length,
             report_memory_used: Boolean(reportMemory),
             report_id: reportMemory?.id || null,
             model_preference: modelPreference,
@@ -1147,6 +1169,9 @@ export async function POST(req: Request) {
       profileContext
         ? `Persistent user profile for non-sensitive personalization:\n${profileContext}\nUse this profile to avoid asking for details the user has already saved. If the user's latest message conflicts with the profile, prioritize the latest message.`
         : "No persistent chat profile is available yet. Do not invent profile preferences.",
+      userMemoryContext
+        ? `Persistent user memories for stable personalization:\n${userMemoryContext}\nUse these memories as durable user facts and preferences. If the latest user message conflicts with memory, prioritize the latest message and only update memory when the user explicitly asks you to remember or forget something.`
+        : "No persistent user memories are stored yet. Do not claim anything has been remembered unless the user explicitly asked and the request is handled.",
       reportMemory
         ? [
             "A saved ZERINIX report is attached as authoritative report memory.",
@@ -1176,6 +1201,14 @@ export async function POST(req: Request) {
             {
               role: "user" as const,
               content: `Persistent user profile context:\n\n${profileContext}`,
+            },
+          ]
+        : []),
+      ...(userMemoryContext
+        ? [
+            {
+              role: "user" as const,
+              content: `Persistent user memory context:\n\n${userMemoryContext}`,
             },
           ]
         : []),
@@ -1269,6 +1302,9 @@ export async function POST(req: Request) {
             selected_expert: selectedExpert,
             request_kind: requestKind,
             profile_used: Boolean(profileContext),
+            user_memory_used: Boolean(userMemoryContext),
+            user_memory_count: userMemories.length,
+            memory_operation_count: memoryOperations.length,
             report_memory_used: Boolean(reportMemory),
             report_id: reportMemory?.id || null,
             model_preference: modelPreference,
@@ -1428,6 +1464,9 @@ export async function POST(req: Request) {
                 selected_expert: selectedExpert,
                 request_kind: requestKind,
                 profile_used: Boolean(profileContext),
+                user_memory_used: Boolean(userMemoryContext),
+                user_memory_count: userMemories.length,
+                memory_operation_count: memoryOperations.length,
                 report_memory_used: Boolean(reportMemory),
                 report_id: reportMemory?.id || null,
                 model_preference: modelPreference,
@@ -1499,6 +1538,9 @@ export async function POST(req: Request) {
                 selected_expert: selectedExpert,
                 request_kind: requestKind,
                 profile_used: Boolean(profileContext),
+                user_memory_used: Boolean(userMemoryContext),
+                user_memory_count: userMemories.length,
+                memory_operation_count: memoryOperations.length,
                 report_memory_used: Boolean(reportMemory),
                 report_id: reportMemory?.id || null,
                 model_preference: modelPreference,

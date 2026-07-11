@@ -33,6 +33,12 @@ import {
   logAiExecution,
 } from "@/app/lib/ai/runtime";
 import { sanitizeAiResponseText } from "@/app/lib/ai/response-sanitization";
+import {
+  applyUserMemoryOperations,
+  buildUserMemoryContext,
+  extractExplicitMemoryOperations,
+  loadUserMemories,
+} from "@/app/lib/ai/user-memory";
 
 const planPrompts = {
   executiveSummary: {
@@ -681,11 +687,23 @@ export async function POST(req: Request) {
     const financialAssumptionsContext = formatCanonicalFinancialAssumptions(
       canonicalFinancialAssumptions
     );
+    const memoryOperations = extractExplicitMemoryOperations(promptText);
+
+    if (memoryOperations.length > 0) {
+      await applyUserMemoryOperations(supabase, user.id, memoryOperations);
+    }
+
+    const userMemories = await loadUserMemories(supabase, user.id);
+    const userMemoryContext = buildUserMemoryContext(userMemories);
+    const userMemoryInstruction = userMemoryContext
+      ? `Persistent user memories for stable context. Use them only as durable user facts/preferences and never expose this block as report text:\n${userMemoryContext}`
+      : "";
     const analyzedBusinessDescription = createReportBusinessDescription(promptText);
     const input = `Submitted business context for private analysis only: ${promptText}
 Analyzed business/company description to use in the report: ${analyzedBusinessDescription}
 
 ${financialAssumptionsContext}
+${userMemoryInstruction ? `\n${userMemoryInstruction}\n` : ""}
 
 Section to generate: ${planFieldLabels[responseLanguage][reportField]}
 Task: ${fieldConfig.prompt}
@@ -755,7 +773,9 @@ Write only the content for this section. Do not write a JSON object, field name,
     if (isFullReportRequest) {
       const fullReportCacheKey = createAiCacheKey({
         endpoint: "/api/plan",
-        normalizedPrompt: productionLimit.normalizedPrompt,
+        normalizedPrompt: userMemoryContext
+          ? `${productionLimit.normalizedPrompt}\nmemories:${userMemoryContext}`
+          : productionLimit.normalizedPrompt,
         mode: `business_plan:${FULL_REPORT_FIELD}:${canonicalFinancialAssumptions.version}:${canonicalFinancialAssumptions.fingerprint}`,
         language: responseLanguage,
         model,
@@ -851,6 +871,7 @@ Write only the content for this section. Do not write a JSON object, field name,
 Analyzed business/company description to use in the report: ${analyzedBusinessDescription}
 
 ${financialAssumptionsContext}
+${userMemoryInstruction ? `\n${userMemoryInstruction}\n` : ""}
 
 Generate the complete Business Plan report as one structured JSON object.
 Return exactly these JSON keys and no others:
@@ -1039,7 +1060,9 @@ Report quality rules:
 
     const cacheKey = createAiCacheKey({
       endpoint: "/api/plan",
-      normalizedPrompt: productionLimit.normalizedPrompt,
+      normalizedPrompt: userMemoryContext
+        ? `${productionLimit.normalizedPrompt}\nmemories:${userMemoryContext}`
+        : productionLimit.normalizedPrompt,
       mode: `business_plan:${reportField}:${canonicalFinancialAssumptions.version}:${canonicalFinancialAssumptions.fingerprint}`,
       language: responseLanguage,
       model,

@@ -148,6 +148,7 @@ test("Supabase migrations enforce RLS ownership for core user data", () => {
     "reports",
     "report_workspaces",
     "ai_chat_profiles",
+    "user_memories",
     "ai_usage_events",
     "ai_response_cache",
   ]) {
