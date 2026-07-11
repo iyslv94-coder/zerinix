@@ -66,7 +66,7 @@ type CacheInput = {
 export const dailyAiLimitMessage =
   "Daily AI usage limit reached. Please try again tomorrow or upgrade your plan.";
 
-const usageLimits: Record<PlanTier, UsageLimitSet> = {
+export const usageLimits: Record<PlanTier, UsageLimitSet> = {
   free: {
     simple_chat: { dailyRequests: 20, monthlyRequests: 620 },
     business_advice: { dailyRequests: 20, monthlyRequests: 620 },
