@@ -50,11 +50,13 @@ export async function AdminShell({
   eyebrow,
   title,
   subtitle,
+  hidePageHeader = false,
 }: {
   children: ReactNode;
   eyebrow: string;
   title: string;
   subtitle: string;
+  hidePageHeader?: boolean;
 }) {
   const admin = await requireAdminPage();
   const email = admin.user.email || "Admin user";
@@ -177,17 +179,19 @@ export async function AdminShell({
             </div>
           </header>
 
-          <div className="rounded-[2rem] border border-white/10 bg-white/[0.045] p-6 shadow-2xl shadow-black/35 backdrop-blur-2xl sm:p-8">
-            <p className="text-xs font-semibold uppercase tracking-[0.35em] text-teal-200/70">
-              {eyebrow}
-            </p>
-            <h1 className="mt-3 text-4xl font-semibold tracking-tight md:text-5xl">
-              {title}
-            </h1>
-            <p className="mt-4 max-w-3xl text-sm leading-7 text-zinc-400 md:text-base">
-              {subtitle}
-            </p>
-          </div>
+          {hidePageHeader ? null : (
+            <div className="rounded-[2rem] border border-white/10 bg-white/[0.045] p-6 shadow-2xl shadow-black/35 backdrop-blur-2xl sm:p-8">
+              <p className="text-xs font-semibold uppercase tracking-[0.35em] text-teal-200/70">
+                {eyebrow}
+              </p>
+              <h1 className="mt-3 text-4xl font-semibold tracking-tight md:text-5xl">
+                {title}
+              </h1>
+              <p className="mt-4 max-w-3xl text-sm leading-7 text-zinc-400 md:text-base">
+                {subtitle}
+              </p>
+            </div>
+          )}
 
           {children}
         </section>

@@ -6,8 +6,10 @@ import {
   DollarSign,
   FileText,
   RefreshCw,
+  Sparkles,
   Users,
 } from "lucide-react";
+import { AdminAnimatedValue } from "./AdminAnimatedValue";
 import { AdminShell } from "./AdminShell";
 import { loadAdminDashboardData } from "./admin-data";
 
@@ -24,6 +26,14 @@ function formatCurrency(value: number | null) {
     style: "currency",
     currency: "USD",
     maximumFractionDigits: 2,
+  }).format(value);
+}
+
+function formatCompactCurrency(value: number) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: value >= 100 ? 0 : 2,
   }).format(value);
 }
 
@@ -52,30 +62,142 @@ function MetricCard({
   value,
   detail,
   icon: Icon,
+  animatedValue,
+  valueFormatter,
 }: {
   label: string;
   value: string;
   detail: string;
   icon: typeof Users;
+  animatedValue?: number;
+  valueFormatter?: (value: number) => string;
 }) {
   return (
-    <article className="rounded-[1.65rem] border border-white/10 bg-white/[0.045] p-5 shadow-2xl shadow-black/25 backdrop-blur-xl transition hover:-translate-y-1 hover:border-teal-300/20 hover:bg-white/[0.065]">
+    <article className="group rounded-[1.4rem] border border-white/10 bg-white/[0.045] p-5 shadow-[0_20px_80px_rgba(0,0,0,0.28)] backdrop-blur-xl transition duration-300 ease-out hover:-translate-y-1 hover:border-teal-300/25 hover:bg-white/[0.07] hover:shadow-[0_28px_100px_rgba(20,184,166,0.12)]">
       <div className="flex items-center justify-between gap-4">
-        <span className="flex h-11 w-11 items-center justify-center rounded-2xl border border-teal-300/20 bg-teal-300/10">
+        <span className="flex h-10 w-10 items-center justify-center rounded-2xl border border-teal-300/20 bg-teal-300/10 transition duration-300 group-hover:scale-105 group-hover:border-teal-200/35">
           <Icon className="h-5 w-5 text-teal-200" />
         </span>
-        <span className="rounded-full border border-white/10 bg-black/25 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
+        <span className="rounded-full border border-white/10 bg-black/25 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
           Live
         </span>
       </div>
-      <p className="mt-5 text-xs font-semibold uppercase tracking-[0.22em] text-zinc-500">
+      <p className="mt-5 text-[11px] font-semibold uppercase tracking-[0.22em] text-zinc-500">
         {label}
       </p>
-      <p className="mt-2 text-3xl font-semibold tracking-tight text-white">
-        {value}
+      <p className="mt-2 text-3xl font-semibold tracking-tight text-white transition duration-300 group-hover:text-teal-50">
+        {typeof animatedValue === "number" ? (
+          <AdminAnimatedValue value={animatedValue} formatter={valueFormatter} />
+        ) : (
+          value
+        )}
       </p>
       <p className="mt-2 text-sm leading-5 text-zinc-500">{detail}</p>
     </article>
+  );
+}
+
+function getGreeting() {
+  const hour = new Date().getHours();
+
+  if (hour < 12) {
+    return "Good morning";
+  }
+
+  if (hour < 18) {
+    return "Good afternoon";
+  }
+
+  return "Good evening";
+}
+
+function buildExecutiveSummary(input: {
+  newUsersToday: number;
+  reportsToday: number;
+  aiCostToday: number | null;
+  activeAlerts: number;
+}) {
+  const cost = input.aiCostToday === null ? "cost data is not available" : `${formatCompactCurrency(input.aiCostToday)} in estimated AI cost`;
+  const alertCopy = input.activeAlerts
+    ? `${input.activeAlerts} active alert${input.activeAlerts === 1 ? "" : "s"} need review`
+    : "no active critical alerts are visible";
+
+  return `AI executive summary: today shows ${input.newUsersToday} new user${input.newUsersToday === 1 ? "" : "s"}, ${input.reportsToday} report${input.reportsToday === 1 ? "" : "s"}, ${cost}, and ${alertCopy}.`;
+}
+
+function ExecutiveOverview({
+  newUsersToday,
+  reportsToday,
+  aiCostToday,
+  activeAlerts,
+}: {
+  newUsersToday: number;
+  reportsToday: number;
+  aiCostToday: number | null;
+  activeAlerts: number;
+}) {
+  const summary = buildExecutiveSummary({
+    newUsersToday,
+    reportsToday,
+    aiCostToday,
+    activeAlerts,
+  });
+
+  return (
+    <section className="rounded-[2rem] border border-white/10 bg-white/[0.05] p-5 shadow-[0_28px_120px_rgba(0,0,0,0.38)] backdrop-blur-2xl sm:p-7">
+      <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr] xl:items-end">
+        <div>
+          <p className="inline-flex items-center gap-2 rounded-full border border-teal-300/20 bg-teal-300/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-teal-100">
+            <Sparkles className="h-3.5 w-3.5" />
+            Executive Overview
+          </p>
+          <h1 className="mt-5 text-4xl font-semibold tracking-tight text-white md:text-5xl">
+            {getGreeting()}, Admin.
+          </h1>
+          <p className="mt-4 max-w-3xl text-base leading-7 text-zinc-400">
+            {summary}
+          </p>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          {[
+            {
+              label: "New users today",
+              value: newUsersToday,
+              formatter: (value: number) => formatNumber(Math.round(value)),
+            },
+            {
+              label: "Reports today",
+              value: reportsToday,
+              formatter: (value: number) => formatNumber(Math.round(value)),
+            },
+            {
+              label: "AI cost today",
+              value: aiCostToday ?? 0,
+              formatter: (value: number) =>
+                aiCostToday === null ? "Not configured" : formatCompactCurrency(value),
+            },
+            {
+              label: "Active alerts",
+              value: activeAlerts,
+              formatter: (value: number) => formatNumber(Math.round(value)),
+            },
+          ].map((item) => (
+            <div
+              key={item.label}
+              className="rounded-[1.25rem] border border-white/10 bg-black/25 p-4 shadow-inner shadow-white/[0.02] transition duration-300 hover:border-teal-300/25 hover:bg-black/35"
+            >
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                {item.label}
+              </p>
+              <p className="mt-2 text-2xl font-semibold tracking-tight text-white">
+                <AdminAnimatedValue value={item.value} formatter={item.formatter} />
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -89,7 +211,7 @@ function Distribution({
   const max = Math.max(1, ...data.map((item) => item.value));
 
   return (
-    <div className="rounded-[1.75rem] border border-white/10 bg-white/[0.045] p-5 shadow-2xl shadow-black/25 backdrop-blur-xl">
+    <div className="rounded-[1.4rem] border border-white/10 bg-white/[0.045] p-5 shadow-[0_20px_80px_rgba(0,0,0,0.26)] backdrop-blur-xl transition duration-300 hover:border-teal-300/20 hover:bg-white/[0.06]">
       <h2 className="text-lg font-semibold text-white">{title}</h2>
       <div className="mt-5 space-y-4">
         {data.length ? (
@@ -129,7 +251,7 @@ function MiniChart({
   const max = Math.max(1, ...data.map((item) => item.value));
 
   return (
-    <div className="rounded-[1.75rem] border border-white/10 bg-white/[0.045] p-5 shadow-2xl shadow-black/25 backdrop-blur-xl">
+    <div className="rounded-[1.4rem] border border-white/10 bg-white/[0.045] p-5 shadow-[0_20px_80px_rgba(0,0,0,0.26)] backdrop-blur-xl transition duration-300 hover:border-teal-300/20 hover:bg-white/[0.06]">
       <h2 className="text-sm font-semibold text-white">{title}</h2>
       {data.length ? (
         <div className="mt-5 flex h-36 items-end gap-2" aria-label={`${title} chart`}>
@@ -171,42 +293,59 @@ function statusClass(status: string) {
 
 export default async function AdminDashboardPage() {
   const data = await loadAdminDashboardData();
+  const lastUserGrowthPoint = data.charts.userGrowth.at(-1);
+  const lastReportPoint = data.charts.reportsGenerated.at(-1);
+  const activeAlerts =
+    data.systemStatus.filter((item) => item.status === "Degraded" || item.status === "Down").length +
+    data.recentErrors.length;
   const cards = [
     {
       label: "Total users",
       value: formatNumber(data.totalUsers),
       detail: "Supabase Auth users",
       icon: Users,
+      animatedValue: data.totalUsers,
+      valueFormatter: (value: number) => formatNumber(Math.round(value)),
     },
     {
       label: "Active users",
       value: formatNumber(data.activeUsers),
       detail: "Users with at least one sign-in",
       icon: Activity,
+      animatedValue: data.activeUsers,
+      valueFormatter: (value: number) => formatNumber(Math.round(value)),
     },
     {
       label: "Reports generated",
       value: formatNumber(data.reportsGenerated),
       detail: "Saved report records",
       icon: FileText,
+      animatedValue: data.reportsGenerated,
+      valueFormatter: (value: number) => formatNumber(Math.round(value)),
     },
     {
       label: "AI conversations",
       value: formatNumber(data.aiConversations),
       detail: "Stored conversations",
       icon: Bot,
+      animatedValue: data.aiConversations,
+      valueFormatter: (value: number) => formatNumber(Math.round(value)),
     },
     {
       label: "Total AI requests",
       value: formatNumber(data.usageSummary.totalRequests),
       detail: "Stored usage events",
       icon: Activity,
+      animatedValue: data.usageSummary.totalRequests,
+      valueFormatter: (value: number) => formatNumber(Math.round(value)),
     },
     {
       label: "Token usage",
       value: formatNumber(data.usageSummary.totalTokens),
       detail: "Prompt and completion tokens",
       icon: Bot,
+      animatedValue: data.usageSummary.totalTokens,
+      valueFormatter: (value: number) => formatNumber(Math.round(value)),
     },
     {
       label: "Monthly recurring revenue",
@@ -219,6 +358,8 @@ export default async function AdminDashboardPage() {
       value: formatCurrency(data.aiApiCost),
       detail: "From stored usage records",
       icon: Activity,
+      animatedValue: data.aiApiCost,
+      valueFormatter: formatCompactCurrency,
     },
   ];
 
@@ -227,8 +368,16 @@ export default async function AdminDashboardPage() {
       eyebrow="Admin"
       title="Control center"
       subtitle="Operational visibility for users, reports, AI usage, system health, and audited administration."
+      hidePageHeader
     >
-      <div className="mt-6 rounded-[1.75rem] border border-white/10 bg-white/[0.045] p-5 shadow-2xl shadow-black/25 backdrop-blur-xl">
+      <ExecutiveOverview
+        newUsersToday={lastUserGrowthPoint?.value ?? 0}
+        reportsToday={lastReportPoint?.value ?? 0}
+        aiCostToday={data.costControl.estimatedCostToday}
+        activeAlerts={activeAlerts}
+      />
+
+      <div className="mt-5 rounded-[1.5rem] border border-white/10 bg-white/[0.045] p-5 shadow-[0_20px_80px_rgba(0,0,0,0.25)] backdrop-blur-xl">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-lg font-semibold text-white">System Health</h2>
@@ -260,13 +409,13 @@ export default async function AdminDashboardPage() {
         </div>
       </div>
 
-      <div className="mt-6 grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
+      <div className="mt-5 grid gap-4 md:grid-cols-2 2xl:grid-cols-4">
         {cards.map((card) => (
           <MetricCard key={card.label} {...card} />
         ))}
       </div>
 
-      <div className="mt-6 rounded-[1.75rem] border border-white/10 bg-white/[0.045] p-5 shadow-2xl shadow-black/25 backdrop-blur-xl">
+      <div className="mt-5 rounded-[1.5rem] border border-white/10 bg-white/[0.045] p-5 shadow-[0_20px_80px_rgba(0,0,0,0.25)] backdrop-blur-xl">
         <h2 className="text-lg font-semibold text-white">Executive financial overview</h2>
         <p className="mt-1 text-sm text-zinc-500">
           Revenue cards remain visible but disabled until Stripe production billing is configured.
@@ -282,7 +431,7 @@ export default async function AdminDashboardPage() {
         </div>
       </div>
 
-      <div className="mt-6 rounded-[1.75rem] border border-white/10 bg-white/[0.045] p-5 shadow-2xl shadow-black/25 backdrop-blur-xl">
+      <div className="mt-5 rounded-[1.5rem] border border-white/10 bg-white/[0.045] p-5 shadow-[0_20px_80px_rgba(0,0,0,0.25)] backdrop-blur-xl">
         <h2 className="text-lg font-semibold text-white">AI Cost Control</h2>
         <p className="mt-1 text-sm text-zinc-500">
           Estimated from stored usage events and centralized server-side model pricing.
@@ -322,13 +471,13 @@ export default async function AdminDashboardPage() {
         </div>
       </div>
 
-      <div className="mt-6 grid gap-5 xl:grid-cols-3">
+      <div className="mt-5 grid gap-5 xl:grid-cols-3">
         <Distribution title="User growth" data={data.userGrowth} />
         <Distribution title="Report type distribution" data={data.reportTypeDistribution} />
         <Distribution title="Subscription plan distribution" data={data.planDistribution} />
       </div>
 
-      <div className="mt-6 grid gap-5 md:grid-cols-2 2xl:grid-cols-3">
+      <div className="mt-5 grid gap-5 md:grid-cols-2 2xl:grid-cols-3">
         <MiniChart title="New users over time" data={data.charts.userGrowth} />
         <MiniChart title="Active users over time" data={data.charts.activeUsers} />
         <MiniChart title="Reports generated over time" data={data.charts.reportsGenerated} />
@@ -338,8 +487,8 @@ export default async function AdminDashboardPage() {
         <MiniChart title="Revenue over time" data={data.charts.revenue} valuePrefix="$" />
       </div>
 
-      <div className="mt-6 grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
-        <div className="rounded-[1.75rem] border border-white/10 bg-white/[0.045] p-5 shadow-2xl shadow-black/25 backdrop-blur-xl">
+      <div className="mt-5 grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
+        <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.045] p-5 shadow-[0_20px_80px_rgba(0,0,0,0.25)] backdrop-blur-xl">
           <h2 className="text-lg font-semibold text-white">Recent users</h2>
           <div className="mt-4 overflow-x-auto">
             <table className="w-full min-w-[720px] text-left text-sm">
@@ -378,7 +527,7 @@ export default async function AdminDashboardPage() {
         </div>
 
         <div className="space-y-5">
-          <div className="rounded-[1.75rem] border border-white/10 bg-white/[0.045] p-5 shadow-2xl shadow-black/25 backdrop-blur-xl">
+          <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.045] p-5 shadow-[0_20px_80px_rgba(0,0,0,0.25)] backdrop-blur-xl">
             <h2 className="text-lg font-semibold text-white">AI usage summary</h2>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               {[
@@ -397,7 +546,7 @@ export default async function AdminDashboardPage() {
             </div>
           </div>
 
-          <div className="rounded-[1.75rem] border border-white/10 bg-white/[0.045] p-5 shadow-2xl shadow-black/25 backdrop-blur-xl">
+          <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.045] p-5 shadow-[0_20px_80px_rgba(0,0,0,0.25)] backdrop-blur-xl">
             <div className="flex items-center justify-between gap-4">
               <h2 className="text-lg font-semibold text-white">Recent activity</h2>
               <Link href="/admin/logs" className="text-xs font-medium text-teal-100 transition hover:text-white">
@@ -411,9 +560,9 @@ export default async function AdminDashboardPage() {
                     <p className="font-medium text-white">{item.label}</p>
                     <p className="mt-1 text-zinc-500">{item.detail} · {formatDate(item.createdAt)}</p>
                     {item.href ? (
-                      <a href={item.href} className="mt-2 inline-flex text-xs font-medium text-teal-100">
+                      <Link href={item.href} className="mt-2 inline-flex text-xs font-medium text-teal-100">
                         View related record
-                      </a>
+                      </Link>
                     ) : null}
                   </div>
                 ))
@@ -425,7 +574,7 @@ export default async function AdminDashboardPage() {
             </div>
           </div>
 
-          <div className="rounded-[1.75rem] border border-white/10 bg-white/[0.045] p-5 shadow-2xl shadow-black/25 backdrop-blur-xl">
+          <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.045] p-5 shadow-[0_20px_80px_rgba(0,0,0,0.25)] backdrop-blur-xl">
             <div className="flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-amber-200" />
               <h2 className="text-lg font-semibold text-white">Failed jobs / recent errors</h2>

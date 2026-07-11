@@ -59,6 +59,7 @@ test("admin shell renders authenticated admin header and global search", () => {
 
   assert.match(shell, /requireAdminPage/);
   assert.match(shell, /AdminGlobalSearch/);
+  assert.match(shell, /hidePageHeader/);
   assert.match(shell, /Current admin|Signed in as|Admin notifications|Account settings|Security settings|Sign out/s);
   assert.match(shell, /AI CEO/);
   assert.match(search, /\/api\/admin\/search/);
@@ -205,6 +206,14 @@ test("admin dashboard includes revenue placeholders, cost controls, charts, and 
   const dashboard = read("app/admin/page.tsx");
   const adminData = read("app/admin/admin-data.ts");
 
+  assert.match(dashboard, /ExecutiveOverview/);
+  assert.match(dashboard, /Good morning|Good afternoon|Good evening/s);
+  assert.match(dashboard, /AI executive summary/);
+  assert.match(dashboard, /New users today/);
+  assert.match(dashboard, /Reports today/);
+  assert.match(dashboard, /AI cost today/);
+  assert.match(dashboard, /Active alerts/);
+  assert.match(dashboard, /hidePageHeader/);
   assert.match(dashboard, /Executive financial overview/);
   assert.match(dashboard, /AI Cost Control/);
   assert.match(dashboard, /New users over time/);
@@ -216,6 +225,17 @@ test("admin dashboard includes revenue placeholders, cost controls, charts, and 
   assert.match(adminData, /getModelPricing/);
   assert.match(adminData, /loadRecentActivity/);
   assert.match(adminData, /buildDailySeries/);
+});
+
+test("admin dashboard cards use animated counters and premium transitions", () => {
+  const dashboard = read("app/admin/page.tsx");
+  const counter = read("app/admin/AdminAnimatedValue.tsx");
+
+  assert.match(dashboard, /AdminAnimatedValue/);
+  assert.match(dashboard, /hover:-translate-y-1/);
+  assert.match(dashboard, /duration-300/);
+  assert.match(dashboard, /shadow-\[0_20px_80px/);
+  assert.match(counter, /requestAnimationFrame/);
 });
 
 test("AI CEO is admin-only, rate-limited, audited, and prompt-injection resistant", () => {
