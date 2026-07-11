@@ -33,7 +33,7 @@ import {
   buildUserMemoryContext,
   extractExplicitMemoryOperations,
   getUserNameFromMemories,
-  loadUserMemories,
+  loadUserMemoriesForUser,
 } from "@/app/lib/ai/user-memory";
 
 type ChatInputMessage = {
@@ -980,8 +980,8 @@ export async function POST(req: Request) {
     const profileContext = buildProfileContext(chatProfile);
     const memoryOperations = extractExplicitMemoryOperations(prompt);
     const memoryApplyResult = memoryOperations.length > 0
-      ? await applyUserMemoryOperations(supabase, user.id, memoryOperations)
-      : { remembered: 0, forgotten: 0, failed: 0 };
+      ? await applyUserMemoryOperations(supabase, user.id, memoryOperations, user)
+      : { remembered: 0, forgotten: 0, failed: 0, storage: "none" as const };
 
     if (memoryOperations.length > 0) {
       logOperationalInfo("[api:chat] persistent memory operation", {
@@ -991,6 +991,7 @@ export async function POST(req: Request) {
         remembered: memoryApplyResult.remembered,
         forgotten: memoryApplyResult.forgotten,
         failed: memoryApplyResult.failed,
+        storage: memoryApplyResult.storage,
       });
     }
 
@@ -1000,7 +1001,11 @@ export async function POST(req: Request) {
       );
     }
 
-    const userMemories = await loadUserMemories(supabase, user.id);
+    const userMemories = await loadUserMemoriesForUser(
+      supabase,
+      user,
+      memoryApplyResult.fallbackMemories
+    );
     const userMemoryContext = buildUserMemoryContext(userMemories);
     const rememberedName = getUserNameFromMemories(userMemories);
 
@@ -1010,6 +1015,7 @@ export async function POST(req: Request) {
       memoryCount: userMemories.length,
       memoryContextAttached: Boolean(userMemoryContext),
       hasRememberedName: Boolean(rememberedName),
+      storage: memoryApplyResult.storage,
     });
 
     const loadedReport = reportId ? await loadUserReport(supabase, user, reportId) : null;

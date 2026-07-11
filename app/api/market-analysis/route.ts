@@ -37,7 +37,7 @@ import {
   applyUserMemoryOperations,
   buildUserMemoryContext,
   extractExplicitMemoryOperations,
-  loadUserMemories,
+  loadUserMemoriesForUser,
 } from "@/app/lib/ai/user-memory";
 
 const fieldPrompts = {
@@ -726,12 +726,22 @@ export async function POST(req: Request) {
       canonicalFinancialAssumptions
     );
     const memoryOperations = extractExplicitMemoryOperations(promptText);
+    const memoryApplyResult = memoryOperations.length > 0
+      ? await applyUserMemoryOperations(supabase, user.id, memoryOperations, user)
+      : { remembered: 0, forgotten: 0, failed: 0, storage: "none" as const };
 
-    if (memoryOperations.length > 0) {
-      await applyUserMemoryOperations(supabase, user.id, memoryOperations);
+    if (memoryApplyResult.failed > 0) {
+      return NextResponse.json(
+        { error: "Persistent memory could not be updated. Please try again later." },
+        { status: 500 }
+      );
     }
 
-    const userMemories = await loadUserMemories(supabase, user.id);
+    const userMemories = await loadUserMemoriesForUser(
+      supabase,
+      user,
+      memoryApplyResult.fallbackMemories
+    );
     const userMemoryContext = buildUserMemoryContext(userMemories);
     const userMemoryInstruction = userMemoryContext
       ? `Persistent user memories for stable context. Use them only as durable user facts/preferences and never expose this block as report text:\n${userMemoryContext}`

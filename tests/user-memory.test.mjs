@@ -31,10 +31,13 @@ test("memory extraction only reacts to explicit durable-memory phrases", () => {
   assert.match(helperSource, /MAX_MEMORY_CONTENT_LENGTH/);
   assert.match(helperSource, /UserMemoryApplyResult/);
   assert.match(helperSource, /getUserNameFromMemories/);
+  assert.match(helperSource, /loadUserMemoriesForUser/);
+  assert.match(helperSource, /USER_METADATA_MEMORY_KEY/);
+  assert.match(helperSource, /isMissingUserMemoriesTableError/);
 });
 
 test("AI Chat loads, updates, and injects persistent user memories", () => {
-  assert.match(chatRouteSource, /loadUserMemories/);
+  assert.match(chatRouteSource, /loadUserMemoriesForUser/);
   assert.match(chatRouteSource, /extractExplicitMemoryOperations/);
   assert.match(chatRouteSource, /applyUserMemoryOperations/);
   assert.match(chatRouteSource, /buildUserMemoryContext/);
@@ -43,6 +46,7 @@ test("AI Chat loads, updates, and injects persistent user memories", () => {
   assert.match(chatRouteSource, /persistent memory operation/);
   assert.match(chatRouteSource, /persistent memory loaded/);
   assert.match(chatRouteSource, /memoryApplyResult\.failed > 0/);
+  assert.match(chatRouteSource, /memoryApplyResult\.fallbackMemories/);
   assert.match(chatRouteSource, /user_memory_used/);
   assert.match(chatRouteSource, /memory_operation_count/);
 });
@@ -63,6 +67,7 @@ test("AI Chat cache is disabled when persistent memory affects the response", ()
 test("AI Plan and Market Analysis include user memory context in provider input and cache keys", () => {
   for (const source of [planRouteSource, marketRouteSource]) {
     assert.match(source, /loadUserMemories/);
+    assert.match(source, /loadUserMemoriesForUser/);
     assert.match(source, /extractExplicitMemoryOperations/);
     assert.match(source, /applyUserMemoryOperations/);
     assert.match(source, /buildUserMemoryContext/);

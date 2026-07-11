@@ -1,4 +1,4 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { SupabaseClient, User } from "@supabase/supabase-js";
 
 export type UserMemoryType =
   | "name"
@@ -32,6 +32,8 @@ export type UserMemoryApplyResult = {
   remembered: number;
   forgotten: number;
   failed: number;
+  storage: "table" | "metadata" | "none";
+  fallbackMemories?: UserMemory[];
 };
 
 type UserMemoryRow = {
@@ -43,6 +45,7 @@ type UserMemoryRow = {
 
 const MAX_MEMORY_CONTENT_LENGTH = 240;
 const MAX_LOADED_MEMORIES = 30;
+const USER_METADATA_MEMORY_KEY = "zerinix_memories";
 
 const memoryTypeLabels: Record<UserMemoryType, string> = {
   name: "Name",
@@ -64,6 +67,20 @@ function cleanMemoryContent(value: string) {
     .replace(/[.;,\s]+$/g, "")
     .slice(0, MAX_MEMORY_CONTENT_LENGTH)
     .trim();
+}
+
+function createMemoryId(type: UserMemoryType, content: string) {
+  return `${type}:${content.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 80)}`;
+}
+
+function isMissingUserMemoriesTableError(error: { code?: string; message?: string }) {
+  const message = error.message || "";
+
+  return (
+    error.code === "42P01" ||
+    error.code === "PGRST205" ||
+    /user_memories/i.test(message) && /schema cache|relation|table|does not exist/i.test(message)
+  );
 }
 
 function inferMemoryType(content: string): UserMemoryType {
@@ -228,15 +245,196 @@ export function getUserNameFromMemories(memories: UserMemory[]) {
   return memories.find((memory) => memory.type === "name")?.content || "";
 }
 
+function readUserMetadataMemories(user: User): UserMemory[] {
+  const rawMemories = user.user_metadata?.[USER_METADATA_MEMORY_KEY];
+
+  if (!Array.isArray(rawMemories)) {
+    return [];
+  }
+
+  return rawMemories
+    .map((memory): UserMemory | null => {
+      if (!memory || typeof memory !== "object") {
+        return null;
+      }
+
+      const record = memory as Record<string, unknown>;
+      const type = typeof record.type === "string" ? record.type : "";
+      const content = typeof record.content === "string" ? cleanMemoryContent(record.content) : "";
+
+      if (
+        !content ||
+        ![
+          "name",
+          "company",
+          "preference",
+          "writing_style",
+          "language",
+          "long_term_goal",
+          "general",
+        ].includes(type)
+      ) {
+        return null;
+      }
+
+      return {
+        id:
+          typeof record.id === "string" && record.id
+            ? record.id
+            : createMemoryId(type as UserMemoryType, content),
+        type: type as UserMemoryType,
+        content,
+        updatedAt:
+          typeof record.updatedAt === "string" && record.updatedAt
+            ? record.updatedAt
+            : new Date(0).toISOString(),
+      };
+    })
+    .filter((memory): memory is UserMemory => Boolean(memory))
+    .slice(0, MAX_LOADED_MEMORIES);
+}
+
+function applyOperationsToMemoryList(
+  existingMemories: UserMemory[],
+  operations: UserMemoryOperation[]
+) {
+  let memories = [...existingMemories];
+  let remembered = 0;
+  let forgotten = 0;
+
+  for (const operation of operations) {
+    if (operation.action === "remember") {
+      const duplicate = memories.some(
+        (memory) =>
+          memory.type === operation.type &&
+          memory.content.toLowerCase() === operation.content.toLowerCase()
+      );
+
+      if (!duplicate) {
+        memories = [
+          {
+            id: createMemoryId(operation.type, operation.content),
+            type: operation.type,
+            content: operation.content,
+            updatedAt: new Date().toISOString(),
+          },
+          ...memories,
+        ].slice(0, MAX_LOADED_MEMORIES);
+        remembered += 1;
+      }
+
+      continue;
+    }
+
+    const target = operation.content.toLowerCase();
+    const beforeCount = memories.length;
+
+    memories = memories.filter((memory) => {
+      if (operation.type && memory.type === operation.type) {
+        return false;
+      }
+
+      const content = memory.content.toLowerCase();
+
+      return !(content.includes(target) || target.includes(content));
+    });
+    forgotten += beforeCount - memories.length;
+  }
+
+  return {
+    memories,
+    remembered,
+    forgotten,
+  };
+}
+
+async function applyUserMemoryOperationsToMetadata(
+  supabase: SupabaseClient,
+  user: User,
+  operations: UserMemoryOperation[]
+): Promise<UserMemoryApplyResult> {
+  const next = applyOperationsToMemoryList(readUserMetadataMemories(user), operations);
+  const { error } = await supabase.auth.updateUser({
+    data: {
+      [USER_METADATA_MEMORY_KEY]: next.memories.map((memory) => ({
+        id: memory.id,
+        type: memory.type,
+        content: memory.content,
+        updatedAt: memory.updatedAt,
+      })),
+    },
+  });
+
+  if (error) {
+    console.error("[user_memories metadata fallback update failed]", {
+      message: error.message,
+      code: error.code,
+      status: error.status,
+    });
+
+    return {
+      remembered: 0,
+      forgotten: 0,
+      failed: operations.length,
+      storage: "none",
+    };
+  }
+
+  return {
+    remembered: next.remembered,
+    forgotten: next.forgotten,
+    failed: 0,
+    storage: "metadata",
+    fallbackMemories: next.memories,
+  };
+}
+
+export async function loadUserMemoriesForUser(
+  supabase: SupabaseClient,
+  user: User,
+  fallbackMemories: UserMemory[] = []
+): Promise<UserMemory[]> {
+  const { data, error } = await supabase
+    .from("user_memories")
+    .select("id,memory_type,content,updated_at")
+    .eq("user_id", user.id)
+    .order("updated_at", { ascending: false })
+    .limit(MAX_LOADED_MEMORIES);
+
+  if (error) {
+    console.error("[user_memories select failed]", {
+      message: error.message,
+      code: error.code,
+    });
+
+    if (isMissingUserMemoriesTableError(error)) {
+      return fallbackMemories.length ? fallbackMemories : readUserMetadataMemories(user);
+    }
+
+    return [];
+  }
+
+  return ((data || []) as UserMemoryRow[])
+    .map((row) => ({
+      id: row.id,
+      type: row.memory_type,
+      content: row.content,
+      updatedAt: row.updated_at,
+    }))
+    .filter((memory) => Boolean(memory.content.trim()));
+}
+
 export async function applyUserMemoryOperations(
   supabase: SupabaseClient,
   userId: string,
-  operations: UserMemoryOperation[]
+  operations: UserMemoryOperation[],
+  user?: User
 ): Promise<UserMemoryApplyResult> {
   const result: UserMemoryApplyResult = {
     remembered: 0,
     forgotten: 0,
     failed: 0,
+    storage: "table",
   };
 
   if (!operations.length) {
@@ -257,6 +455,11 @@ export async function applyUserMemoryOperations(
           message: existingError.message,
           code: existingError.code,
         });
+
+        if (user && isMissingUserMemoriesTableError(existingError)) {
+          return applyUserMemoryOperationsToMetadata(supabase, user, operations);
+        }
+
         result.failed += 1;
         continue;
       }
@@ -284,6 +487,11 @@ export async function applyUserMemoryOperations(
           message: error.message,
           code: error.code,
         });
+
+        if (user && isMissingUserMemoriesTableError(error)) {
+          return applyUserMemoryOperationsToMetadata(supabase, user, operations);
+        }
+
         result.failed += 1;
       } else {
         result.remembered += 1;
@@ -302,6 +510,11 @@ export async function applyUserMemoryOperations(
         message: selectError.message,
         code: selectError.code,
       });
+
+      if (user && isMissingUserMemoriesTableError(selectError)) {
+        return applyUserMemoryOperationsToMetadata(supabase, user, operations);
+      }
+
       result.failed += 1;
       continue;
     }
@@ -338,6 +551,11 @@ export async function applyUserMemoryOperations(
         message: error.message,
         code: error.code,
       });
+
+      if (user && isMissingUserMemoriesTableError(error)) {
+        return applyUserMemoryOperationsToMetadata(supabase, user, operations);
+      }
+
       result.failed += 1;
     } else {
       result.forgotten += idsToDelete.length;
