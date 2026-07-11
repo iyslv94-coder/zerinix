@@ -154,7 +154,12 @@ export async function syncInvoice(
     { onConflict: "stripe_invoice_id" }
   );
 
-  return { ok: !error, reason: error?.message || "", userId };
+  return {
+    ok: !error,
+    reason: error?.message || "",
+    userId,
+    invoice: normalized,
+  };
 }
 
 export function planTierFromStripePrice(priceId?: string | null) {

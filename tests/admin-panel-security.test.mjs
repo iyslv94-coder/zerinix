@@ -70,7 +70,8 @@ test("service-role access is isolated to server-only admin modules", () => {
       file === "app/lib/supabase/admin.ts" ||
       file === "app/lib/supabase/env.ts" ||
       file.startsWith("app/admin/") ||
-      file === "app/lib/billing/stripe-webhook.ts"
+      file === "app/lib/billing/stripe-webhook.ts" ||
+      file === "app/lib/integrations/email-events.ts"
     ) {
       continue;
     }

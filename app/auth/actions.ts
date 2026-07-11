@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/app/lib/supabase/server";
+import { sendWelcomeEmail } from "@/app/lib/integrations/email-events";
 import {
   checkRateLimit,
   getServerActionClientIp,
@@ -49,6 +50,27 @@ export async function loginWithPassword(
     };
   }
 
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (user?.email && !user.user_metadata?.welcome_email_sent_at) {
+    const result = await sendWelcomeEmail({
+      userId: user.id,
+      email: user.email,
+      name: user.user_metadata?.full_name,
+    });
+
+    if (result.ok) {
+      await supabase.auth.updateUser({
+        data: {
+          ...user.user_metadata,
+          welcome_email_sent_at: new Date().toISOString(),
+        },
+      });
+    }
+  }
+
   revalidatePath("/login");
   revalidatePath("/register");
   redirect("/plan");
@@ -76,6 +98,27 @@ export async function signInWithPassword(formData: FormData) {
 
   if (error) {
     redirect("/login?auth_error=invalid_credentials");
+  }
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (user?.email && !user.user_metadata?.welcome_email_sent_at) {
+    const result = await sendWelcomeEmail({
+      userId: user.id,
+      email: user.email,
+      name: user.user_metadata?.full_name,
+    });
+
+    if (result.ok) {
+      await supabase.auth.updateUser({
+        data: {
+          ...user.user_metadata,
+          welcome_email_sent_at: new Date().toISOString(),
+        },
+      });
+    }
   }
 
   revalidatePath("/login");

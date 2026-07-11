@@ -58,6 +58,9 @@ test("resend integration is server-only and refuses to send when disabled", () =
   assert.match(resend, /email_verification/);
   assert.match(resend, /password_reset/);
   assert.match(resend, /welcome/);
+  assert.match(resend, /workspace_invitation/);
+  assert.match(resend, /report_ready/);
+  assert.match(resend, /billing_receipt/);
   assert.match(resend, /subscription/);
   assert.match(resend, /security_alert/);
   assert.doesNotMatch(resend, /NEXT_PUBLIC_RESEND|RESEND_API_KEY.*return/);

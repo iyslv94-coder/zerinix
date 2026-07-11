@@ -2,6 +2,7 @@ import "server-only";
 
 import { createServiceRoleClient } from "@/app/lib/supabase/admin";
 import { logOperationalError } from "@/app/lib/security/logging";
+import { sendBillingReceiptEmail, sendSubscriptionEmail } from "@/app/lib/integrations/email-events";
 import { verifyStripeWebhookSignature } from "./stripe";
 import {
   syncCheckoutSession,
@@ -84,7 +85,16 @@ export async function handleStripeWebhookPayload(input: {
       eventType === "customer.subscription.updated" ||
       eventType === "customer.subscription.deleted"
     ) {
-      await syncSubscription(supabase, object);
+      const synced = await syncSubscription(supabase, object);
+
+      if (synced.ok && synced.userId) {
+        await sendSubscriptionEmail({
+          userId: synced.userId,
+          plan: synced.planTier || "free",
+          status: String(object.status || "unknown"),
+          supabase,
+        });
+      }
     }
 
     if (
@@ -93,7 +103,21 @@ export async function handleStripeWebhookPayload(input: {
       eventType === "invoice.paid" ||
       eventType === "invoice.payment_failed"
     ) {
-      await syncInvoice(supabase, object);
+      const synced = await syncInvoice(supabase, object);
+
+      if (eventType === "invoice.paid" && synced.ok && synced.userId && synced.invoice) {
+        await sendBillingReceiptEmail({
+          userId: synced.userId,
+          invoiceId: synced.invoice.invoiceId,
+          totalCents: synced.invoice.totalCents,
+          currency: synced.invoice.currency,
+          status: synced.invoice.status,
+          invoiceUrl: synced.invoice.hostedInvoiceUrl,
+          periodStart: synced.invoice.periodStart,
+          periodEnd: synced.invoice.periodEnd,
+          supabase,
+        });
+      }
     }
 
     await markEventProcessed(eventId, eventType);

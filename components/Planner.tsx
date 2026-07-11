@@ -5818,6 +5818,20 @@ export default function Planner({
     }
   }
 
+  async function notifyReportReady(reportId: string) {
+    if (!reportId) {
+      return;
+    }
+
+    try {
+      await fetch(`/api/reports/${encodeURIComponent(reportId)}/notify`, {
+        method: "POST",
+      });
+    } catch (error) {
+      console.error("[report ready notification failed]", error);
+    }
+  }
+
   async function readStreamingSectionJson(
     response: Response,
     onEvent: (event: ReportStreamEvent) => void,
@@ -6258,6 +6272,7 @@ export default function Planner({
         expectedSectionCount: outputFields.length,
       });
       setActiveReportId(savedReportId);
+      void notifyReportReady(savedReportId);
     } catch (error) {
       const errorMessage = getReportGenerationErrorMessage(error, copy.retryError);
       setReportGenerationError(errorMessage);
@@ -6461,6 +6476,7 @@ export default function Planner({
         expectedSectionCount: outputFields.length,
       });
       setActiveReportId(savedReportId);
+      void notifyReportReady(savedReportId);
     } catch (error) {
       const errorMessage = getReportGenerationErrorMessage(
         error,
