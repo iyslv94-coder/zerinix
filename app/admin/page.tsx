@@ -21,7 +21,7 @@ import { AdminSystemHealth } from "./AdminSystemHealth";
 import { loadAdminDashboardData, type AdminActivityItem } from "./admin-data";
 
 const AdminCharts = dynamic(
-  () => import("./AdminCharts").then((mod) => mod.AdminCharts),
+  () => import("./AdminCharts"),
   {
     loading: () => (
       <div className="grid gap-5 md:grid-cols-2 2xl:grid-cols-3">

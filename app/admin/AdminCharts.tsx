@@ -166,3 +166,5 @@ export function AdminCharts({ charts }: AdminChartsProps) {
     </div>
   );
 }
+
+export default AdminCharts;
