@@ -1,5 +1,5 @@
-export function logServerError(scope: string, error: unknown) {
-  const message = error instanceof Error ? error.message : "Unknown server error";
+import { logOperationalError } from "./logging";
 
-  console.error(`[${scope}]`, message);
+export function logServerError(scope: string, error: unknown) {
+  logOperationalError(`[${scope}]`, error);
 }

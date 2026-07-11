@@ -8,6 +8,7 @@ import {
 } from "@/app/lib/security/rate-limit";
 import { validateApiRequest } from "@/app/lib/security/request-validation";
 import { logServerError } from "@/app/lib/security/errors";
+import { logOperationalInfo } from "@/app/lib/security/logging";
 import {
   createAiCacheKey,
   estimateAiCostUsd,
@@ -1002,7 +1003,7 @@ export async function POST(req: Request) {
     }
 
     if (reportQuestion && !reportMemory) {
-      console.info("[api:chat] report memory missing", {
+      logOperationalInfo("[api:chat] report memory missing", {
         conversationId: conversationId || null,
         reportId: reportId || null,
         reportMemoryAttached: false,
@@ -1203,7 +1204,7 @@ export async function POST(req: Request) {
       instructionsText.length +
       inputMessages.reduce((total, message) => total + message.content.length, 0);
 
-    console.info("[api:chat] provider call started", {
+    logOperationalInfo("[api:chat] provider call started", {
       model,
       selectedIntent,
       selectedExpert,
@@ -1235,7 +1236,7 @@ export async function POST(req: Request) {
       .catch(async (error) => {
         const errorMessage = getChatErrorMessage(error);
 
-        console.info("[api:chat] provider request failed", {
+        logOperationalInfo("[api:chat] provider request failed", {
           model,
           selectedIntent,
           selectedExpert,
@@ -1439,7 +1440,7 @@ export async function POST(req: Request) {
               },
             });
 
-            console.info("[api:chat] provider call completed", {
+            logOperationalInfo("[api:chat] provider call completed", {
               model,
               selectedIntent,
               selectedExpert,

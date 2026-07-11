@@ -9,6 +9,7 @@ import {
 } from "@/app/lib/security/rate-limit";
 import { validateApiRequest } from "@/app/lib/security/request-validation";
 import { logServerError } from "@/app/lib/security/errors";
+import { logOperationalInfo } from "@/app/lib/security/logging";
 import {
   createAiCacheKey,
   estimateAiCostUsd,
@@ -772,7 +773,7 @@ Do not generate business-plan sections here. Do not suggest website URLs, domain
     };
 
     if (!productionLimit.allowed) {
-      console.info("[api:market-analysis] quota denied before provider call", {
+      logOperationalInfo("[api:market-analysis] quota denied before provider call", {
         reportField: usageReportField,
         reportRequestId: reportRequestId || null,
         providerCalled: false,
@@ -833,14 +834,14 @@ Do not generate business-plan sections here. Do not suggest website URLs, domain
         }
 
         if (!parsedCachedReport) {
-          console.info("[api:market-analysis] cache miss after malformed full report", {
+          logOperationalInfo("[api:market-analysis] cache miss after malformed full report", {
             reportRequestId: reportRequestId || null,
             cacheKey: fullReportCacheKey,
           });
         } else {
 
           if (cachedMissingFields.length || cachedInvalidFields.length) {
-            console.info("[api:market-analysis] cached full report partial sections", {
+            logOperationalInfo("[api:market-analysis] cached full report partial sections", {
               reportRequestId: reportRequestId || null,
               missingFields: cachedMissingFields,
               invalidFields: cachedInvalidFields,
@@ -908,7 +909,7 @@ Do not generate business-plan sections here. Do not suggest website URLs, domain
         reportRequestId,
       });
 
-      console.info("[api:market-analysis] AI call budget", {
+      logOperationalInfo("[api:market-analysis] AI call budget", {
         endpoint: "/api/market-analysis",
         reportRequestId: reportRequestId || null,
         existingAiCallCount,
@@ -967,7 +968,7 @@ Do not include markdown code fences, braces inside string values, or commentary 
       const startedAt = Date.now();
 
       try {
-        console.info("[api:market-analysis] provider call started", {
+        logOperationalInfo("[api:market-analysis] provider call started", {
           reportField: FULL_REPORT_FIELD,
           reportRequestId: reportRequestId || null,
           model,
@@ -1020,7 +1021,7 @@ Do not include markdown code fences, braces inside string values, or commentary 
         const cacheResponseText = JSON.stringify(parsedReport);
         const isPartialReport = Boolean(missingFields.length || invalidFields.length);
 
-        console.info("[api:market-analysis] full report section validation", {
+        logOperationalInfo("[api:market-analysis] full report section validation", {
           reportRequestId: reportRequestId || null,
           model,
           responseTextLength: responseText.length,
@@ -1033,7 +1034,7 @@ Do not include markdown code fences, braces inside string values, or commentary 
           partial: isPartialReport,
         });
         reportFields.forEach((fieldName) => {
-          console.info("[api:market-analysis] section validation step", {
+          logOperationalInfo("[api:market-analysis] section validation step", {
             reportRequestId: reportRequestId || null,
             reportField: fieldName,
             model,
@@ -1061,7 +1062,7 @@ Do not include markdown code fences, braces inside string values, or commentary 
             expiresInDays: 3,
           });
         } else if (isPartialReport) {
-          console.info("[api:market-analysis] skipped cache for partial full report", {
+          logOperationalInfo("[api:market-analysis] skipped cache for partial full report", {
             reportRequestId: reportRequestId || null,
             missingFields,
             invalidFields,
@@ -1091,7 +1092,7 @@ Do not include markdown code fences, braces inside string values, or commentary 
           },
         });
 
-        console.info("[api:market-analysis] provider call completed", {
+        logOperationalInfo("[api:market-analysis] provider call completed", {
           reportField: FULL_REPORT_FIELD,
           reportRequestId: reportRequestId || null,
           model,
@@ -1148,7 +1149,7 @@ Do not include markdown code fences, braces inside string values, or commentary 
               error instanceof Error && error.message ? error.message : "GenerationFailed",
           },
         });
-        console.info("[api:market-analysis] provider call failed", {
+        logOperationalInfo("[api:market-analysis] provider call failed", {
           reportField: FULL_REPORT_FIELD,
           reportRequestId: reportRequestId || null,
           model,
@@ -1251,7 +1252,7 @@ Do not include markdown code fences, braces inside string values, or commentary 
     });
     const startedAt = Date.now();
 
-    console.info("[api:market-analysis] provider call started", {
+    logOperationalInfo("[api:market-analysis] provider call started", {
       reportField,
       reportRequestId: reportRequestId || null,
       model,
@@ -1305,7 +1306,7 @@ Do not include markdown code fences, braces inside string values, or commentary 
         { signal: req.signal }
       )
       .catch(async (error) => {
-        console.info("[api:market-analysis] provider request failed", {
+        logOperationalInfo("[api:market-analysis] provider request failed", {
           reportField,
           reportRequestId: reportRequestId || null,
           model,
@@ -1424,7 +1425,7 @@ Do not include markdown code fences, braces inside string values, or commentary 
               },
             });
 
-            console.info("[api:market-analysis] provider call completed", {
+            logOperationalInfo("[api:market-analysis] provider call completed", {
               reportField,
               reportRequestId: reportRequestId || null,
               model,

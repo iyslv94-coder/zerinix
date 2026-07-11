@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { logOperationalInfo } from "@/app/lib/security/logging";
 
 export type AiRuntimeEnvironment = "development" | "production" | "test";
 export type AiExecutionSource = "mock" | "cache" | "real_ai";
@@ -141,7 +142,7 @@ export function logAiExecution(input: {
   model?: string;
   cacheHit?: boolean;
 }) {
-  console.info("[ai runtime]", {
+  logOperationalInfo("[ai runtime]", {
     endpoint: input.endpoint,
     source: input.source,
     Environment: getAiRuntimeEnvironment().toUpperCase(),

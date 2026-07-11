@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { isFounderAccount } from "@/app/lib/beta-access";
+import { logOperationalInfo } from "@/app/lib/security/logging";
 import {
   checkUsageAllowance,
   createAiPromptHash,
@@ -42,7 +43,7 @@ export async function checkAiProductionRateLimit({
   const founderQuotaExempt = isFounderAccount(account);
 
   if (founderQuotaExempt) {
-    console.info("[ai quota] founder account quota bypass", {
+    logOperationalInfo("[ai quota] founder account quota bypass", {
       endpoint,
       reportField: reportField ?? null,
       reportRequestId: reportRequestId ?? null,
@@ -99,7 +100,7 @@ export async function checkAiProductionRateLimit({
   const allowance = await checkUsageAllowance(supabase, userId, planTier, requestKind);
 
   if (!allowance.allowed) {
-    console.info("[ai quota] request blocked", {
+    logOperationalInfo("[ai quota] request blocked", {
       endpoint,
       reportField: reportField ?? null,
       reportRequestId: reportRequestId ?? null,
@@ -141,7 +142,7 @@ export async function checkAiProductionRateLimit({
       },
     });
   } else {
-    console.info("[ai quota] request allowed", {
+    logOperationalInfo("[ai quota] request allowed", {
       endpoint,
       reportField: reportField ?? null,
       reportRequestId: reportRequestId ?? null,

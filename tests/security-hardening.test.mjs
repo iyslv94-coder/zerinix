@@ -103,7 +103,8 @@ test("authentication diagnostics and signup errors do not expose sensitive inter
   assert.doesNotMatch(actions, /stack:/);
   assert.doesNotMatch(actions, /raw:/);
   assert.doesNotMatch(actions, /cause=\$\{/);
-  assert.match(actions, /registration_failed/);
+  assert.match(actions, /registration_disabled/);
+  assert.doesNotMatch(actions, /\.signUp\(/);
 });
 
 test("Supabase migrations enforce RLS ownership for core user data", () => {

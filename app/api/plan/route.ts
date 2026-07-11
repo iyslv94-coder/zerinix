@@ -9,6 +9,7 @@ import {
 } from "@/app/lib/security/rate-limit";
 import { validateApiRequest } from "@/app/lib/security/request-validation";
 import { logServerError } from "@/app/lib/security/errors";
+import { logOperationalInfo } from "@/app/lib/security/logging";
 import {
   createAiCacheKey,
   estimateAiCostUsd,
@@ -737,7 +738,7 @@ Write only the content for this section. Do not write a JSON object, field name,
     };
 
     if (!productionLimit.allowed) {
-      console.info("[api:plan] quota denied before provider call", {
+      logOperationalInfo("[api:plan] quota denied before provider call", {
         reportField: usageReportField,
         reportRequestId: reportRequestId || null,
         providerCalled: false,
@@ -828,7 +829,7 @@ Write only the content for this section. Do not write a JSON object, field name,
         reportRequestId,
       });
 
-      console.info("[api:plan] AI call budget", {
+      logOperationalInfo("[api:plan] AI call budget", {
         endpoint: "/api/plan",
         reportRequestId: reportRequestId || null,
         existingAiCallCount,
@@ -885,7 +886,7 @@ Report quality rules:
       const startedAt = Date.now();
 
       try {
-        console.info("[api:plan] provider call started", {
+        logOperationalInfo("[api:plan] provider call started", {
           reportField: FULL_REPORT_FIELD,
           reportRequestId: reportRequestId || null,
           model,
@@ -972,7 +973,7 @@ Report quality rules:
           },
         });
 
-        console.info("[api:plan] provider call completed", {
+        logOperationalInfo("[api:plan] provider call completed", {
           reportField: FULL_REPORT_FIELD,
           reportRequestId: reportRequestId || null,
           model,
@@ -1018,7 +1019,7 @@ Report quality rules:
               error instanceof Error && error.message ? error.message : "GenerationFailed",
           },
         });
-        console.info("[api:plan] provider call failed", {
+        logOperationalInfo("[api:plan] provider call failed", {
           reportField: FULL_REPORT_FIELD,
           reportRequestId: reportRequestId || null,
           model,
@@ -1105,7 +1106,7 @@ Report quality rules:
     });
     const startedAt = Date.now();
 
-    console.info("[api:plan] provider call started", {
+    logOperationalInfo("[api:plan] provider call started", {
       reportField,
       reportRequestId: reportRequestId || null,
       model,
@@ -1152,7 +1153,7 @@ Report quality rules:
         { signal: req.signal }
       )
       .catch(async (error) => {
-        console.info("[api:plan] provider request failed", {
+        logOperationalInfo("[api:plan] provider request failed", {
           reportField,
           reportRequestId: reportRequestId || null,
           model,
@@ -1262,7 +1263,7 @@ Report quality rules:
               },
             });
 
-            console.info("[api:plan] provider call completed", {
+            logOperationalInfo("[api:plan] provider call completed", {
               reportField,
               reportRequestId: reportRequestId || null,
               model,

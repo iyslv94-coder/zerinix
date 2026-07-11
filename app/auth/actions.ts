@@ -83,52 +83,8 @@ export async function signInWithPassword(formData: FormData) {
   redirect("/plan");
 }
 
-function redirectWithSignupError(error: unknown): never {
-  const serializedError = serializeSignupError(error);
-  const isDevelopment = process.env.NODE_ENV !== "production";
-
-  if (!isDevelopment) {
-    redirect("/register?auth_error=registration_failed");
-  }
-
-  const details = [
-    `message=${serializedError.message}`,
-    serializedError.code ? `code=${String(serializedError.code)}` : "",
-    serializedError.status ? `status=${String(serializedError.status)}` : "",
-  ]
-    .filter(Boolean)
-    .join("; ");
-
-  redirect(`/register?auth_error=${encodeURIComponent(details)}`);
-}
-
-function serializeSignupError(error: unknown) {
-  const errorRecord =
-    typeof error === "object" && error ? (error as Record<string, unknown>) : {};
-  const message =
-    error instanceof Error
-      ? error.message
-      : typeof errorRecord.message === "string"
-        ? errorRecord.message
-        : String(error || "Unknown Supabase sign up error");
-
-  return {
-    message,
-    code: errorRecord.code,
-    status: errorRecord.status,
-  };
-}
-
-function logSignupError(scope: string, error: unknown) {
-  console.error(scope, {
-    error: serializeSignupError(error),
-  });
-}
-
 export async function signUpWithPassword(formData: FormData) {
-  const name = String(formData.get("name") ?? "");
   const email = String(formData.get("email") ?? "");
-  const password = String(formData.get("password") ?? "");
   const ip = await getServerActionClientIp();
   const rateLimit = checkRateLimit(`auth:signup:${ip}:${email.toLowerCase()}`, {
     limit: 5,
@@ -139,37 +95,7 @@ export async function signUpWithPassword(formData: FormData) {
     redirect("/register?auth_error=rate_limited");
   }
 
-  let supabase: Awaited<ReturnType<typeof createClient>>;
-
-  try {
-    supabase = await createClient();
-  } catch (error) {
-    logSignupError("[auth:signup:supabase_config]", error);
-    redirectWithSignupError(error);
-  }
-
-  const { error: signUpError } = await supabase.auth
-    .signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name: name,
-        },
-      },
-    })
-    .catch((error: unknown) => {
-      logSignupError("[auth:signup:supabase_fetch]", error);
-
-      return { error };
-    });
-
-  if (signUpError) {
-    logSignupError("[auth:signup:supabase_error]", signUpError);
-    redirectWithSignupError(signUpError);
-  }
-
-  redirect("/plan");
+  redirect("/register?auth_error=registration_disabled");
 }
 
 export async function signOut() {

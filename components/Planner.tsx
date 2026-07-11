@@ -52,6 +52,7 @@ import {
 import Link from "next/link";
 import { createClient } from "@/app/lib/supabase/client";
 import { sanitizeAiResponseText } from "@/app/lib/ai/response-sanitization";
+import { logOperationalInfo } from "@/app/lib/security/logging";
 import { isAmbiguousBusinessRequest } from "@/app/lib/business-idea-detection";
 import {
   containsReportGenerationFailure,
@@ -6180,7 +6181,7 @@ export default function Planner({
     const streamFullReport = async () => {
       reportApiCalls += 1;
 
-      console.info("[planner] Business Plan AI call count", {
+      logOperationalInfo("[planner] Business Plan AI call count", {
         reportRequestId,
         aiCallsForReport: reportApiCalls,
         maxAiCallsPerReport: maxReportApiCalls,
@@ -6366,7 +6367,7 @@ export default function Planner({
     const streamFullReport = async () => {
       reportApiCalls += 1;
 
-      console.info("[planner] Market Analysis AI call count", {
+      logOperationalInfo("[planner] Market Analysis AI call count", {
         reportRequestId,
         aiCallsForReport: reportApiCalls,
         maxAiCallsPerReport: maxReportApiCalls,
