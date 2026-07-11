@@ -165,7 +165,7 @@ export function AdminGlobalSearch() {
       </div>
 
       {query.trim().length >= 2 ? (
-        <div className="absolute left-0 right-0 top-14 z-30 overflow-hidden rounded-3xl border border-white/10 bg-zinc-950/95 p-3 shadow-2xl shadow-black/40 backdrop-blur-2xl">
+        <div className="absolute left-0 right-0 top-full z-30 mt-2 overflow-hidden rounded-3xl border border-white/10 bg-zinc-950/95 p-3 shadow-2xl shadow-black/40 backdrop-blur-2xl">
           {status === "loading" ? (
             <p className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-sm text-zinc-500">
               Searching admin records...

@@ -70,13 +70,14 @@ function exportPdf(table: ExportTable) {
   <script>window.print();</script>
 </body>
 </html>`;
-  const printWindow = window.open("", "_blank", "noopener,noreferrer");
+  const printWindow = window.open("", "_blank");
 
   if (!printWindow) {
     downloadFile(`${table.id}.html`, html, "text/html;charset=utf-8");
     return;
   }
 
+  printWindow.opener = null;
   printWindow.document.write(html);
   printWindow.document.close();
 }
