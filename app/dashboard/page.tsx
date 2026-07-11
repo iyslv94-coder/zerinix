@@ -2,15 +2,18 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
   Activity,
+  ArrowRight,
   BadgeCheck,
   BarChart3,
   Clock3,
   FileText,
   Folder,
   Gauge,
+  MessageSquareText,
   Plus,
   Settings,
   Sparkles,
+  TrendingUp,
   WalletCards,
 } from "lucide-react";
 import { createClient } from "@/app/lib/supabase/server";
@@ -52,6 +55,13 @@ function formatCurrency(value: number) {
   }).format(value);
 }
 
+function formatCompactNumber(value: number) {
+  return new Intl.NumberFormat("en-US", {
+    notation: "compact",
+    maximumFractionDigits: 1,
+  }).format(value);
+}
+
 export default async function DashboardPage() {
   const supabase = await createClient();
   const user = await getAuthenticatedUser(supabase);
@@ -82,6 +92,11 @@ export default async function DashboardPage() {
   const completedReports = reports.filter(
     (report) => report.status.toLowerCase() === "completed"
   ).length;
+  const planLabel = `${planTier.charAt(0).toUpperCase()}${planTier.slice(1)} plan`;
+  const usageEfficiency =
+    usage.totalRequests > 0
+      ? `${formatCompactNumber(Math.round(usage.totalTokens / usage.totalRequests))} avg tokens`
+      : "No AI usage yet";
   const dashboardStats = [
     {
       label: "Workspaces",
@@ -119,53 +134,99 @@ export default async function DashboardPage() {
       tone: "zinc",
     },
   ];
+  const quickActions = [
+    {
+      title: "New Report",
+      description: "Create an AI Plan or Market Analysis.",
+      href: "/plan",
+      icon: Plus,
+      primary: true,
+    },
+    {
+      title: "AI Chat",
+      description: "Ask follow-up questions with workspace memory.",
+      href: "/chat",
+      icon: MessageSquareText,
+    },
+    {
+      title: "Workspaces",
+      description: "Organize saved reports by venture or theme.",
+      href: "/dashboard#workspaces",
+      icon: Folder,
+    },
+  ];
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-black text-white">
-      <div className="pointer-events-none absolute inset-0 z-0 bg-[radial-gradient(circle_at_top_right,rgba(45,212,191,0.12),transparent_32%),radial-gradient(circle_at_bottom_left,rgba(255,255,255,0.055),transparent_26%)]" />
+      <div className="pointer-events-none absolute inset-0 z-0 bg-[radial-gradient(circle_at_top_right,rgba(45,212,191,0.14),transparent_30%),radial-gradient(circle_at_18%_18%,rgba(255,255,255,0.055),transparent_28%),linear-gradient(180deg,rgba(255,255,255,0.025),transparent_36%)]" />
+      <div className="pointer-events-none absolute inset-0 z-0 bg-[linear-gradient(rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.035)_1px,transparent_1px)] bg-[size:64px_64px] opacity-40" />
       <div className="relative z-10 flex min-h-screen flex-col lg:flex-row">
         <DashboardSidebar />
 
         <section className="flex-1 px-5 py-6 sm:px-8 lg:px-10 lg:py-9">
-          <div className="overflow-hidden rounded-[2.25rem] border border-white/10 bg-white/[0.045] shadow-2xl shadow-black/35 backdrop-blur-2xl">
+          <div className="overflow-hidden rounded-[2.35rem] border border-white/10 bg-white/[0.045] shadow-2xl shadow-black/35 backdrop-blur-2xl">
             <div className="relative p-6 sm:p-8 lg:p-10">
-              <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.08),transparent_42%)]" />
-              <div className="relative flex flex-col gap-8 md:flex-row md:items-end md:justify-between">
+              <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.09),transparent_38%),radial-gradient(circle_at_85%_20%,rgba(45,212,191,0.16),transparent_34%)]" />
+              <div className="relative flex flex-col gap-8 xl:flex-row xl:items-end xl:justify-between">
                 <div>
                   <div className="inline-flex items-center gap-2 rounded-full border border-teal-300/20 bg-teal-300/10 px-3 py-1.5 text-xs font-semibold tracking-[0.24em] text-teal-100 shadow-lg shadow-teal-950/20">
                     <Sparkles className="h-3.5 w-3.5" />
                     USER DASHBOARD
                   </div>
                   <h1 className="mt-5 max-w-3xl text-4xl font-semibold tracking-tight text-white md:text-6xl">
-                    Workspace Center
+                    Your AI business command center.
                   </h1>
                   <p className="mt-4 max-w-2xl text-base leading-7 text-zinc-400">
-                    Organize reports, reopen recent decisions, track usage and
-                    keep every business workspace moving from idea to execution.
+                    Reopen strategic reports, track usage, manage workspaces and
+                    move from rough idea to sharper founder decisions.
                   </p>
                 </div>
 
-                <div className="flex flex-col gap-3 sm:flex-row">
-                  <Link
-                    href="/plan"
-                    className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-black shadow-xl shadow-white/10 transition duration-300 hover:-translate-y-0.5 hover:bg-zinc-200"
-                  >
-                    <Plus className="h-4 w-4" />
-                    Create New Report
-                  </Link>
-                  <Link
-                    href="/chat"
-                    className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.045] px-5 py-3 text-sm font-semibold text-white transition duration-300 hover:-translate-y-0.5 hover:border-teal-300/30 hover:bg-white/[0.075]"
-                  >
-                    <Sparkles className="h-4 w-4 text-teal-200" />
-                    Open AI Chat
-                  </Link>
+                <div className="grid gap-3 sm:grid-cols-3 xl:min-w-[520px]">
+                  {quickActions.map((action) => {
+                    const Icon = action.icon;
+
+                    return (
+                      <Link
+                        key={action.title}
+                        href={action.href}
+                        className={
+                          action.primary
+                            ? "group rounded-[1.35rem] bg-white p-4 text-black shadow-xl shadow-white/10 transition duration-300 hover:-translate-y-1 hover:bg-zinc-200"
+                            : "group rounded-[1.35rem] border border-white/10 bg-black/25 p-4 text-white transition duration-300 hover:-translate-y-1 hover:border-teal-300/25 hover:bg-white/[0.065]"
+                        }
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <span
+                            className={
+                              action.primary
+                                ? "flex h-10 w-10 items-center justify-center rounded-2xl bg-black text-white"
+                                : "flex h-10 w-10 items-center justify-center rounded-2xl border border-teal-300/20 bg-teal-300/10 text-teal-200"
+                            }
+                          >
+                            <Icon className="h-4 w-4" />
+                          </span>
+                          <ArrowRight className="h-4 w-4 opacity-45 transition group-hover:translate-x-0.5 group-hover:opacity-100" />
+                        </div>
+                        <p className="mt-4 text-sm font-semibold">{action.title}</p>
+                        <p
+                          className={
+                            action.primary
+                              ? "mt-1 text-xs leading-5 text-zinc-700"
+                              : "mt-1 text-xs leading-5 text-zinc-500"
+                          }
+                        >
+                          {action.description}
+                        </p>
+                      </Link>
+                    );
+                  })}
                 </div>
               </div>
 
               <div className="relative mt-8 grid gap-3 border-t border-white/10 pt-5 sm:grid-cols-3">
                 {["Workspace reports", "Live sync", "PDF export"].map((item) => (
-                  <div key={item} className="flex items-center gap-2 rounded-2xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-zinc-400">
+                  <div key={item} className="flex items-center gap-2 rounded-2xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-zinc-400">
                     <BadgeCheck className="h-4 w-4 text-teal-200" />
                     {item}
                   </div>
@@ -174,7 +235,7 @@ export default async function DashboardPage() {
             </div>
           </div>
 
-          <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
             {dashboardStats.map((stat) => {
               const Icon = stat.icon;
               const accentClass =
@@ -227,15 +288,15 @@ export default async function DashboardPage() {
             </div>
           ) : null}
 
-          <div className="mt-8 grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
-            <section className="rounded-[1.75rem] border border-white/10 bg-white/[0.045] p-6 shadow-2xl shadow-black/25 backdrop-blur-xl">
+          <div className="mt-8 grid gap-5 2xl:grid-cols-[1.05fr_0.95fr]">
+            <section className="rounded-[1.85rem] border border-white/10 bg-white/[0.045] p-6 shadow-2xl shadow-black/25 backdrop-blur-xl">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.24em] text-teal-200/70">
                     Recent reports
                   </p>
                   <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">
-                    Continue where the work is warm.
+                    Continue the latest decisions.
                   </h2>
                 </div>
                 <Link
@@ -256,7 +317,7 @@ export default async function DashboardPage() {
                       <Link
                         key={report.id}
                         href={`/dashboard/${report.id}`}
-                        className="group flex flex-col gap-4 rounded-2xl border border-white/10 bg-black/25 p-4 transition hover:border-teal-300/25 hover:bg-white/[0.055] sm:flex-row sm:items-center"
+                        className="group flex flex-col gap-4 rounded-2xl border border-white/10 bg-black/25 p-4 transition duration-300 hover:-translate-y-0.5 hover:border-teal-300/25 hover:bg-white/[0.055] sm:flex-row sm:items-center"
                       >
                         <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04]">
                           <Icon className="h-5 w-5 text-teal-200" />
@@ -284,8 +345,8 @@ export default async function DashboardPage() {
               </div>
             </section>
 
-            <section className="grid gap-5">
-              <div className="rounded-[1.75rem] border border-white/10 bg-white/[0.045] p-6 shadow-2xl shadow-black/25 backdrop-blur-xl">
+            <section className="grid gap-5 lg:grid-cols-2 2xl:grid-cols-1">
+              <div className="rounded-[1.85rem] border border-white/10 bg-white/[0.045] p-6 shadow-2xl shadow-black/25 backdrop-blur-xl">
                 <div className="flex items-start gap-4">
                   <span className="flex h-12 w-12 items-center justify-center rounded-2xl border border-teal-300/20 bg-teal-300/10">
                     <WalletCards className="h-5 w-5 text-teal-200" />
@@ -295,7 +356,7 @@ export default async function DashboardPage() {
                       Subscription
                     </p>
                     <h2 className="mt-2 text-2xl font-semibold capitalize text-white">
-                      {planTier} plan
+                      {planLabel}
                     </h2>
                     <p className="mt-2 text-sm leading-6 text-zinc-500">
                       Billing is not connected yet. Your current limits are
@@ -303,9 +364,27 @@ export default async function DashboardPage() {
                     </p>
                   </div>
                 </div>
+                <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                      Usage state
+                    </p>
+                    <p className="mt-2 text-sm font-semibold text-white">
+                      {usage.error ? "Needs review" : "Healthy"}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                      Efficiency
+                    </p>
+                    <p className="mt-2 text-sm font-semibold text-white">
+                      {usageEfficiency}
+                    </p>
+                  </div>
+                </div>
               </div>
 
-              <div className="rounded-[1.75rem] border border-white/10 bg-white/[0.045] p-6 shadow-2xl shadow-black/25 backdrop-blur-xl">
+              <div className="rounded-[1.85rem] border border-white/10 bg-white/[0.045] p-6 shadow-2xl shadow-black/25 backdrop-blur-xl">
                 <div className="flex items-start gap-4">
                   <span className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04]">
                     <Settings className="h-5 w-5 text-teal-200" />
@@ -324,6 +403,13 @@ export default async function DashboardPage() {
                     </p>
                   </div>
                 </div>
+                <Link
+                  href="/dashboard/usage"
+                  className="mt-5 inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-medium text-zinc-200 transition duration-300 hover:-translate-y-0.5 hover:border-teal-300/25 hover:bg-white/[0.075]"
+                >
+                  <TrendingUp className="h-4 w-4 text-teal-200" />
+                  View usage details
+                </Link>
               </div>
             </section>
           </div>

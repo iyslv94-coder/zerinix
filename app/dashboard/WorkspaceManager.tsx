@@ -32,10 +32,25 @@ export default function WorkspaceManager({
   workspaces: DashboardWorkspace[];
 }) {
   return (
-    <>
+    <section id="workspaces" className="mt-8 scroll-mt-24">
+      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-teal-200/70">
+            Workspaces
+          </p>
+          <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">
+            Organize reports by venture, market or decision.
+          </h2>
+        </div>
+        <p className="max-w-md text-sm leading-6 text-zinc-500">
+          Each workspace keeps related reports together so strategy work stays
+          easy to scan and reopen.
+        </p>
+      </div>
+
       <form
         action={createWorkspace}
-        className="mt-8 rounded-[1.75rem] border border-white/10 bg-white/[0.045] p-4 shadow-2xl shadow-black/30 backdrop-blur-xl"
+        className="rounded-[1.85rem] border border-white/10 bg-white/[0.045] p-4 shadow-2xl shadow-black/30 backdrop-blur-xl"
       >
         <div className="flex flex-col gap-3 md:flex-row md:items-center">
           <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[1.1rem] border border-teal-300/20 bg-teal-300/10 shadow-lg shadow-teal-950/10">
@@ -45,11 +60,11 @@ export default function WorkspaceManager({
             name="name"
             required
             placeholder="New workspace name"
-            className="min-h-12 flex-1 rounded-2xl border border-white/10 bg-black/35 px-4 text-sm text-white outline-none transition duration-300 placeholder:text-zinc-600 focus:border-teal-300/40 focus:bg-black/50"
+            className="min-h-12 flex-1 rounded-2xl border border-white/10 bg-black/35 px-4 text-sm text-white outline-none transition duration-300 placeholder:text-zinc-600 focus:border-teal-300/40 focus:bg-black/50 focus:ring-2 focus:ring-teal-200/10"
           />
           <button
             type="submit"
-            className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-white px-5 text-sm font-semibold text-black shadow-xl shadow-white/10 transition duration-300 hover:-translate-y-0.5 hover:bg-zinc-200"
+            className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-white px-5 text-sm font-semibold text-black shadow-xl shadow-white/10 transition duration-300 hover:-translate-y-0.5 hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
           >
             <FolderPlus className="h-4 w-4" />
             Create Workspace
@@ -58,7 +73,7 @@ export default function WorkspaceManager({
       </form>
 
       {workspaces.length === 0 ? (
-        <section className="mt-6 rounded-[1.75rem] border border-white/10 bg-white/[0.04] p-10 text-center shadow-2xl shadow-black/30 backdrop-blur-xl">
+        <div className="mt-6 rounded-[1.85rem] border border-white/10 bg-white/[0.04] p-10 text-center shadow-2xl shadow-black/30 backdrop-blur-xl">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-[1.2rem] border border-teal-300/20 bg-teal-300/10">
             <Inbox className="h-6 w-6 text-teal-200" />
           </div>
@@ -73,7 +88,7 @@ export default function WorkspaceManager({
             segment or investment theme. Reports created in ZERINIX will stay
             organized here.
           </p>
-        </section>
+        </div>
       ) : null}
 
       <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -85,7 +100,7 @@ export default function WorkspaceManager({
           return (
             <article
               key={workspace.id}
-              className="group rounded-[1.75rem] border border-white/10 bg-white/[0.045] p-5 shadow-2xl shadow-black/30 backdrop-blur-xl transition duration-300 hover:-translate-y-1 hover:border-teal-300/20 hover:bg-white/[0.065]"
+              className="group rounded-[1.85rem] border border-white/10 bg-white/[0.045] p-5 shadow-2xl shadow-black/30 backdrop-blur-xl transition duration-300 hover:-translate-y-1 hover:border-teal-300/20 hover:bg-white/[0.065]"
             >
               <div className="flex items-start justify-between gap-4">
                 <div className="flex h-12 w-12 items-center justify-center rounded-[1.1rem] border border-white/10 bg-white/5 transition duration-300 group-hover:border-teal-300/25 group-hover:bg-teal-300/10">
@@ -120,7 +135,7 @@ export default function WorkspaceManager({
 
               <Link
                 href={`/dashboard/workspaces/${workspace.id}`}
-                className="mt-5 inline-flex items-center gap-2 rounded-xl border border-teal-300/15 bg-teal-300/[0.06] px-3 py-2 text-sm font-medium text-teal-100 transition duration-300 hover:-translate-y-0.5 hover:border-teal-300/30 hover:bg-teal-300/10"
+                className="mt-5 inline-flex items-center gap-2 rounded-xl border border-teal-300/15 bg-teal-300/[0.06] px-3 py-2 text-sm font-medium text-teal-100 transition duration-300 hover:-translate-y-0.5 hover:border-teal-300/30 hover:bg-teal-300/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200/30"
               >
                 <FileText className="h-4 w-4" />
                 Open workspace
@@ -137,11 +152,11 @@ export default function WorkspaceManager({
                     name="name"
                     defaultValue={workspace.name}
                     required
-                    className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black/35 px-3 py-2 text-sm text-zinc-200 outline-none transition duration-300 focus:border-teal-300/40"
+                    className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black/35 px-3 py-2 text-sm text-zinc-200 outline-none transition duration-300 focus:border-teal-300/40 focus:ring-2 focus:ring-teal-200/10"
                   />
                   <button
                     type="submit"
-                    className="inline-flex items-center justify-center rounded-xl border border-white/10 bg-white/5 px-3 text-zinc-200 transition duration-300 hover:-translate-y-0.5 hover:border-teal-300/25 hover:bg-white/10"
+                    className="inline-flex items-center justify-center rounded-xl border border-white/10 bg-white/5 px-3 text-zinc-200 transition duration-300 hover:-translate-y-0.5 hover:border-teal-300/25 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200/30"
                     aria-label="Rename workspace"
                   >
                     <Pencil className="h-4 w-4 text-teal-200" />
@@ -157,7 +172,7 @@ export default function WorkspaceManager({
                   <button
                     type="submit"
                     disabled={isDeleteDisabled}
-                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-zinc-300 transition duration-300 hover:-translate-y-0.5 hover:border-red-300/30 hover:bg-red-950/30 hover:text-white disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0"
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-zinc-300 transition duration-300 hover:-translate-y-0.5 hover:border-red-300/30 hover:bg-red-950/30 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-200/30 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0"
                   >
                     <Trash2 className="h-4 w-4 text-red-200" />
                     {isDeleteDisabled ? "Delete disabled while reports exist" : "Delete workspace"}
@@ -168,6 +183,6 @@ export default function WorkspaceManager({
           );
         })}
       </div>
-    </>
+    </section>
   );
 }

@@ -1,7 +1,9 @@
 import Link from "next/link";
 import {
   Activity,
+  Bot,
   ChevronRight,
+  Folder,
   LayoutDashboard,
   LogOut,
   Plus,
@@ -13,11 +15,13 @@ export default function DashboardSidebar() {
   const items = [
     { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
     { label: "New Report", href: "/plan", icon: Plus },
+    { label: "AI Chat", href: "/chat", icon: Bot },
+    { label: "Workspaces", href: "/dashboard#workspaces", icon: Folder },
     { label: "Usage", href: "/dashboard/usage", icon: Activity },
   ];
 
   return (
-    <aside className="flex border-b border-white/10 bg-black/80 px-4 py-4 shadow-2xl shadow-black/30 backdrop-blur-2xl lg:sticky lg:top-0 lg:min-h-screen lg:w-72 lg:flex-col lg:border-b-0 lg:border-r lg:border-white/10 lg:bg-black/65 lg:px-5 lg:py-6">
+    <aside className="flex border-b border-white/10 bg-black/85 px-4 py-4 shadow-2xl shadow-black/30 backdrop-blur-2xl lg:sticky lg:top-0 lg:min-h-screen lg:w-72 lg:flex-col lg:border-b-0 lg:border-r lg:border-white/10 lg:bg-black/70 lg:px-5 lg:py-6">
       <div className="hidden lg:block">
         <Link
           href="/"
@@ -44,7 +48,9 @@ export default function DashboardSidebar() {
             </div>
             <div>
               <p className="text-sm font-semibold text-white">Secure workspace</p>
-              <p className="mt-1 text-xs text-teal-100/65">Reports and AI history</p>
+              <p className="mt-1 text-xs text-teal-100/65">
+                Reports and AI history
+              </p>
             </div>
           </div>
         </div>
@@ -58,7 +64,7 @@ export default function DashboardSidebar() {
             <Link
               key={item.href}
               href={item.href}
-              className="group flex shrink-0 items-center gap-3 rounded-[1.15rem] border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-medium text-zinc-300 shadow-sm shadow-black/10 transition duration-300 hover:-translate-y-0.5 hover:border-teal-300/25 hover:bg-white/[0.065] hover:text-white lg:w-full"
+              className="group flex shrink-0 items-center gap-3 rounded-[1.15rem] border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-medium text-zinc-300 shadow-sm shadow-black/10 transition duration-300 hover:-translate-y-0.5 hover:border-teal-300/25 hover:bg-white/[0.065] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200/40 lg:w-full"
             >
               <span className="flex h-8 w-8 items-center justify-center rounded-xl border border-white/10 bg-black/25 transition duration-300 group-hover:border-teal-200/25 group-hover:bg-teal-200/10">
                 <Icon className="h-4 w-4 text-teal-200" />
@@ -73,7 +79,7 @@ export default function DashboardSidebar() {
       <form action={signOut} className="ml-2 lg:ml-0 lg:mt-6">
         <button
           type="submit"
-          className="flex items-center gap-3 rounded-[1.15rem] border border-white/10 bg-zinc-950/80 px-4 py-3 text-sm font-medium text-zinc-300 transition duration-300 hover:-translate-y-0.5 hover:border-red-300/30 hover:bg-red-950/30 hover:text-white lg:w-full"
+          className="flex items-center gap-3 rounded-[1.15rem] border border-white/10 bg-zinc-950/80 px-4 py-3 text-sm font-medium text-zinc-300 transition duration-300 hover:-translate-y-0.5 hover:border-red-300/30 hover:bg-red-950/30 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-200/30 lg:w-full"
         >
           <LogOut className="h-4 w-4 text-red-200" />
           Logout
