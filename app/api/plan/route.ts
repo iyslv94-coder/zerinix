@@ -331,35 +331,107 @@ function createFullReportJsonSchema(name: string, fields: readonly string[]) {
   };
 }
 
+const TEXT_LIKE_RESPONSE_FIELD_PATTERN =
+  /^(output_text|text|value|content|message|refusal|response|answer|summary|reply|markdown|body|description)$/i;
+
+const NON_CONTENT_RESPONSE_FIELD_PATTERN =
+  /^(id|object|type|status|role|model|created|created_at|updated_at|usage|metadata|annotations|finish_reason|index|incomplete_details)$/i;
+
+function extractTextFromValue(
+  value: unknown,
+  parentKey = "",
+  seen: WeakSet<object> = new WeakSet()
+): string {
+  if (typeof value === "string") {
+    return !parentKey || TEXT_LIKE_RESPONSE_FIELD_PATTERN.test(parentKey) ? value : "";
+  }
+
+  if (!value || typeof value !== "object") {
+    return "";
+  }
+
+  if (seen.has(value)) {
+    return "";
+  }
+
+  seen.add(value);
+
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => extractTextFromValue(item, parentKey, seen))
+      .filter(Boolean)
+      .join("");
+  }
+
+  const record = value as Record<string, unknown>;
+  const type = typeof record.type === "string" ? record.type : "";
+  const candidateKeys =
+    type === "output_text"
+      ? ["text", "value", "content", "message"]
+      : [
+          "output_text",
+          "text",
+          "value",
+          "content",
+          "message",
+          "refusal",
+          "response",
+          "answer",
+          "summary",
+        ];
+
+  for (const key of candidateKeys) {
+    const extracted = extractTextFromValue(record[key], key, seen);
+
+    if (extracted.trim()) {
+      return extracted;
+    }
+  }
+
+  for (const [key, item] of Object.entries(record)) {
+    if (candidateKeys.includes(key) || NON_CONTENT_RESPONSE_FIELD_PATTERN.test(key)) {
+      continue;
+    }
+
+    const extracted = extractTextFromValue(item, key, seen);
+
+    if (extracted.trim()) {
+      return extracted;
+    }
+  }
+
+  return "";
+}
+
 function extractResponseText(response: unknown) {
   if (!response || typeof response !== "object") {
     return "";
   }
 
-  const outputText = (response as { output_text?: unknown }).output_text;
+  const record = response as Record<string, unknown>;
+  const outputText = extractTextFromValue(record.output_text);
 
-  if (typeof outputText === "string") {
+  if (outputText.trim()) {
     return outputText;
   }
 
-  const output = (response as { output?: unknown }).output;
+  const output = extractTextFromValue(record.output);
 
-  if (!Array.isArray(output)) {
-    return "";
+  if (output.trim()) {
+    return output;
   }
 
-  return output
-    .flatMap((item) => {
-      const content = (item as { content?: unknown }).content;
+  const outputParsed = record.output_parsed;
 
-      return Array.isArray(content) ? content : [];
-    })
-    .map((part) => {
-      const text = (part as { text?: unknown }).text;
+  if (typeof outputParsed === "string") {
+    return outputParsed;
+  }
 
-      return typeof text === "string" ? text : "";
-    })
-    .join("");
+  if (outputParsed && typeof outputParsed === "object") {
+    return JSON.stringify(outputParsed);
+  }
+
+  return "";
 }
 
 function getOpenAiResponseStatusDetails(response: unknown) {

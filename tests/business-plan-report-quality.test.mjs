@@ -34,6 +34,13 @@ test("Business Plan sources require structured metadata without fake citations",
   assert.match(planRouteSource, /User-provided facts, AI assumptions, and Market-derived estimates/);
 });
 
+test("Business Plan route accepts structured Responses API parsed output", () => {
+  assert.match(planRouteSource, /function extractTextFromValue/);
+  assert.match(planRouteSource, /record\.output_parsed/);
+  assert.match(planRouteSource, /JSON\.stringify\(outputParsed\)/);
+  assert.match(planRouteSource, /type === "output_text"/);
+});
+
 test("PDF cover Business Idea does not render raw saved prompt text", () => {
   for (const source of [plannerSource, dashboardPdfSource]) {
     assert.match(source, /deriveBusinessDescriptionFromSections/);
