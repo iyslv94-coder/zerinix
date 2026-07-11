@@ -470,87 +470,6 @@ function getOpenAiResponseStatusDetails(response: unknown) {
   };
 }
 
-function summarizeOpenAiResponseShape(response: unknown) {
-  if (!response || typeof response !== "object") {
-    return {
-      type: typeof response,
-      status: "missing",
-    };
-  }
-
-  const record = response as Record<string, unknown>;
-  const output = Array.isArray(record.output) ? record.output : [];
-  const outputFirst = output[0];
-  const outputFirstRecord =
-    outputFirst && typeof outputFirst === "object"
-      ? (outputFirst as Record<string, unknown>)
-      : {};
-  const outputFirstContent = Array.isArray(outputFirstRecord.content)
-    ? outputFirstRecord.content
-    : [];
-  const outputParsed = record.output_parsed;
-
-  return {
-    status: typeof record.status === "string" ? record.status : null,
-    model: typeof record.model === "string" ? record.model : null,
-    hasOutputText:
-      typeof record.output_text === "string" && record.output_text.trim().length > 0,
-    outputTextLength:
-      typeof record.output_text === "string" ? record.output_text.length : null,
-    outputLength: output.length,
-    outputFirstType:
-      typeof outputFirstRecord.type === "string" ? outputFirstRecord.type : null,
-    outputFirstContentLength: outputFirstContent.length,
-    outputParsedType: Array.isArray(outputParsed)
-      ? "array"
-      : outputParsed === null
-        ? "null"
-        : typeof outputParsed,
-    outputParsedKeys:
-      outputParsed && typeof outputParsed === "object" && !Array.isArray(outputParsed)
-        ? Object.keys(outputParsed as Record<string, unknown>).slice(0, 50)
-        : [],
-    incompleteDetails:
-      record.incomplete_details &&
-      typeof record.incomplete_details === "object"
-        ? record.incomplete_details
-        : null,
-    error:
-      record.error && typeof record.error === "object" ? record.error : null,
-  };
-}
-
-function summarizeCaughtPlanError(error: unknown) {
-  if (!error || typeof error !== "object") {
-    return {
-      name: typeof error,
-      message: String(error || "Unknown error"),
-    };
-  }
-
-  const record = error as Record<string, unknown>;
-
-  return {
-    name: error instanceof Error ? error.name : record.name,
-    message: error instanceof Error ? error.message : record.message,
-    stack: error instanceof Error ? error.stack : record.stack,
-    status:
-      typeof record.status === "number" || typeof record.status === "string"
-        ? record.status
-        : null,
-    statusCode:
-      typeof record.statusCode === "number" || typeof record.statusCode === "string"
-        ? record.statusCode
-        : null,
-    code: typeof record.code === "string" ? record.code : null,
-    type: typeof record.type === "string" ? record.type : null,
-    param: typeof record.param === "string" ? record.param : null,
-    response: record.response ?? null,
-    body: record.body ?? null,
-    error: record.error ?? null,
-  };
-}
-
 function assertCompletedOpenAiResponse(response: unknown) {
   const details = getOpenAiResponseStatusDetails(response);
 
@@ -565,6 +484,39 @@ function assertCompletedOpenAiResponse(response: unknown) {
         .join(" ")
     );
   }
+}
+
+function createSourcesAssumptionsFallback(parsed: Record<string, unknown>) {
+  const financialAssumptions =
+    typeof parsed.financialAssumptions === "string"
+      ? sanitizeVisibleReportContent(parsed.financialAssumptions)
+      : "";
+  const tamSamSom =
+    typeof parsed.tamSamSom === "string"
+      ? sanitizeVisibleReportContent(parsed.tamSamSom)
+      : "";
+  const marketOpportunity =
+    typeof parsed.marketOpportunity === "string"
+      ? sanitizeVisibleReportContent(parsed.marketOpportunity)
+      : "";
+
+  return [
+    "Sources and Assumptions",
+    "",
+    "Verified external citations were not returned in a complete structured form for this report. No source URLs or publisher metadata have been fabricated.",
+    "",
+    "User-provided facts: The business context submitted by the user was treated as the planning input.",
+    financialAssumptions
+      ? `AI assumptions: ${financialAssumptions}`
+      : "AI assumptions: Financial estimates are model-derived and require validation with primary customer, pricing, and cost data.",
+    tamSamSom
+      ? `Market-derived estimates: ${tamSamSom}`
+      : marketOpportunity
+        ? `Market-derived estimates: ${marketOpportunity}`
+        : "Market-derived estimates: Market sizing and demand signals should be verified with current third-party data before investment decisions.",
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 function parseFullPlanReport(value: string): Record<PlanReportField, string> {
@@ -591,7 +543,11 @@ function parseFullPlanReport(value: string): Record<PlanReportField, string> {
   const failureFields: string[] = [];
 
   for (const field of planFields) {
-    const content = parsed[field];
+    const content =
+      field === "sourcesAssumptions" &&
+      (typeof parsed[field] !== "string" || !String(parsed[field]).trim())
+        ? createSourcesAssumptionsFallback(parsed)
+        : parsed[field];
 
     if (typeof content !== "string" || !content.trim()) {
       invalidFields.push(field);
@@ -1068,10 +1024,6 @@ Report quality rules:
         model,
       });
       const startedAt = Date.now();
-      let providerResponse: unknown = null;
-      let planGenerationStage = "before_provider_call";
-      let extractedOutputLength = 0;
-      let parsedFieldCount = 0;
 
       try {
         logOperationalInfo("[api:plan] provider call started", {
@@ -1089,7 +1041,6 @@ Report quality rules:
           mode: FULL_REPORT_FIELD,
           model,
         });
-        planGenerationStage = "provider_call";
         const response = await client.responses.create(
           {
             model,
@@ -1109,29 +1060,21 @@ Report quality rules:
           },
           { signal: req.signal }
         );
-        providerResponse = response;
-        planGenerationStage = "extract_token_usage";
         const tokenUsage = extractTokenUsage(response);
         const estimatedCostUsd = estimateAiCostUsd(model, tokenUsage);
         const responseTimeMs = Date.now() - startedAt;
-        planGenerationStage = "assert_completed_response";
         assertCompletedOpenAiResponse(response);
-        planGenerationStage = "extract_response_text";
         const responseText = extractResponseText(response);
-        extractedOutputLength = responseText.length;
         if (!responseText.trim()) {
           const details = getOpenAiResponseStatusDetails(response);
           throw new Error(
             `OpenAI response completed without output_text. status=${details.status} outputLength=0`
           );
         }
-        planGenerationStage = "parse_full_plan_report";
         const parsedReport = parseFullPlanReport(responseText);
-        parsedFieldCount = Object.keys(parsedReport).length;
         const cacheResponseText = JSON.stringify(parsedReport);
 
         if (!isReportGenerationFailureText(cacheResponseText)) {
-          planGenerationStage = "store_ai_cache";
           await storeCachedAiResponse(supabase, {
             userId: user.id,
             cacheKey: fullReportCacheKey,
@@ -1147,7 +1090,6 @@ Report quality rules:
           });
         }
 
-        planGenerationStage = "record_ai_usage";
         await recordAiUsage(supabase, {
           userId: user.id,
           endpoint: "/api/plan",
@@ -1171,7 +1113,6 @@ Report quality rules:
           },
         });
 
-        planGenerationStage = "return_report_stream";
         logOperationalInfo("[api:plan] provider call completed", {
           reportField: FULL_REPORT_FIELD,
           reportRequestId: reportRequestId || null,
@@ -1192,19 +1133,6 @@ Report quality rules:
         if (configurationError) {
           return NextResponse.json({ error: configurationError }, { status: 500 });
         }
-
-        console.error("[api:plan] TEMP full-report failure diagnostic", {
-          reportField: FULL_REPORT_FIELD,
-          reportRequestId: reportRequestId || null,
-          userId: user.id,
-          model,
-          stage: planGenerationStage,
-          elapsedMs: Date.now() - startedAt,
-          extractedOutputLength,
-          parsedFieldCount,
-          response: summarizeOpenAiResponseShape(providerResponse),
-          error: summarizeCaughtPlanError(error),
-        });
 
         await recordAiUsage(supabase, {
           userId: user.id,

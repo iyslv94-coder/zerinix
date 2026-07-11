@@ -41,6 +41,13 @@ test("Business Plan route accepts structured Responses API parsed output", () =>
   assert.match(planRouteSource, /type === "output_text"/);
 });
 
+test("Business Plan route repairs missing Sources / Assumptions without failing the report", () => {
+  assert.match(planRouteSource, /function createSourcesAssumptionsFallback/);
+  assert.match(planRouteSource, /Verified external citations were not returned/);
+  assert.match(planRouteSource, /field === "sourcesAssumptions"/);
+  assert.match(planRouteSource, /createSourcesAssumptionsFallback\(parsed\)/);
+});
+
 test("PDF cover Business Idea does not render raw saved prompt text", () => {
   for (const source of [plannerSource, dashboardPdfSource]) {
     assert.match(source, /deriveBusinessDescriptionFromSections/);
