@@ -2,12 +2,28 @@
 
 import { useEffect, useState } from "react";
 
+export type AdminAnimatedValueFormat = "integer" | "compactCurrency" | "nullableCompactCurrency";
+
+function formatAnimatedValue(value: number, format: AdminAnimatedValueFormat) {
+  if (format === "compactCurrency" || format === "nullableCompactCurrency") {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      maximumFractionDigits: value >= 100 ? 0 : 2,
+    }).format(value);
+  }
+
+  return Math.round(value).toLocaleString("en-US");
+}
+
 export function AdminAnimatedValue({
   value,
-  formatter,
+  format = "integer",
+  emptyLabel,
 }: {
   value: number;
-  formatter?: (value: number) => string;
+  format?: AdminAnimatedValueFormat;
+  emptyLabel?: string;
 }) {
   const [displayValue, setDisplayValue] = useState(0);
 
@@ -33,5 +49,9 @@ export function AdminAnimatedValue({
     return () => cancelAnimationFrame(frame);
   }, [value]);
 
-  return <>{formatter ? formatter(displayValue) : Math.round(displayValue).toLocaleString("en-US")}</>;
+  if (emptyLabel && value === 0) {
+    return <>{emptyLabel}</>;
+  }
+
+  return <>{formatAnimatedValue(displayValue, format)}</>;
 }

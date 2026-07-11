@@ -249,6 +249,9 @@ test("admin dashboard cards use animated counters and premium transitions", () =
   const counter = read("app/admin/AdminAnimatedValue.tsx");
 
   assert.match(dashboard, /AdminAnimatedValue/);
+  assert.doesNotMatch(dashboard, /formatter=\{/);
+  assert.doesNotMatch(counter, /formatter\?: \([^)]*=>/);
+  assert.match(counter, /AdminAnimatedValueFormat/);
   assert.match(dashboard, /hover:-translate-y-1/);
   assert.match(dashboard, /duration-300/);
   assert.match(dashboard, /shadow-\[0_20px_80px/);

@@ -15,7 +15,7 @@ import {
   Users,
   XCircle,
 } from "lucide-react";
-import { AdminAnimatedValue } from "./AdminAnimatedValue";
+import { AdminAnimatedValue, type AdminAnimatedValueFormat } from "./AdminAnimatedValue";
 import { AdminShell } from "./AdminShell";
 import { AdminSystemHealth } from "./AdminSystemHealth";
 import { loadAdminDashboardData, type AdminActivityItem } from "./admin-data";
@@ -198,7 +198,8 @@ function MetricCard({
   detail,
   icon: Icon,
   animatedValue,
-  valueFormatter,
+  valueFormat = "integer",
+  animatedEmptyLabel,
   trend,
 }: {
   label: string;
@@ -206,7 +207,8 @@ function MetricCard({
   detail: string;
   icon: typeof Users;
   animatedValue?: number;
-  valueFormatter?: (value: number) => string;
+  valueFormat?: AdminAnimatedValueFormat;
+  animatedEmptyLabel?: string;
   trend?: Trend;
 }) {
   const TrendIcon = trend?.direction === "down" ? TrendingDown : TrendingUp;
@@ -233,7 +235,11 @@ function MetricCard({
       </p>
       <p className="mt-2 text-3xl font-semibold tracking-tight text-white transition duration-300 group-hover:text-teal-50">
         {typeof animatedValue === "number" ? (
-          <AdminAnimatedValue value={animatedValue} formatter={valueFormatter} />
+          <AdminAnimatedValue
+            value={animatedValue}
+            format={valueFormat}
+            emptyLabel={animatedEmptyLabel}
+          />
         ) : (
           value
         )}
@@ -313,23 +319,23 @@ function ExecutiveOverview({
             {
               label: "New users today",
               value: newUsersToday,
-              formatter: (value: number) => formatNumber(Math.round(value)),
+              format: "integer" as const,
             },
             {
               label: "Reports today",
               value: reportsToday,
-              formatter: (value: number) => formatNumber(Math.round(value)),
+              format: "integer" as const,
             },
             {
               label: "AI cost today",
               value: aiCostToday ?? 0,
-              formatter: (value: number) =>
-                aiCostToday === null ? "Not configured" : formatCompactCurrency(value),
+              format: "compactCurrency" as const,
+              emptyLabel: aiCostToday === null ? "Not configured" : undefined,
             },
             {
               label: "Active alerts",
               value: activeAlerts,
-              formatter: (value: number) => formatNumber(Math.round(value)),
+              format: "integer" as const,
             },
           ].map((item) => (
             <div
@@ -340,7 +346,11 @@ function ExecutiveOverview({
                 {item.label}
               </p>
               <p className="mt-2 text-2xl font-semibold tracking-tight text-white">
-                <AdminAnimatedValue value={item.value} formatter={item.formatter} />
+                <AdminAnimatedValue
+                  value={item.value}
+                  format={item.format}
+                  emptyLabel={item.emptyLabel}
+                />
               </p>
             </div>
           ))}
@@ -402,7 +412,7 @@ export default async function AdminDashboardPage() {
       detail: "Supabase Auth users",
       icon: Users,
       animatedValue: data.totalUsers,
-      valueFormatter: (value: number) => formatNumber(Math.round(value)),
+      valueFormat: "integer" as const,
       trend: calculateTrend(data.charts.userGrowth, "Last 24h"),
     },
     {
@@ -411,7 +421,7 @@ export default async function AdminDashboardPage() {
       detail: "Users with at least one sign-in",
       icon: Activity,
       animatedValue: data.activeUsers,
-      valueFormatter: (value: number) => formatNumber(Math.round(value)),
+      valueFormat: "integer" as const,
       trend: calculateTrend(data.charts.activeUsers, "Last 24h"),
     },
     {
@@ -420,7 +430,7 @@ export default async function AdminDashboardPage() {
       detail: "Saved report records",
       icon: FileText,
       animatedValue: data.reportsGenerated,
-      valueFormatter: (value: number) => formatNumber(Math.round(value)),
+      valueFormat: "integer" as const,
       trend: calculateTrend(data.charts.reportsGenerated, "Last 24h"),
     },
     {
@@ -429,7 +439,7 @@ export default async function AdminDashboardPage() {
       detail: "Stored conversations",
       icon: Bot,
       animatedValue: data.aiConversations,
-      valueFormatter: (value: number) => formatNumber(Math.round(value)),
+      valueFormat: "integer" as const,
     },
     {
       label: "Total AI requests",
@@ -437,7 +447,7 @@ export default async function AdminDashboardPage() {
       detail: "Stored usage events",
       icon: Activity,
       animatedValue: data.usageSummary.totalRequests,
-      valueFormatter: (value: number) => formatNumber(Math.round(value)),
+      valueFormat: "integer" as const,
       trend: calculateTrend(data.charts.aiRequests, "Last 24h"),
     },
     {
@@ -446,7 +456,7 @@ export default async function AdminDashboardPage() {
       detail: "Prompt and completion tokens",
       icon: Bot,
       animatedValue: data.usageSummary.totalTokens,
-      valueFormatter: (value: number) => formatNumber(Math.round(value)),
+      valueFormat: "integer" as const,
       trend: calculateTrend(data.charts.tokenUsage),
     },
     {
@@ -461,7 +471,7 @@ export default async function AdminDashboardPage() {
       detail: "From stored usage records",
       icon: Activity,
       animatedValue: data.aiApiCost,
-      valueFormatter: formatCompactCurrency,
+      valueFormat: "compactCurrency" as const,
       trend: calculateTrend(data.charts.estimatedAiCost),
     },
   ];
