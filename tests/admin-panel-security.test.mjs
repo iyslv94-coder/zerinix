@@ -173,16 +173,23 @@ test("admin UI never renders passwords, tokens, card data, or secret values", ()
 test("admin health endpoint uses cached server-side status and no paid provider calls", () => {
   const route = read("app/api/admin/health/route.ts");
   const adminData = read("app/admin/admin-data.ts");
+  const systemHealth = read("app/admin/AdminSystemHealth.tsx");
 
   assert.match(route, /loadSystemStatus/);
   assert.match(adminData, /cachedHealth/);
   assert.match(adminData, /expiresAt: now \+ 30_000/);
   assert.match(adminData, /lastChecked/);
+  assert.match(adminData, /lastSuccessfulCheck/);
+  assert.match(adminData, /responseTimeMs/);
   assert.match(adminData, /ZERINIX API/);
   assert.match(adminData, /Cloudflare\/domain/);
   assert.match(adminData, /getStripeConfiguration/);
   assert.match(adminData, /getResendConfiguration/);
   assert.match(adminData, /Not configured/);
+  assert.match(systemHealth, /setInterval/);
+  assert.match(systemHealth, /60_000/);
+  assert.match(systemHealth, /\/api\/admin\/health/);
+  assert.match(systemHealth, /animate-ping/);
   assert.doesNotMatch(adminData, /createOpenAiClient|responses\.create|fetch\(/);
 });
 
@@ -204,6 +211,7 @@ test("admin global search is authorized, validated, grouped, and server-side", (
 
 test("admin dashboard includes revenue placeholders, cost controls, charts, and activity feed", () => {
   const dashboard = read("app/admin/page.tsx");
+  const charts = read("app/admin/AdminCharts.tsx");
   const adminData = read("app/admin/admin-data.ts");
 
   assert.match(dashboard, /ExecutiveOverview/);
@@ -217,8 +225,17 @@ test("admin dashboard includes revenue placeholders, cost controls, charts, and 
   assert.match(dashboard, /Executive financial overview/);
   assert.match(dashboard, /AI Cost Control/);
   assert.match(dashboard, /New users over time/);
-  assert.match(dashboard, /Estimated AI cost over time/);
+  assert.match(dashboard, /AI cost over time/);
+  assert.match(dashboard, /Awaiting Stripe/);
+  assert.match(dashboard, /dynamic\(/);
+  assert.match(dashboard, /calculateTrend/);
+  assert.match(dashboard, /Last 24h/);
   assert.match(dashboard, /Recent activity/);
+  assert.match(charts, /live analytics chart/);
+  assert.match(charts, /TrendPill/);
+  assert.match(charts, /No data available/);
+  assert.match(dashboard, /Revenue over time/);
+  assert.match(dashboard, /Awaiting Stripe/);
   assert.match(adminData, /buildRevenueOverview/);
   assert.match(adminData, /Stripe production billing is not configured/);
   assert.match(adminData, /calculateCostControl/);
@@ -236,6 +253,18 @@ test("admin dashboard cards use animated counters and premium transitions", () =
   assert.match(dashboard, /duration-300/);
   assert.match(dashboard, /shadow-\[0_20px_80px/);
   assert.match(counter, /requestAnimationFrame/);
+});
+
+test("admin recent activity uses icons, event colors, relative time, and record links", () => {
+  const dashboard = read("app/admin/page.tsx");
+
+  assert.match(dashboard, /activityPresentation/);
+  assert.match(dashboard, /UserPlus/);
+  assert.match(dashboard, /MessageSquare/);
+  assert.match(dashboard, /XCircle/);
+  assert.match(dashboard, /formatRelativeTime/);
+  assert.match(dashboard, /View related record/);
+  assert.match(dashboard, /hover:border-teal-300\/25/);
 });
 
 test("AI CEO is admin-only, rate-limited, audited, and prompt-injection resistant", () => {
@@ -262,10 +291,11 @@ test("AI CEO is admin-only, rate-limited, audited, and prompt-injection resistan
 test("admin loading and empty states are present for dynamic admin views", () => {
   const loading = read("app/admin/loading.tsx");
   const dashboard = read("app/admin/page.tsx");
+  const charts = read("app/admin/AdminCharts.tsx");
   const usersPage = read("app/admin/users/page.tsx");
 
   assert.match(loading, /animate-pulse/);
-  assert.match(dashboard, /No data available/);
+  assert.match(charts, /No data available/);
   assert.match(dashboard, /No activity has been recorded yet/);
   assert.match(usersPage, /No users match this search/);
 });

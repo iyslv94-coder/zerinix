@@ -68,6 +68,8 @@ export type AdminSystemStatus = {
   status: "Operational" | "Degraded" | "Down" | "Not configured" | "Unknown";
   detail: string;
   lastChecked: string;
+  lastSuccessfulCheck: string | null;
+  responseTimeMs: number | null;
 };
 
 export type AdminActivityItem = {
@@ -831,16 +833,20 @@ export async function loadSystemStatus() {
 
   const serviceClient = createServiceRoleClient();
   const lastChecked = new Date().toISOString();
+  const supabaseStartedAt = Date.now();
   const { error } = await serviceClient
     .from("ai_usage_events")
     .select("id", { count: "exact", head: true })
     .limit(1);
+  const supabaseResponseTimeMs = Date.now() - supabaseStartedAt;
+  const usageStartedAt = Date.now();
   const { data: recentUsage } = await serviceClient
     .from("ai_usage_events")
     .select("status,created_at")
     .gte("created_at", toIso(startOfUtcDay(-1)))
     .order("created_at", { ascending: false })
     .limit(100);
+  const usageResponseTimeMs = Date.now() - usageStartedAt;
   const recentAiFailures = (recentUsage || []).filter(
     (row) => readString(row.status).toLowerCase() === "failed"
   ).length;
@@ -851,18 +857,22 @@ export async function loadSystemStatus() {
   const stripe = getStripeConfiguration();
   const resend = getResendConfiguration();
 
-  const data = [
+  const data: AdminSystemStatus[] = [
     {
       label: "ZERINIX API",
       status: "Operational" as const,
       detail: "Admin server rendered successfully",
       lastChecked,
+      lastSuccessfulCheck: lastChecked,
+      responseTimeMs: 0,
     },
     {
       label: "Supabase",
       status: error ? ("Degraded" as const) : ("Operational" as const),
       detail: error ? "Database query failed" : "Database reachable",
       lastChecked,
+      lastSuccessfulCheck: error ? null : lastChecked,
+      responseTimeMs: supabaseResponseTimeMs,
     },
     {
       label: "OpenAI",
@@ -871,30 +881,40 @@ export async function loadSystemStatus() {
         ? "Inferred from configuration and recent stored AI usage"
         : "OpenAI credentials are not configured",
       lastChecked,
+      lastSuccessfulCheck: openAiStatus === "Operational" ? lastChecked : null,
+      responseTimeMs: openAiConfigured ? usageResponseTimeMs : null,
     },
     {
       label: "Vercel application",
       status: process.env.VERCEL ? ("Operational" as const) : ("Unknown" as const),
       detail: process.env.VERCEL ? "Running in Vercel environment" : "Deployment metadata unavailable",
       lastChecked,
+      lastSuccessfulCheck: process.env.VERCEL ? lastChecked : null,
+      responseTimeMs: null,
     },
     {
       label: "Cloudflare/domain",
       status: "Unknown" as const,
       detail: "No safe server-side domain probe is configured",
       lastChecked,
+      lastSuccessfulCheck: null,
+      responseTimeMs: null,
     },
     {
       label: "Stripe",
       status: stripe.configured && stripe.enabled ? ("Operational" as const) : ("Not configured" as const),
       detail: stripe.configured && stripe.enabled ? "Stripe configuration is present" : "Stripe production credentials are absent or disabled",
       lastChecked,
+      lastSuccessfulCheck: stripe.configured && stripe.enabled ? lastChecked : null,
+      responseTimeMs: null,
     },
     {
       label: "Resend",
       status: resend.configured && resend.enabled ? ("Operational" as const) : ("Not configured" as const),
       detail: resend.configured && resend.enabled ? "Resend configuration is present" : "Resend production credentials are absent or disabled",
       lastChecked,
+      lastSuccessfulCheck: resend.configured && resend.enabled ? lastChecked : null,
+      responseTimeMs: null,
     },
   ];
 

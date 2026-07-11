@@ -1,17 +1,46 @@
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import {
   Activity,
   AlertTriangle,
   Bot,
   DollarSign,
   FileText,
-  RefreshCw,
+  MessageSquare,
+  ShieldCheck,
   Sparkles,
+  TrendingDown,
+  TrendingUp,
+  UserPlus,
   Users,
+  XCircle,
 } from "lucide-react";
 import { AdminAnimatedValue } from "./AdminAnimatedValue";
 import { AdminShell } from "./AdminShell";
-import { loadAdminDashboardData } from "./admin-data";
+import { AdminSystemHealth } from "./AdminSystemHealth";
+import { loadAdminDashboardData, type AdminActivityItem } from "./admin-data";
+
+const AdminCharts = dynamic(
+  () => import("./AdminCharts").then((mod) => mod.AdminCharts),
+  {
+    loading: () => (
+      <div className="grid gap-5 md:grid-cols-2 2xl:grid-cols-3">
+        {Array.from({ length: 6 }).map((_, index) => (
+          <div
+            key={`admin-chart-loading:${index}`}
+            className="h-64 animate-pulse rounded-[1.4rem] border border-white/10 bg-white/[0.045]"
+          />
+        ))}
+      </div>
+    ),
+  }
+);
+
+type Trend = {
+  direction: "up" | "down" | "flat";
+  label: string;
+  period: "Last 24h" | "Last 7d";
+};
 
 function formatNumber(value: number) {
   return new Intl.NumberFormat("en-US").format(value);
@@ -57,6 +86,112 @@ function formatDate(value: string) {
   }).format(new Date(value));
 }
 
+function formatRelativeTime(value: string) {
+  const timestamp = new Date(value).getTime();
+
+  if (!Number.isFinite(timestamp)) {
+    return "Unknown time";
+  }
+
+  const seconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1000));
+
+  if (seconds < 60) {
+    return "Just now";
+  }
+
+  const minutes = Math.floor(seconds / 60);
+
+  if (minutes < 60) {
+    return `${minutes}m ago`;
+  }
+
+  const hours = Math.floor(minutes / 60);
+
+  if (hours < 24) {
+    return `${hours}h ago`;
+  }
+
+  const days = Math.floor(hours / 24);
+
+  return `${days}d ago`;
+}
+
+function calculateTrend(
+  series: Array<{ label: string; value: number }>,
+  period: Trend["period"] = "Last 7d"
+): Trend {
+  const current = series.at(-1)?.value ?? 0;
+  const previous = series.at(-2)?.value ?? 0;
+
+  if (previous === 0 && current === 0) {
+    return { direction: "flat", label: "0%", period };
+  }
+
+  if (previous === 0) {
+    return { direction: "up", label: "+100%", period };
+  }
+
+  const change = ((current - previous) / previous) * 100;
+
+  return {
+    direction: change < 0 ? "down" : change > 0 ? "up" : "flat",
+    label: `${change >= 0 ? "+" : ""}${change.toFixed(0)}%`,
+    period,
+  };
+}
+
+function trendClass(direction: Trend["direction"]) {
+  if (direction === "down") {
+    return "border-red-300/20 bg-red-950/20 text-red-100";
+  }
+
+  if (direction === "up") {
+    return "border-teal-300/20 bg-teal-300/10 text-teal-100";
+  }
+
+  return "border-white/10 bg-white/[0.04] text-zinc-400";
+}
+
+function activityPresentation(item: AdminActivityItem) {
+  if (item.label.includes("registered")) {
+    return {
+      Icon: UserPlus,
+      type: "User",
+      className: "border-teal-300/20 bg-teal-300/10 text-teal-100",
+    };
+  }
+
+  if (item.label.includes("Report")) {
+    return {
+      Icon: FileText,
+      type: "Report",
+      className: "border-sky-300/20 bg-sky-950/20 text-sky-100",
+    };
+  }
+
+  if (item.label.includes("conversation")) {
+    return {
+      Icon: MessageSquare,
+      type: "AI",
+      className: "border-violet-300/20 bg-violet-950/20 text-violet-100",
+    };
+  }
+
+  if (item.label.includes("failed")) {
+    return {
+      Icon: XCircle,
+      type: "Error",
+      className: "border-red-300/20 bg-red-950/20 text-red-100",
+    };
+  }
+
+  return {
+    Icon: ShieldCheck,
+    type: "Audit",
+    className: "border-amber-300/20 bg-amber-950/20 text-amber-100",
+  };
+}
+
 function MetricCard({
   label,
   value,
@@ -64,6 +199,7 @@ function MetricCard({
   icon: Icon,
   animatedValue,
   valueFormatter,
+  trend,
 }: {
   label: string;
   value: string;
@@ -71,16 +207,26 @@ function MetricCard({
   icon: typeof Users;
   animatedValue?: number;
   valueFormatter?: (value: number) => string;
+  trend?: Trend;
 }) {
+  const TrendIcon = trend?.direction === "down" ? TrendingDown : TrendingUp;
+
   return (
     <article className="group rounded-[1.4rem] border border-white/10 bg-white/[0.045] p-5 shadow-[0_20px_80px_rgba(0,0,0,0.28)] backdrop-blur-xl transition duration-300 ease-out hover:-translate-y-1 hover:border-teal-300/25 hover:bg-white/[0.07] hover:shadow-[0_28px_100px_rgba(20,184,166,0.12)]">
       <div className="flex items-center justify-between gap-4">
         <span className="flex h-10 w-10 items-center justify-center rounded-2xl border border-teal-300/20 bg-teal-300/10 transition duration-300 group-hover:scale-105 group-hover:border-teal-200/35">
           <Icon className="h-5 w-5 text-teal-200" />
         </span>
-        <span className="rounded-full border border-white/10 bg-black/25 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
-          Live
-        </span>
+        {trend ? (
+          <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-semibold ${trendClass(trend.direction)}`}>
+            <TrendIcon className="h-3.5 w-3.5" />
+            {trend.label}
+          </span>
+        ) : (
+          <span className="rounded-full border border-white/10 bg-black/25 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
+            Live
+          </span>
+        )}
       </div>
       <p className="mt-5 text-[11px] font-semibold uppercase tracking-[0.22em] text-zinc-500">
         {label}
@@ -93,6 +239,9 @@ function MetricCard({
         )}
       </p>
       <p className="mt-2 text-sm leading-5 text-zinc-500">{detail}</p>
+      {trend ? (
+        <p className="mt-3 text-xs font-medium text-zinc-600">{trend.period}</p>
+      ) : null}
     </article>
   );
 }
@@ -239,58 +388,6 @@ function Distribution({
   );
 }
 
-function MiniChart({
-  title,
-  data,
-  valuePrefix = "",
-}: {
-  title: string;
-  data: Array<{ label: string; value: number }>;
-  valuePrefix?: string;
-}) {
-  const max = Math.max(1, ...data.map((item) => item.value));
-
-  return (
-    <div className="rounded-[1.4rem] border border-white/10 bg-white/[0.045] p-5 shadow-[0_20px_80px_rgba(0,0,0,0.26)] backdrop-blur-xl transition duration-300 hover:border-teal-300/20 hover:bg-white/[0.06]">
-      <h2 className="text-sm font-semibold text-white">{title}</h2>
-      {data.length ? (
-        <div className="mt-5 flex h-36 items-end gap-2" aria-label={`${title} chart`}>
-          {data.map((item) => (
-            <div key={`${title}:${item.label}`} className="flex flex-1 flex-col items-center gap-2">
-              <div
-                className="w-full rounded-t-xl bg-teal-300/80 transition hover:bg-teal-200"
-                style={{ height: `${Math.max(8, (item.value / max) * 100)}%` }}
-                title={`${item.label}: ${valuePrefix}${formatNumber(Math.round(item.value))}`}
-              />
-              <span className="text-[10px] text-zinc-600">{item.label}</span>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <p className="mt-5 rounded-2xl border border-white/10 bg-black/25 p-4 text-sm text-zinc-500">
-          No data available
-        </p>
-      )}
-    </div>
-  );
-}
-
-function statusClass(status: string) {
-  if (status === "Operational") {
-    return "border-teal-300/20 bg-teal-300/10 text-teal-100";
-  }
-
-  if (status === "Degraded" || status === "Unknown") {
-    return "border-amber-300/20 bg-amber-950/20 text-amber-100";
-  }
-
-  if (status === "Down") {
-    return "border-red-300/20 bg-red-950/20 text-red-100";
-  }
-
-  return "border-white/10 bg-white/[0.04] text-zinc-400";
-}
-
 export default async function AdminDashboardPage() {
   const data = await loadAdminDashboardData();
   const lastUserGrowthPoint = data.charts.userGrowth.at(-1);
@@ -306,6 +403,7 @@ export default async function AdminDashboardPage() {
       icon: Users,
       animatedValue: data.totalUsers,
       valueFormatter: (value: number) => formatNumber(Math.round(value)),
+      trend: calculateTrend(data.charts.userGrowth, "Last 24h"),
     },
     {
       label: "Active users",
@@ -314,6 +412,7 @@ export default async function AdminDashboardPage() {
       icon: Activity,
       animatedValue: data.activeUsers,
       valueFormatter: (value: number) => formatNumber(Math.round(value)),
+      trend: calculateTrend(data.charts.activeUsers, "Last 24h"),
     },
     {
       label: "Reports generated",
@@ -322,6 +421,7 @@ export default async function AdminDashboardPage() {
       icon: FileText,
       animatedValue: data.reportsGenerated,
       valueFormatter: (value: number) => formatNumber(Math.round(value)),
+      trend: calculateTrend(data.charts.reportsGenerated, "Last 24h"),
     },
     {
       label: "AI conversations",
@@ -338,6 +438,7 @@ export default async function AdminDashboardPage() {
       icon: Activity,
       animatedValue: data.usageSummary.totalRequests,
       valueFormatter: (value: number) => formatNumber(Math.round(value)),
+      trend: calculateTrend(data.charts.aiRequests, "Last 24h"),
     },
     {
       label: "Token usage",
@@ -346,6 +447,7 @@ export default async function AdminDashboardPage() {
       icon: Bot,
       animatedValue: data.usageSummary.totalTokens,
       valueFormatter: (value: number) => formatNumber(Math.round(value)),
+      trend: calculateTrend(data.charts.tokenUsage),
     },
     {
       label: "Monthly recurring revenue",
@@ -360,6 +462,21 @@ export default async function AdminDashboardPage() {
       icon: Activity,
       animatedValue: data.aiApiCost,
       valueFormatter: formatCompactCurrency,
+      trend: calculateTrend(data.charts.estimatedAiCost),
+    },
+  ];
+  const chartConfigs = [
+    { title: "New users over time", data: data.charts.userGrowth },
+    { title: "Active users over time", data: data.charts.activeUsers },
+    { title: "Reports generated over time", data: data.charts.reportsGenerated },
+    { title: "AI requests over time", data: data.charts.aiRequests },
+    { title: "Token usage over time", data: data.charts.tokenUsage },
+    { title: "AI cost over time", data: data.charts.estimatedAiCost, valuePrefix: "$" },
+    {
+      title: "Revenue over time",
+      data: data.charts.revenue,
+      valuePrefix: "$",
+      unavailableLabel: "Awaiting Stripe",
     },
   ];
 
@@ -377,37 +494,7 @@ export default async function AdminDashboardPage() {
         activeAlerts={activeAlerts}
       />
 
-      <div className="mt-5 rounded-[1.5rem] border border-white/10 bg-white/[0.045] p-5 shadow-[0_20px_80px_rgba(0,0,0,0.25)] backdrop-blur-xl">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-white">System Health</h2>
-            <p className="mt-1 text-sm text-zinc-500">
-              Lightweight server-side checks with no secret exposure or paid provider calls.
-            </p>
-          </div>
-          <Link
-            href="/admin"
-            className="inline-flex h-10 items-center gap-2 rounded-2xl border border-white/10 bg-black/25 px-4 text-sm text-zinc-300 transition hover:border-teal-300/30 hover:text-white"
-          >
-            <RefreshCw className="h-4 w-4" />
-            Refresh
-          </Link>
-        </div>
-        <div className="mt-5 grid gap-3 md:grid-cols-2 2xl:grid-cols-4">
-          {data.systemStatus.map((item) => (
-            <div key={item.label} className="rounded-2xl border border-white/10 bg-black/25 p-4">
-              <div className="flex items-start justify-between gap-4">
-                <p className="font-medium text-white">{item.label}</p>
-                <span className={`rounded-full border px-2.5 py-1 text-xs ${statusClass(item.status)}`}>
-                  {item.status}
-                </span>
-              </div>
-              <p className="mt-2 text-sm leading-5 text-zinc-500">{item.detail}</p>
-              <p className="mt-3 text-xs text-zinc-600">Last checked {formatDate(item.lastChecked)}</p>
-            </div>
-          ))}
-        </div>
-      </div>
+      <AdminSystemHealth initialStatuses={data.systemStatus} />
 
       <div className="mt-5 grid gap-4 md:grid-cols-2 2xl:grid-cols-4">
         {cards.map((card) => (
@@ -477,14 +564,8 @@ export default async function AdminDashboardPage() {
         <Distribution title="Subscription plan distribution" data={data.planDistribution} />
       </div>
 
-      <div className="mt-5 grid gap-5 md:grid-cols-2 2xl:grid-cols-3">
-        <MiniChart title="New users over time" data={data.charts.userGrowth} />
-        <MiniChart title="Active users over time" data={data.charts.activeUsers} />
-        <MiniChart title="Reports generated over time" data={data.charts.reportsGenerated} />
-        <MiniChart title="AI requests over time" data={data.charts.aiRequests} />
-        <MiniChart title="Token usage over time" data={data.charts.tokenUsage} />
-        <MiniChart title="Estimated AI cost over time" data={data.charts.estimatedAiCost} valuePrefix="$" />
-        <MiniChart title="Revenue over time" data={data.charts.revenue} valuePrefix="$" />
+      <div className="mt-5">
+        <AdminCharts charts={chartConfigs} />
       </div>
 
       <div className="mt-5 grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
@@ -555,17 +636,50 @@ export default async function AdminDashboardPage() {
             </div>
             <div className="mt-4 space-y-3">
               {data.recentActivity.length ? (
-                data.recentActivity.map((item) => (
-                  <div key={item.id} className="rounded-2xl border border-white/10 bg-black/25 p-4 text-sm">
-                    <p className="font-medium text-white">{item.label}</p>
-                    <p className="mt-1 text-zinc-500">{item.detail} · {formatDate(item.createdAt)}</p>
-                    {item.href ? (
-                      <Link href={item.href} className="mt-2 inline-flex text-xs font-medium text-teal-100">
-                        View related record
-                      </Link>
-                    ) : null}
-                  </div>
-                ))
+                data.recentActivity.map((item) => {
+                  const activity = activityPresentation(item);
+                  const Icon = activity.Icon;
+                  const content = (
+                    <>
+                      <div className="flex items-start gap-3">
+                        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border ${activity.className}`}>
+                          <Icon className="h-4 w-4" />
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="font-medium text-white">{item.label}</p>
+                            <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] ${activity.className}`}>
+                              {activity.type}
+                            </span>
+                          </div>
+                          <p className="mt-1 line-clamp-2 text-zinc-500">{item.detail}</p>
+                          <p className="mt-2 text-xs text-zinc-600">
+                            {formatRelativeTime(item.createdAt)} · {formatDate(item.createdAt)}
+                          </p>
+                        </div>
+                      </div>
+                      {item.href ? (
+                        <span className="mt-3 inline-flex text-xs font-medium text-teal-100">
+                          View related record
+                        </span>
+                      ) : null}
+                    </>
+                  );
+
+                  return item.href ? (
+                    <Link
+                      key={item.id}
+                      href={item.href}
+                      className="block rounded-2xl border border-white/10 bg-black/25 p-4 text-sm transition duration-300 hover:border-teal-300/25 hover:bg-white/[0.05]"
+                    >
+                      {content}
+                    </Link>
+                  ) : (
+                    <div key={item.id} className="rounded-2xl border border-white/10 bg-black/25 p-4 text-sm">
+                      {content}
+                    </div>
+                  );
+                })
               ) : (
                 <p className="rounded-2xl border border-white/10 bg-black/25 p-4 text-sm text-zinc-500">
                   No activity has been recorded yet.
