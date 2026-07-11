@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { ArrowLeft, Plus } from "lucide-react";
+import { ArrowLeft, BarChart3, FileText, FolderOpen, Plus } from "lucide-react";
 import { createClient } from "@/app/lib/supabase/server";
 import DashboardSidebar from "../../DashboardSidebar";
 import ReportManager from "../../ReportManager";
@@ -27,6 +27,38 @@ export default async function WorkspaceReportsPage({
     notFound();
   }
 
+  const completedReports = data.reports.filter(
+    (report) => report.status.toLowerCase() === "completed"
+  ).length;
+  const marketReports = data.reports.filter(
+    (report) => report.type === "Market Analysis"
+  ).length;
+  const businessReports = data.reports.filter(
+    (report) => report.type === "Business Plan"
+  ).length;
+  const workspaceStats = [
+    {
+      label: "Total Reports",
+      value: data.reports.length,
+      icon: FolderOpen,
+    },
+    {
+      label: "Completed",
+      value: completedReports,
+      icon: FileText,
+    },
+    {
+      label: "Market Analysis",
+      value: marketReports,
+      icon: BarChart3,
+    },
+    {
+      label: "Business Plans",
+      value: businessReports,
+      icon: FileText,
+    },
+  ];
+
   return (
     <main className="relative min-h-screen overflow-hidden bg-black text-white">
       <div className="pointer-events-none absolute inset-0 z-0 bg-[radial-gradient(circle_at_top_right,rgba(45,212,191,0.12),transparent_32%),radial-gradient(circle_at_bottom_left,rgba(255,255,255,0.055),transparent_26%)]" />
@@ -37,6 +69,15 @@ export default async function WorkspaceReportsPage({
           <div className="overflow-hidden rounded-[2.25rem] border border-white/10 bg-white/[0.045] p-6 shadow-2xl shadow-black/35 backdrop-blur-2xl sm:p-8 lg:p-10">
             <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
               <div>
+                <div className="mb-4 flex flex-wrap items-center gap-2 text-sm text-zinc-500">
+                  <Link href="/dashboard" className="transition hover:text-white">
+                    Dashboard
+                  </Link>
+                  <span>/</span>
+                  <span className="text-zinc-300">Workspaces</span>
+                  <span>/</span>
+                  <span className="text-zinc-300">{data.workspace.name}</span>
+                </div>
                 <Link
                   href="/dashboard"
                   className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.035] px-3 py-2 text-sm font-medium text-zinc-400 transition duration-300 hover:-translate-y-0.5 hover:border-teal-300/25 hover:text-white"
@@ -63,6 +104,29 @@ export default async function WorkspaceReportsPage({
                 Create New Report
               </Link>
             </div>
+
+            <div className="mt-8 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              {workspaceStats.map((stat) => {
+                const Icon = stat.icon;
+
+                return (
+                  <div
+                    key={stat.label}
+                    className="rounded-2xl border border-white/10 bg-black/25 p-4"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                        {stat.label}
+                      </p>
+                      <Icon className="h-4 w-4 text-teal-200" />
+                    </div>
+                    <p className="mt-3 text-3xl font-semibold tracking-tight text-white">
+                      {stat.value}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
           </div>
 
           {data.error ? (
@@ -71,7 +135,11 @@ export default async function WorkspaceReportsPage({
             </div>
           ) : null}
 
-          <ReportManager reports={data.reports} />
+          <ReportManager
+            reports={data.reports}
+            workspaceId={data.workspace.id}
+            workspaceName={data.workspace.name}
+          />
         </section>
       </div>
     </main>

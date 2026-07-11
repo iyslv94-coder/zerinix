@@ -1,10 +1,15 @@
+"use client";
+
 import Link from "next/link";
+import { useMemo, useState } from "react";
 import {
+  ArrowDownUp,
   FileText,
   Folder,
   FolderPlus,
   Inbox,
   Pencil,
+  Search,
   Trash2,
 } from "lucide-react";
 import type { DashboardWorkspace } from "./report-utils";
@@ -31,6 +36,30 @@ export default function WorkspaceManager({
 }: {
   workspaces: DashboardWorkspace[];
 }) {
+  const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<"recent" | "name" | "reports">("recent");
+  const filteredWorkspaces = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+
+    return workspaces
+      .filter((workspace) =>
+        normalizedQuery
+          ? workspace.name.toLowerCase().includes(normalizedQuery)
+          : true
+      )
+      .sort((a, b) => {
+        if (sort === "name") {
+          return a.name.localeCompare(b.name);
+        }
+
+        if (sort === "reports") {
+          return b.reportCount - a.reportCount || a.name.localeCompare(b.name);
+        }
+
+        return (b.updatedAt || b.createdAt).localeCompare(a.updatedAt || a.createdAt);
+      });
+  }, [query, sort, workspaces]);
+
   return (
     <section id="workspaces" className="mt-8 scroll-mt-24">
       <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -72,6 +101,34 @@ export default function WorkspaceManager({
         </div>
       </form>
 
+      {workspaces.length > 0 ? (
+        <div className="mt-6 grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-teal-200" />
+            <input
+              type="search"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search workspaces..."
+              className="w-full rounded-[1.35rem] border border-white/10 bg-white/[0.045] py-4 pl-12 pr-4 text-sm text-white outline-none shadow-2xl shadow-black/25 backdrop-blur-xl transition duration-300 placeholder:text-zinc-600 focus:border-teal-300/40 focus:bg-white/[0.065]"
+            />
+          </div>
+          <label className="flex items-center gap-2 rounded-[1.35rem] border border-white/10 bg-white/[0.045] px-4 text-sm text-zinc-400 shadow-2xl shadow-black/25 backdrop-blur-xl">
+            <ArrowDownUp className="h-4 w-4 text-teal-200" />
+            <span className="sr-only">Sort workspaces</span>
+            <select
+              value={sort}
+              onChange={(event) => setSort(event.target.value as typeof sort)}
+              className="min-h-12 bg-transparent text-sm text-zinc-200 outline-none"
+            >
+              <option value="recent">Recently updated</option>
+              <option value="name">Name A-Z</option>
+              <option value="reports">Most reports</option>
+            </select>
+          </label>
+        </div>
+      ) : null}
+
       {workspaces.length === 0 ? (
         <div className="mt-6 rounded-[1.85rem] border border-white/10 bg-white/[0.04] p-10 text-center shadow-2xl shadow-black/30 backdrop-blur-xl">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-[1.2rem] border border-teal-300/20 bg-teal-300/10">
@@ -92,7 +149,7 @@ export default function WorkspaceManager({
       ) : null}
 
       <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {workspaces.map((workspace) => {
+        {filteredWorkspaces.map((workspace) => {
           const isDeleteDisabled = workspace.reportCount > 0;
           const statusLabel = workspace.reportCount > 0 ? "Active" : "Ready";
           const activityDate = workspace.updatedAt || workspace.createdAt;
@@ -183,6 +240,20 @@ export default function WorkspaceManager({
           );
         })}
       </div>
+
+      {workspaces.length > 0 && filteredWorkspaces.length === 0 ? (
+        <div className="mt-6 rounded-[1.85rem] border border-white/10 bg-white/[0.04] p-10 text-center shadow-2xl shadow-black/30 backdrop-blur-xl">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-[1.2rem] border border-teal-300/20 bg-teal-300/10">
+            <Search className="h-6 w-6 text-teal-200" />
+          </div>
+          <h2 className="mt-5 text-2xl font-semibold tracking-tight text-white">
+            No workspaces found
+          </h2>
+          <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-zinc-500">
+            Try another name or clear the search field to see every workspace.
+          </p>
+        </div>
+      ) : null}
     </section>
   );
 }
