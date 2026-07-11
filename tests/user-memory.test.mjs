@@ -25,8 +25,8 @@ test("memory extraction only reacts to explicit durable-memory phrases", () => {
   assert.match(helperSource, /extractExplicitMemoryOperations/);
   assert.match(helperSource, /my name is/);
   assert.match(helperSource, /my company is/);
-  assert.match(helperSource, /remember this/);
-  assert.match(helperSource, /forget this/);
+  assert.match(helperSource, /remember \(\?:this\|that\|it\)/);
+  assert.match(helperSource, /forget \(\?:this\|that\|it\)/);
   assert.match(helperSource, /always/);
   assert.match(helperSource, /MAX_MEMORY_CONTENT_LENGTH/);
   assert.match(helperSource, /UserMemoryApplyResult/);
@@ -34,6 +34,8 @@ test("memory extraction only reacts to explicit durable-memory phrases", () => {
   assert.match(helperSource, /loadUserMemoriesForUser/);
   assert.match(helperSource, /USER_METADATA_MEMORY_KEY/);
   assert.match(helperSource, /isMissingUserMemoriesTableError/);
+  assert.match(helperSource, /singletonMemoryTypes/);
+  assert.match(helperSource, /\.update\(\{\s*content: operation\.content,\s*source: "explicit"/s);
 });
 
 test("AI Chat loads, updates, and injects persistent user memories", () => {
@@ -47,6 +49,8 @@ test("AI Chat loads, updates, and injects persistent user memories", () => {
   assert.match(chatRouteSource, /persistent memory loaded/);
   assert.match(chatRouteSource, /memoryApplyResult\.failed > 0/);
   assert.match(chatRouteSource, /memoryApplyResult\.fallbackMemories/);
+  assert.match(chatRouteSource, /memoryApplyResult\.storage !== "table"/);
+  assert.match(chatRouteSource, /I've saved your name as \$\{savedName\}/);
   assert.match(chatRouteSource, /user_memory_used/);
   assert.match(chatRouteSource, /memory_operation_count/);
 });

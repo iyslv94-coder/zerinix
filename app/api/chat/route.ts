@@ -997,7 +997,7 @@ export async function POST(req: Request) {
 
     if (memoryApplyResult.failed > 0) {
       return textStream(
-        "I could not update persistent memory right now. Please try again after the memory database migration is applied."
+        "I could not save that to persistent memory because the memory database write failed. Please try again later."
       );
     }
 
@@ -1017,6 +1017,30 @@ export async function POST(req: Request) {
       hasRememberedName: Boolean(rememberedName),
       storage: memoryApplyResult.storage,
     });
+
+    if (memoryOperations.length > 0) {
+      if (memoryApplyResult.storage !== "table") {
+        return textStream(
+          "I could not save that to public.user_memories, so I will not claim it was saved. Please verify the memory table migration and RLS policies."
+        );
+      }
+
+      if (memoryApplyResult.remembered > 0 || memoryApplyResult.forgotten > 0) {
+        const savedName = getUserNameFromMemories(userMemories);
+
+        if (memoryApplyResult.remembered > 0 && savedName) {
+          return textStream(`I've saved your name as ${savedName}.`);
+        }
+
+        if (memoryApplyResult.remembered > 0) {
+          return textStream("I've saved that to persistent memory.");
+        }
+
+        return textStream("I've removed that from persistent memory.");
+      }
+
+      return textStream("That memory is already saved.");
+    }
 
     const loadedReport = reportId ? await loadUserReport(supabase, user, reportId) : null;
     const reportMemory = buildReportMemoryContext(loadedReport);

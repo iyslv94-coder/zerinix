@@ -46,6 +46,12 @@ type UserMemoryRow = {
 const MAX_MEMORY_CONTENT_LENGTH = 240;
 const MAX_LOADED_MEMORIES = 30;
 const USER_METADATA_MEMORY_KEY = "zerinix_memories";
+const singletonMemoryTypes = new Set<UserMemoryType>([
+  "name",
+  "company",
+  "language",
+  "writing_style",
+]);
 
 const memoryTypeLabels: Record<UserMemoryType, string> = {
   name: "Name",
@@ -174,7 +180,7 @@ export function extractExplicitMemoryOperations(prompt: string): UserMemoryOpera
     }
   }
 
-  for (const match of text.matchAll(/\bremember this[:\s]+([^]+?)(?=$|\bforget this\b|\bmy name is\b|\bmy company is\b)/gi)) {
+  for (const match of text.matchAll(/\bremember (?:this|that|it)[:\s]+([^]+?)(?=$|\bforget (?:this|that|it)\b|\bmy name is\b|\bmy company is\b)/gi)) {
     const content = cleanMemoryContent(match[1]);
     const operation = createRememberOperation(inferMemoryType(content), content);
 
@@ -191,7 +197,7 @@ export function extractExplicitMemoryOperations(prompt: string): UserMemoryOpera
     }
   }
 
-  for (const match of text.matchAll(/\bforget this[:\s]+([^.!?\n]{2,160})/gi)) {
+  for (const match of text.matchAll(/\bforget (?:this|that|it)[:\s]+([^.!?\n]{2,160})/gi)) {
     const operation = createForgetOperation(match[1]);
 
     if (operation) {
@@ -472,6 +478,55 @@ export async function applyUserMemoryOperations(
       });
 
       if (duplicate) {
+        continue;
+      }
+
+      if (singletonMemoryTypes.has(operation.type) && existingMemories?.length) {
+        const [primaryMemory, ...duplicateMemories] = existingMemories;
+        const { error: updateError } = await supabase
+          .from("user_memories")
+          .update({
+            content: operation.content,
+            source: "explicit",
+          })
+          .eq("user_id", userId)
+          .eq("id", primaryMemory.id);
+
+        if (updateError) {
+          console.error("[user_memories update failed]", {
+            message: updateError.message,
+            code: updateError.code,
+          });
+
+          if (user && isMissingUserMemoriesTableError(updateError)) {
+            return applyUserMemoryOperationsToMetadata(supabase, user, operations);
+          }
+
+          result.failed += 1;
+          continue;
+        }
+
+        result.remembered += 1;
+
+        const duplicateIds = duplicateMemories
+          .map((memory) => memory.id)
+          .filter((id): id is string => typeof id === "string" && id.length > 0);
+
+        if (duplicateIds.length) {
+          const { error: cleanupError } = await supabase
+            .from("user_memories")
+            .delete()
+            .eq("user_id", userId)
+            .in("id", duplicateIds);
+
+          if (cleanupError) {
+            console.error("[user_memories duplicate cleanup failed]", {
+              message: cleanupError.message,
+              code: cleanupError.code,
+            });
+          }
+        }
+
         continue;
       }
 
