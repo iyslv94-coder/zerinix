@@ -1,20 +1,26 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import {
+  ArrowUpRight,
   Bot,
+  Building2,
   Check,
   ChevronRight,
+  CircleDollarSign,
   Clock3,
   FileText,
   Fingerprint,
   Globe2,
   Layers3,
   LockKeyhole,
+  MessageSquareText,
+  Quote,
   Radar,
   ShieldCheck,
   Sparkles,
   Target,
   TrendingUp,
+  Workflow,
   Zap,
 } from "lucide-react";
 import WaitlistForm from "@/components/WaitlistForm";
@@ -35,11 +41,11 @@ export const metadata: Metadata = {
 };
 
 const workflowSteps = [
-  "Analyzing business model",
-  "Researching market signals",
-  "Mapping competitors",
-  "Estimating revenue paths",
-  "Building 90-day strategy",
+  "Clarifying the business model",
+  "Sizing the market opportunity",
+  "Mapping competitors and risks",
+  "Modeling revenue assumptions",
+  "Writing the board-ready plan",
 ];
 
 const chatMessages = [
@@ -55,28 +61,70 @@ const chatMessages = [
 
 const features = [
   {
-    title: "Business plan engine",
+    title: "Investor-grade planning",
     description:
-      "Generate investor-grade plans with executive summary, model, customers, roadmap, risks and success score.",
+      "Create structured business reports with executive summary, business model, financial assumptions, risks and founder priorities.",
     icon: FileText,
   },
   {
-    title: "Market intelligence",
+    title: "Market diligence",
     description:
-      "Research market size, competitors, pricing, trends and opportunities before you commit budget.",
+      "Turn a rough idea into market sizing, competitor landscape, pricing logic, demand signals and entry strategy.",
     icon: Globe2,
   },
   {
-    title: "Founder command center",
+    title: "AI strategy workspace",
     description:
-      "Save reports, organize workspaces, reopen conversations and keep strategy decisions connected.",
+      "Keep reports, conversations, workspaces and follow-up decisions connected in one secure operating layer.",
     icon: Layers3,
   },
   {
-    title: "Cost-aware AI routing",
+    title: "Governed AI usage",
     description:
-      "Use smarter caching, model routing and usage limits to keep analysis fast and sustainable.",
+      "Designed with usage accounting, caching and model routing so serious analysis can scale responsibly.",
     icon: Zap,
+  },
+];
+
+const platformModules = [
+  {
+    eyebrow: "AI Plan",
+    title: "Board-ready business plans",
+    description:
+      "From one idea to a complete strategic report covering the customer, model, pricing, risks, KPIs and execution roadmap.",
+    icon: Workflow,
+  },
+  {
+    eyebrow: "Market Analysis",
+    title: "Diligence before spend",
+    description:
+      "Understand market structure, competitors, trend pressure, TAM/SAM/SOM and validation priorities before committing capital.",
+    icon: Radar,
+  },
+  {
+    eyebrow: "AI Chat",
+    title: "Advisor with memory",
+    description:
+      "Ask follow-up questions, reuse report context and keep strategic conversations tied to your business workspace.",
+    icon: MessageSquareText,
+  },
+];
+
+const trustSignals = [
+  {
+    title: "Designed for founder diligence",
+    detail: "Business models, market logic, financial assumptions and next actions in one workflow.",
+    icon: Building2,
+  },
+  {
+    title: "Built for protected workspaces",
+    detail: "Authenticated sessions, report history and Supabase-backed persistence.",
+    icon: ShieldCheck,
+  },
+  {
+    title: "Disciplined around AI cost",
+    detail: "Usage tracking, caching and routing are part of the product foundation.",
+    icon: CircleDollarSign,
   },
 ];
 
@@ -84,20 +132,20 @@ const pricing = [
   {
     name: "Free",
     price: "Private beta",
-    description: "For testing the ZERINIX operating system before launch.",
-    features: ["Limited AI reports", "Basic market scans", "Founder workspace"],
+    description: "For invited founders exploring the ZERINIX workspace.",
+    features: ["AI Chat access", "Limited reports", "Core workspace history"],
   },
   {
     name: "Pro",
     price: "Founder plan",
-    description: "For entrepreneurs turning ideas into execution plans.",
-    features: ["More daily reports", "PDF exports", "Report history"],
+    description: "For operators turning ideas into investor-ready decisions.",
+    features: ["AI Plan reports", "Market Analysis", "Premium PDF exports"],
     highlighted: true,
   },
   {
     name: "Business",
     price: "Team scale",
-    description: "For teams that need deeper research and operating visibility.",
+    description: "For teams that need shared strategy, reporting and governance.",
     features: ["Higher AI limits", "Workspace organization", "Usage intelligence"],
   },
 ];
@@ -129,6 +177,16 @@ const faqs = [
     question: "Is ZERINIX available publicly?",
     answer:
       "ZERINIX is currently in private beta. Early access is controlled so we can keep quality, reliability and cost discipline high while the product matures.",
+  },
+  {
+    question: "What makes the reports different from a generic AI answer?",
+    answer:
+      "Reports are structured around founder decisions: market sizing, customer focus, business model, risks, financial assumptions, roadmap and executive recommendation.",
+  },
+  {
+    question: "Can teams use ZERINIX later?",
+    answer:
+      "Yes. Team workspaces, higher usage limits and deeper governance are part of the Business plan direction after private beta.",
   },
 ];
 
@@ -162,6 +220,9 @@ export default function Home() {
             <a className="transition hover:text-white" href="#pricing">
               Pricing
             </a>
+            <a className="transition hover:text-white" href="#faq">
+              FAQ
+            </a>
             <a className="transition hover:text-white" href="#security">
               Security
             </a>
@@ -187,12 +248,12 @@ export default function Home() {
           </div>
 
           <h1 className="mt-7 max-w-5xl text-4xl font-semibold leading-[1.04] tracking-tight text-white sm:text-6xl lg:text-7xl">
-            The AI operating system for building sharper companies.
+            Turn raw business ideas into investor-ready strategy.
           </h1>
 
           <p className="mt-7 max-w-2xl text-lg leading-8 text-zinc-300 sm:text-xl">
-            ZERINIX turns raw business ideas into premium strategic reports,
-            market intelligence, execution roadmaps and founder-ready decisions.
+            ZERINIX gives founders a premium AI workspace for business planning,
+            market intelligence, strategic reports and execution-ready decisions.
           </p>
 
           <div className="mt-10 flex flex-col gap-4 sm:flex-row sm:items-center">
@@ -207,15 +268,15 @@ export default function Home() {
             </Link>
           </div>
           <p className="mt-4 max-w-xl text-sm leading-6 text-zinc-500">
-            No public signup yet. Request early access or sign in if you already
-            have an invited account.
+            Private beta is intentionally limited. Request access or sign in if
+            your workspace is already enabled.
           </p>
 
           <div className="mt-10 grid max-w-2xl grid-cols-1 gap-3 sm:grid-cols-3">
             {[
-              ["10x", "faster planning"],
-              ["24/7", "AI strategy desk"],
-              ["0", "guesswork reports"],
+              ["1", "workspace for planning and analysis"],
+              ["PDF", "exports for investor conversations"],
+              ["24/7", "AI strategy desk for founders"],
             ].map(([value, label]) => (
               <div
                 key={label}
@@ -305,13 +366,80 @@ export default function Home() {
         </div>
       </section>
 
+      <section className="mx-auto w-full max-w-7xl px-5 pb-12 sm:px-8">
+        <div className="grid gap-3 rounded-[2rem] border border-white/10 bg-white/[0.035] p-4 shadow-2xl shadow-black/20 backdrop-blur-xl md:grid-cols-3">
+          {trustSignals.map((signal) => {
+            const Icon = signal.icon;
+
+            return (
+              <article
+                key={signal.title}
+                className="rounded-3xl border border-white/10 bg-black/25 p-5"
+              >
+                <Icon className="h-5 w-5 text-teal-200" />
+                <h2 className="mt-4 text-base font-semibold text-white">
+                  {signal.title}
+                </h2>
+                <p className="mt-2 text-sm leading-6 text-zinc-500">
+                  {signal.detail}
+                </p>
+              </article>
+            );
+          })}
+        </div>
+      </section>
+
       <section id="features" className="mx-auto w-full max-w-7xl px-5 py-20 sm:px-8">
-        <div className="landing-fade-up max-w-3xl">
+        <div className="landing-fade-up flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
+          <div className="max-w-3xl">
+            <p className="text-sm font-semibold uppercase tracking-[0.3em] text-teal-200">
+              Platform
+            </p>
+            <h2 className="mt-4 text-4xl font-semibold tracking-tight text-white sm:text-5xl">
+              Strategy, market analysis and workspace memory in one premium layer.
+            </h2>
+          </div>
+          <p className="max-w-md text-sm leading-7 text-zinc-500">
+            ZERINIX is built for the moment before a founder spends money,
+            hires a team or pitches capital: the decision has to be sharper.
+          </p>
+        </div>
+
+        <div className="mt-10 grid gap-4 lg:grid-cols-3">
+          {platformModules.map((module, index) => {
+            const Icon = module.icon;
+
+            return (
+              <article
+                key={module.title}
+                className="landing-card-hover rounded-[1.75rem] border border-white/10 bg-white/[0.045] p-7 shadow-2xl shadow-black/20 backdrop-blur-xl"
+                style={{ animationDelay: `${index * 70}ms` }}
+              >
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-teal-200/20 bg-teal-200/10">
+                    <Icon className="h-5 w-5 text-teal-200" />
+                  </div>
+                  <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-zinc-400">
+                    {module.eyebrow}
+                  </span>
+                </div>
+                <h3 className="mt-7 text-2xl font-semibold tracking-tight text-white">
+                  {module.title}
+                </h3>
+                <p className="mt-3 text-sm leading-7 text-zinc-400">
+                  {module.description}
+                </p>
+              </article>
+            );
+          })}
+        </div>
+
+        <div className="landing-fade-up mt-20 max-w-3xl">
           <p className="text-sm font-semibold uppercase tracking-[0.3em] text-teal-200">
             Founder infrastructure
           </p>
           <h2 className="mt-4 text-4xl font-semibold tracking-tight text-white sm:text-5xl">
-            Everything a serious founder needs before spending serious money.
+            Built around the work that happens before the pitch deck.
           </h2>
         </div>
 
@@ -380,6 +508,40 @@ export default function Home() {
         </div>
       </section>
 
+      <section className="mx-auto w-full max-w-7xl px-5 py-20 sm:px-8">
+        <div className="overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.04] shadow-2xl shadow-black/30 backdrop-blur-xl">
+          <div className="grid gap-0 lg:grid-cols-[0.92fr_1.08fr]">
+            <div className="border-b border-white/10 p-8 lg:border-b-0 lg:border-r lg:p-10">
+              <Quote className="h-8 w-8 text-teal-200" />
+              <p className="mt-7 text-2xl font-medium leading-10 tracking-tight text-white sm:text-3xl">
+                “ZERINIX is designed for founders who need a sharper first
+                strategy before they burn months validating the wrong idea.”
+              </p>
+              <p className="mt-6 text-sm font-semibold uppercase tracking-[0.22em] text-zinc-500">
+                Product principle
+              </p>
+            </div>
+            <div className="grid gap-0 sm:grid-cols-3">
+              {[
+                ["Planning", "Business model, ICP, pricing and roadmap"],
+                ["Diligence", "Market size, competitors, risks and trends"],
+                ["Execution", "Saved reports, workspace memory and exports"],
+              ].map(([title, copy]) => (
+                <div
+                  key={title}
+                  className="border-b border-white/10 p-7 last:border-b-0 sm:border-b-0 sm:border-r sm:last:border-r-0"
+                >
+                  <p className="text-sm font-semibold uppercase tracking-[0.24em] text-teal-200/70">
+                    {title}
+                  </p>
+                  <p className="mt-4 text-sm leading-7 text-zinc-400">{copy}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section id="pricing" className="mx-auto w-full max-w-7xl px-5 py-20 sm:px-8">
         <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
           <div className="max-w-2xl">
@@ -428,12 +590,25 @@ export default function Home() {
                   </div>
                 ))}
               </div>
+              <div className="mt-7">
+                <a
+                  href="#waitlist"
+                  className={
+                    plan.highlighted
+                      ? "inline-flex w-full items-center justify-center gap-2 rounded-full bg-teal-300 px-5 py-3 text-sm font-semibold text-black transition hover:bg-teal-200"
+                      : "inline-flex w-full items-center justify-center gap-2 rounded-full border border-white/12 bg-white/[0.04] px-5 py-3 text-sm font-semibold text-white transition hover:border-white/25 hover:bg-white/[0.08]"
+                  }
+                >
+                  Request access
+                  <ArrowUpRight className="h-4 w-4" />
+                </a>
+              </div>
             </article>
           ))}
         </div>
       </section>
 
-      <section className="mx-auto w-full max-w-7xl px-5 py-20 sm:px-8">
+      <section id="faq" className="mx-auto w-full max-w-7xl px-5 py-20 sm:px-8">
         <div className="grid gap-8 lg:grid-cols-[0.82fr_1.18fr]">
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.3em] text-teal-200">
@@ -524,33 +699,51 @@ export default function Home() {
       </section>
 
       <footer className="border-t border-white/10 px-5 py-10 sm:px-8">
-        <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 md:flex-row md:items-center md:justify-between">
-          <div>
+        <div className="mx-auto grid w-full max-w-7xl gap-8 md:grid-cols-[1.1fr_0.9fr] md:items-start">
+          <div className="max-w-md">
             <p className="text-lg font-semibold tracking-[0.28em] text-white">ZERINIX</p>
             <p className="mt-2 text-sm text-zinc-500">
-              AI business planning, market intelligence and strategic reports.
+              Premium AI business planning, market intelligence and strategic
+              reporting for founders preparing serious decisions.
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-3 text-sm text-zinc-500">
-            <a href="#features" className="transition hover:text-white">
-              Platform
-            </a>
-            <span>/</span>
-            <a href="#pricing" className="transition hover:text-white">
-              Pricing
-            </a>
-            <span>/</span>
-            <a href="#security" className="transition hover:text-white">
-              Security
-            </a>
-            <span>/</span>
-            <Link
-              href="/login?next=/plan"
-              prefetch={false}
-              className="transition hover:text-white"
-            >
-              Developer Login
-            </Link>
+          <div className="grid gap-6 sm:grid-cols-2">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-zinc-500">
+                Product
+              </p>
+              <div className="mt-4 grid gap-3 text-sm text-zinc-400">
+                <a href="#features" className="transition hover:text-white">
+                  Platform
+                </a>
+                <a href="#pricing" className="transition hover:text-white">
+                  Pricing
+                </a>
+                <a href="#faq" className="transition hover:text-white">
+                  FAQ
+                </a>
+              </div>
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-zinc-500">
+                Access
+              </p>
+              <div className="mt-4 grid gap-3 text-sm text-zinc-400">
+                <a href="#waitlist" className="transition hover:text-white">
+                  Request Early Access
+                </a>
+                <a href="#security" className="transition hover:text-white">
+                  Security
+                </a>
+                <Link
+                  href="/login?next=/plan"
+                  prefetch={false}
+                  className="transition hover:text-white"
+                >
+                  Developer Login
+                </Link>
+              </div>
+            </div>
           </div>
         </div>
       </footer>
