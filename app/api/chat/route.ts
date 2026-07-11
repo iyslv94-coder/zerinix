@@ -6,6 +6,7 @@ import {
   getClientIpFromRequest,
   getRateLimitHeaders,
 } from "@/app/lib/security/rate-limit";
+import { validateApiRequest } from "@/app/lib/security/request-validation";
 import { logServerError } from "@/app/lib/security/errors";
 import {
   createAiCacheKey,
@@ -121,6 +122,61 @@ const expertInstructions: Record<AiExpert, string> = {
     "Write from the perspective of a clear, capable general AI assistant. Be direct, useful, and adapt to the user's task.",
 };
 
+const MAX_CHAT_ATTACHMENTS = 6;
+const MAX_ATTACHMENT_SIZE_BYTES = 5_000_000;
+const MAX_ATTACHMENT_TEXT_BYTES = 20_000;
+const MAX_ATTACHMENT_NAME_LENGTH = 180;
+
+function sanitizeAttachmentName(value: string) {
+  return value
+    .replace(/[\u0000-\u001f\u007f]/g, "")
+    .replace(/[\\/]+/g, "-")
+    .trim()
+    .slice(0, MAX_ATTACHMENT_NAME_LENGTH);
+}
+
+function getAttachmentValidationError(value: unknown) {
+  if (value === undefined || value === null) {
+    return "";
+  }
+
+  if (!Array.isArray(value)) {
+    return "Attachments must be an array.";
+  }
+
+  if (value.length > MAX_CHAT_ATTACHMENTS) {
+    return `Attach up to ${MAX_CHAT_ATTACHMENTS} files per message.`;
+  }
+
+  for (const attachment of value) {
+    if (!attachment || typeof attachment !== "object") {
+      return "Invalid attachment payload.";
+    }
+
+    const record = attachment as Record<string, unknown>;
+    const name = typeof record.name === "string" ? sanitizeAttachmentName(record.name) : "";
+    const size =
+      typeof record.size === "number" && Number.isFinite(record.size)
+        ? record.size
+        : 0;
+    const textContent = typeof record.textContent === "string" ? record.textContent : "";
+
+    if (!name) {
+      return "Attachment name is required.";
+    }
+
+    if (size < 0 || size > MAX_ATTACHMENT_SIZE_BYTES) {
+      return "Attachment is too large.";
+    }
+
+    if (textContent.length > MAX_ATTACHMENT_TEXT_BYTES) {
+      return "Attachment text is too large.";
+    }
+  }
+
+  return "";
+}
+
 function normalizeMessages(value: unknown): ChatInputMessage[] {
   if (!Array.isArray(value)) {
     return [];
@@ -167,12 +223,12 @@ function normalizeAttachments(value: unknown): ChatAttachmentInput[] {
       const size = (attachment as { size?: unknown }).size;
       const textContent = (attachment as { textContent?: unknown }).textContent;
 
-      if (typeof name !== "string" || !name.trim()) {
+      if (typeof name !== "string" || !sanitizeAttachmentName(name)) {
         return null;
       }
 
       return {
-        name: name.trim().slice(0, 180),
+        name: sanitizeAttachmentName(name),
         size: typeof size === "number" && Number.isFinite(size) ? size : 0,
         textContent:
           typeof textContent === "string" ? textContent.trim().slice(0, 12_000) : "",
@@ -813,6 +869,17 @@ function sanitizeResponseShape(value: unknown, depth = 0): unknown {
 }
 
 export async function POST(req: Request) {
+  const requestValidation = validateApiRequest(req, {
+    maxBodyBytes: 1_000_000,
+  });
+
+  if (!requestValidation.ok) {
+    return NextResponse.json(
+      { error: requestValidation.message },
+      { status: requestValidation.status }
+    );
+  }
+
   const startedAt = Date.now();
   const ip = getClientIpFromRequest(req);
   const ipRateLimit = checkRateLimit(`api:chat:ip:${ip}`, {
@@ -858,6 +925,15 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
+    const attachmentValidationError = getAttachmentValidationError(body?.attachments);
+
+    if (attachmentValidationError) {
+      return NextResponse.json(
+        { error: attachmentValidationError },
+        { status: 400 }
+      );
+    }
+
     const prompt = typeof body?.prompt === "string" ? body.prompt.trim() : "";
     const messages = normalizeMessages(body?.messages);
     const attachments = normalizeAttachments(body?.attachments);

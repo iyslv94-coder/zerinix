@@ -7,6 +7,7 @@ import {
   getClientIpFromRequest,
   getRateLimitHeaders,
 } from "@/app/lib/security/rate-limit";
+import { validateApiRequest } from "@/app/lib/security/request-validation";
 import { logServerError } from "@/app/lib/security/errors";
 import {
   createAiCacheKey,
@@ -559,6 +560,17 @@ function clarificationMessage() {
 
 export async function POST(req: Request) {
   try {
+    const requestValidation = validateApiRequest(req, {
+      maxBodyBytes: 250_000,
+    });
+
+    if (!requestValidation.ok) {
+      return NextResponse.json(
+        { error: requestValidation.message },
+        { status: requestValidation.status }
+      );
+    }
+
     const ip = getClientIpFromRequest(req);
     const ipRateLimit = checkRateLimit(`api:plan:ip:${ip}`, {
       limit: 30,

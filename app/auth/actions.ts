@@ -95,7 +95,6 @@ function redirectWithSignupError(error: unknown): never {
     `message=${serializedError.message}`,
     serializedError.code ? `code=${String(serializedError.code)}` : "",
     serializedError.status ? `status=${String(serializedError.status)}` : "",
-    serializedError.cause ? `cause=${JSON.stringify(serializedError.cause)}` : "",
   ]
     .filter(Boolean)
     .join("; ");
@@ -106,23 +105,6 @@ function redirectWithSignupError(error: unknown): never {
 function serializeSignupError(error: unknown) {
   const errorRecord =
     typeof error === "object" && error ? (error as Record<string, unknown>) : {};
-  const cause =
-    error instanceof Error && "cause" in error ? errorRecord.cause : undefined;
-  const causeRecord =
-    typeof cause === "object" && cause ? (cause as Record<string, unknown>) : {};
-  const causeDetails = cause
-    ? {
-        message:
-          cause instanceof Error
-            ? cause.message
-            : typeof causeRecord.message === "string"
-              ? causeRecord.message
-              : undefined,
-        code: causeRecord.code,
-        status: causeRecord.status,
-        hostname: causeRecord.hostname,
-      }
-    : undefined;
   const message =
     error instanceof Error
       ? error.message
@@ -134,9 +116,6 @@ function serializeSignupError(error: unknown) {
     message,
     code: errorRecord.code,
     status: errorRecord.status,
-    stack: error instanceof Error ? error.stack : undefined,
-    cause: causeDetails,
-    raw: error,
   };
 }
 

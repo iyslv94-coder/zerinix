@@ -9,7 +9,7 @@ type LoginPageProps = {
 };
 
 export default async function LoginPage({ searchParams }: LoginPageProps) {
-  await redirectAuthenticatedUserFromAuthPage("/login");
+  await redirectAuthenticatedUserFromAuthPage();
 
   const { auth_error: authError } = await searchParams;
 

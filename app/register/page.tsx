@@ -2,7 +2,7 @@ import AuthShell from "@/components/AuthShell";
 import { redirectAuthenticatedUserFromAuthPage } from "@/app/auth/server-guard";
 
 export default async function RegisterPage() {
-  await redirectAuthenticatedUserFromAuthPage("/register");
+  await redirectAuthenticatedUserFromAuthPage();
 
   return (
     <AuthShell

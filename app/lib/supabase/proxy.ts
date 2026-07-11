@@ -8,10 +8,6 @@ function isAuthRoute(pathname: string) {
   return pathname === "/login" || pathname === "/register";
 }
 
-function hasSupabaseAuthCookies(request: NextRequest) {
-  return request.cookies.getAll().some((cookie) => cookie.name.startsWith("sb-"));
-}
-
 function preventAuthRouteCaching(response: NextResponse, pathname: string) {
   if (!isAuthRoute(pathname)) {
     return;
@@ -76,20 +72,10 @@ export async function updateSession(request: NextRequest) {
     const {
       data: { user },
     } = await supabase.auth.getUser();
-    const authCookiesPresent = hasSupabaseAuthCookies(request);
     const redirectPath = getAuthRouteRedirectPath(
       request.nextUrl.pathname,
       user
     );
-
-    if (isAuthRoute(request.nextUrl.pathname)) {
-      console.log("[auth-guard:proxy]", {
-        pathname: request.nextUrl.pathname,
-        authCookiesPresent,
-        userEmail: user?.email ?? null,
-        branch: redirectPath ? "redirect_dashboard" : "continue",
-      });
-    }
 
     if (redirectPath) {
       const redirectResponse = NextResponse.redirect(
