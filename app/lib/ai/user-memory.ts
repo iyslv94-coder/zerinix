@@ -56,8 +56,11 @@ const USER_METADATA_MEMORY_KEY = "zerinix_memories";
 const singletonMemoryTypes = new Set<UserMemoryType>([
   "name",
   "company",
+  "preference",
   "language",
   "writing_style",
+  "long_term_goal",
+  "general",
 ]);
 
 const memoryTypeLabels: Record<UserMemoryType, string> = {
@@ -134,6 +137,30 @@ function inferMemoryType(content: string): UserMemoryType {
   return "general";
 }
 
+function stripMemoryInstruction(value: string) {
+  return cleanMemoryContent(
+    value.replace(/\bremember (?:this|that|it)\b/gi, "").replace(/\bplease remember\b/gi, "")
+  );
+}
+
+function firstMatch(text: string, patterns: RegExp[]) {
+  for (const pattern of patterns) {
+    const match = pattern.exec(text);
+
+    if (match?.[1]) {
+      return stripMemoryInstruction(match[1]);
+    }
+  }
+
+  return "";
+}
+
+function isLikelyLanguage(value: string) {
+  return /^(english|turkish|türkçe|spanish|french|german|italian|arabic|portuguese|russian|chinese|japanese|korean)$/i.test(
+    value.trim()
+  );
+}
+
 function createRememberOperation(type: UserMemoryType, content: string): UserMemoryOperation | null {
   const cleanedContent = cleanMemoryContent(content);
 
@@ -174,42 +201,83 @@ function createForgetOperation(content: string): UserMemoryOperation | null {
 export function extractExplicitMemoryOperations(prompt: string): UserMemoryOperation[] {
   const text = normalizeWhitespace(prompt);
   const operations: UserMemoryOperation[] = [];
+  const addRemember = (type: UserMemoryType, content: string) => {
+    const operation = createRememberOperation(type, content);
+
+    if (
+      operation &&
+      !operations.some(
+        (existing) =>
+          existing.action === "remember" &&
+          existing.type === operation.type &&
+          existing.content.toLowerCase() === operation.content.toLowerCase()
+      )
+    ) {
+      operations.push(operation);
+    }
+  };
 
   if (!text) {
     return operations;
   }
 
-  for (const match of text.matchAll(/\bmy name is\s+([^.!?\n]{2,80})/gi)) {
-    const operation = createRememberOperation("name", match[1]);
+  const name = firstMatch(text, [
+    /\bmy name is\s+([^.!?\n]{2,80})/i,
+    /\bcall me\s+([^.!?\n]{2,80})/i,
+  ]);
 
-    if (operation) {
-      operations.push(operation);
-    }
+  if (name) {
+    addRemember("name", name);
   }
 
-  for (const match of text.matchAll(/\bmy company is\s+([^.!?\n]{2,120})/gi)) {
-    const operation = createRememberOperation("company", match[1]);
+  const company = firstMatch(text, [
+    /\bmy company is\s+([^.!?\n]{2,120})/i,
+    /\bmy business is\s+([^.!?\n]{2,120})/i,
+    /\bi work (?:at|for)\s+([^.!?\n]{2,120})/i,
+  ]);
 
-    if (operation) {
-      operations.push(operation);
-    }
+  if (company) {
+    addRemember("company", company);
+  }
+
+  const language = firstMatch(text, [
+    /\bmy preferred language is\s+([^.!?\n]{2,80})/i,
+    /\bi prefer\s+([a-zçğıöşüİıĞÖŞÜ]{2,40})(?:\s|$|[.!?])/i,
+    /\bplease answer in\s+([^.!?\n]{2,80})/i,
+    /\brespond in\s+([^.!?\n]{2,80})/i,
+    /\breply in\s+([^.!?\n]{2,80})/i,
+  ]);
+
+  if (language && (isLikelyLanguage(language) || /\b(language|answer in|respond in|reply in)\b/i.test(text))) {
+    addRemember("language", language);
+  }
+
+  const writingStyle = firstMatch(text, [
+    /\bi (?:like|prefer)\s+((?:concise|short|brief|detailed|formal|casual|direct|structured)[^.!?\n]{0,120}(?:answers|responses|writing|style)?)\b/i,
+    /\bmy writing style preference is\s+([^.!?\n]{3,160})/i,
+    /\banswer me with\s+([^.!?\n]{3,160})/i,
+  ]);
+
+  if (writingStyle && !operations.some((operation) => operation.action === "remember" && operation.type === "language")) {
+    addRemember("writing_style", writingStyle);
+  }
+
+  const longTermGoal = firstMatch(text, [
+    /\bmy long[-\s]?term goal is\s+([^.!?\n]{3,180})/i,
+    /\bmy goal is\s+([^.!?\n]{3,180})/i,
+  ]);
+
+  if (longTermGoal) {
+    addRemember("long_term_goal", longTermGoal);
   }
 
   for (const match of text.matchAll(/\bremember (?:this|that|it)[:\s]+([^]+?)(?=$|\bforget (?:this|that|it)\b|\bmy name is\b|\bmy company is\b)/gi)) {
     const content = cleanMemoryContent(match[1]);
-    const operation = createRememberOperation(inferMemoryType(content), content);
-
-    if (operation) {
-      operations.push(operation);
-    }
+    addRemember(inferMemoryType(content), content);
   }
 
   for (const match of text.matchAll(/\balways\s+([^.!?\n]{3,180})/gi)) {
-    const operation = createRememberOperation("preference", `Always ${match[1]}`);
-
-    if (operation) {
-      operations.push(operation);
-    }
+    addRemember("preference", `Always ${match[1]}`);
   }
 
   for (const match of text.matchAll(/\bforget (?:this|that|it)[:\s]+([^.!?\n]{2,160})/gi)) {
@@ -266,6 +334,10 @@ export function buildUserMemoryContext(memories: UserMemory[]) {
 
 export function getUserNameFromMemories(memories: UserMemory[]) {
   return memories.find((memory) => memory.type === "name")?.content || "";
+}
+
+export function getUserMemoryByType(memories: UserMemory[], type: UserMemoryType) {
+  return memories.find((memory) => memory.type === type)?.content || "";
 }
 
 function readUserMetadataMemories(user: User): UserMemory[] {

@@ -32,8 +32,11 @@ import {
   applyUserMemoryOperations,
   buildUserMemoryContext,
   extractExplicitMemoryOperations,
+  getUserMemoryByType,
   getUserNameFromMemories,
   loadUserMemoriesForUser,
+  type UserMemory,
+  type UserMemoryType,
 } from "@/app/lib/ai/user-memory";
 
 type ChatInputMessage = {
@@ -535,6 +538,70 @@ function isUserIdentityQuestion(prompt: string) {
   );
 }
 
+function getMemoryRecallType(prompt: string): UserMemoryType | null {
+  const normalized = prompt.trim().toLowerCase();
+
+  if (/^(?:who am i|what is my name|do you know my name|who do you know me as)\??$/.test(normalized)) {
+    return "name";
+  }
+
+  if (/\b(?:what is my company|which company|where do i work|what company do i work)\b/.test(normalized)) {
+    return "company";
+  }
+
+  if (/\b(?:which language do i prefer|what language do i prefer|preferred language|language preference)\b/.test(normalized)) {
+    return "language";
+  }
+
+  if (/\b(?:how should you answer me|how should you respond|writing style|response style)\b/.test(normalized)) {
+    return "writing_style";
+  }
+
+  if (/\b(?:what is my long[-\s]?term goal|what is my goal|long[-\s]?term goal)\b/.test(normalized)) {
+    return "long_term_goal";
+  }
+
+  return null;
+}
+
+function formatMemorySaveResponse(type: UserMemoryType, content: string) {
+  switch (type) {
+    case "name":
+      return `I've saved your name as ${content}.`;
+    case "company":
+      return `I've saved your company as ${content}.`;
+    case "language":
+      return `I've saved your language preference as ${content}.`;
+    case "writing_style":
+      return `I'll remember that you prefer ${content}.`;
+    case "long_term_goal":
+      return "I've saved your long-term goal.";
+    default:
+      return "I'll remember that.";
+  }
+}
+
+function formatMemoryRecallResponse(type: UserMemoryType, content: string) {
+  switch (type) {
+    case "name":
+      return `Your name is ${content}.`;
+    case "company":
+      return `Your company is ${content}.`;
+    case "language":
+      return `You prefer ${content}.`;
+    case "writing_style":
+      return `You prefer ${content}.`;
+    case "long_term_goal":
+      return `Your long-term goal is ${content}.`;
+    default:
+      return content;
+  }
+}
+
+function getSavedMemoryContent(memories: UserMemory[], type: UserMemoryType) {
+  return getUserMemoryByType(memories, type);
+}
+
 function isBusinessAdvisorConversation(messages: ChatInputMessage[], prompt: string) {
   if (isBusinessAdvisorRequest(prompt)) {
     return true;
@@ -1027,10 +1094,15 @@ export async function POST(req: Request) {
       }
 
       if (memoryApplyResult.remembered > 0 || memoryApplyResult.forgotten > 0) {
-        const savedName = getUserNameFromMemories(userMemories);
+        const savedOperation = memoryOperations.find(
+          (operation) => operation.action === "remember"
+        );
 
-        if (memoryApplyResult.remembered > 0 && savedName) {
-          return textStream(`I've saved your name as ${savedName}.`);
+        if (memoryApplyResult.remembered > 0 && savedOperation?.action === "remember") {
+          const savedContent =
+            getSavedMemoryContent(userMemories, savedOperation.type) || savedOperation.content;
+
+          return textStream(formatMemorySaveResponse(savedOperation.type, savedContent));
         }
 
         if (memoryApplyResult.remembered > 0) {
@@ -1072,12 +1144,28 @@ export async function POST(req: Request) {
     );
     const responseLanguage = detectResponseLanguage(prompt);
 
+    const recallType = getMemoryRecallType(prompt);
+    const recalledMemory = recallType ? getUserMemoryByType(userMemories, recallType) : "";
+
+    if (recallType && recalledMemory) {
+      logOperationalInfo("[api:chat] answered from persistent memory", {
+        endpoint: "/api/chat",
+        mode: requestKind,
+        providerCalled: false,
+        memoryContextAttached: true,
+        memoryType: recallType,
+      });
+
+      return textStream(formatMemoryRecallResponse(recallType, recalledMemory));
+    }
+
     if (isUserIdentityQuestion(prompt) && rememberedName) {
       logOperationalInfo("[api:chat] answered from persistent memory", {
         endpoint: "/api/chat",
         mode: requestKind,
         providerCalled: false,
         memoryContextAttached: true,
+        memoryType: "name",
       });
 
       return textStream(`Your name is ${rememberedName}.`);

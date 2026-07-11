@@ -25,6 +25,11 @@ test("memory extraction only reacts to explicit durable-memory phrases", () => {
   assert.match(helperSource, /extractExplicitMemoryOperations/);
   assert.match(helperSource, /my name is/);
   assert.match(helperSource, /my company is/);
+  assert.match(helperSource, /my preferred language is/);
+  assert.match(helperSource, /please answer in/);
+  assert.match(helperSource, /i prefer/);
+  assert.match(helperSource, /my long\[-\\s\]\?term goal is/);
+  assert.match(helperSource, /isLikelyLanguage/);
   assert.match(helperSource, /remember \(\?:this\|that\|it\)/);
   assert.match(helperSource, /forget \(\?:this\|that\|it\)/);
   assert.match(helperSource, /always/);
@@ -56,16 +61,26 @@ test("AI Chat loads, updates, and injects persistent user memories", () => {
   assert.match(chatRouteSource, /memoryApplyResult\.error/);
   assert.match(chatRouteSource, /memory database write failed/);
   assert.match(chatRouteSource, /Storage used: \$\{memoryApplyResult\.storage\}/);
-  assert.match(chatRouteSource, /I've saved your name as \$\{savedName\}/);
+  assert.match(chatRouteSource, /formatMemorySaveResponse/);
+  assert.match(chatRouteSource, /I've saved your company as \$\{content\}/);
+  assert.match(chatRouteSource, /I've saved your language preference as \$\{content\}/);
+  assert.match(chatRouteSource, /I'll remember that you prefer \$\{content\}/);
+  assert.match(chatRouteSource, /I've saved your long-term goal/);
   assert.match(chatRouteSource, /user_memory_used/);
   assert.match(chatRouteSource, /memory_operation_count/);
 });
 
-test("AI Chat can answer identity questions directly from persistent name memory", () => {
-  assert.match(chatRouteSource, /isUserIdentityQuestion/);
-  assert.match(chatRouteSource, /rememberedName/);
+test("AI Chat can answer memory recall questions directly from persistent memory", () => {
+  assert.match(chatRouteSource, /getMemoryRecallType/);
+  assert.match(chatRouteSource, /what is my company/);
+  assert.match(chatRouteSource, /which language do i prefer/);
+  assert.match(chatRouteSource, /how should you answer me/);
+  assert.match(chatRouteSource, /what is my long\[-\\s\]\?term goal/);
+  assert.match(chatRouteSource, /formatMemoryRecallResponse/);
   assert.match(chatRouteSource, /answered from persistent memory/);
-  assert.match(chatRouteSource, /Your name is \$\{rememberedName\}/);
+  assert.match(chatRouteSource, /Your company is \$\{content\}/);
+  assert.match(chatRouteSource, /You prefer \$\{content\}/);
+  assert.match(chatRouteSource, /Your long-term goal is \$\{content\}/);
 });
 
 test("AI Chat cache is disabled when persistent memory affects the response", () => {
