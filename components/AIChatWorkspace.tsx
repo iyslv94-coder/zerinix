@@ -575,10 +575,12 @@ const ChatBubble = memo(function ChatBubble({
   message,
   onSaveEdit,
   onRegenerate,
+  actionDisabled = false,
 }: {
   message: ChatMessage;
   onSaveEdit: (messageId: string, content: string) => void;
   onRegenerate: () => void;
+  actionDisabled?: boolean;
 }) {
   const isUser = message.role === "user";
   const [editing, setEditing] = useState(false);
@@ -625,7 +627,7 @@ const ChatBubble = memo(function ChatBubble({
             {message.status === "streaming" ? (
               <span className="inline-flex items-center gap-1.5 rounded-lg border border-teal-300/20 px-2 py-1 text-xs text-teal-100">
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                Streaming
+                {message.content ? "Regenerating" : "Streaming"}
               </span>
             ) : null}
             <button
@@ -656,7 +658,8 @@ const ChatBubble = memo(function ChatBubble({
               <button
                 type="button"
                 onClick={onRegenerate}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-2 py-1 text-xs text-zinc-300 transition hover:border-teal-300/20 hover:bg-white/10 hover:text-white"
+                disabled={actionDisabled}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-2 py-1 text-xs text-zinc-300 transition hover:border-teal-300/20 hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <RefreshCcw className="h-3.5 w-3.5 text-teal-200" />
                 Regenerate
@@ -1073,16 +1076,6 @@ export default function AIChatWorkspace({
     }
   }
 
-  async function deletePersistedMessage(messageId: string) {
-    const supabase = createClient();
-    const { error } = await supabase.from("ai_messages").delete().eq("id", messageId);
-
-    if (error) {
-      console.error("[ai_messages delete failed]", error);
-      setConversationError(error.message);
-    }
-  }
-
   async function deletePersistedConversation(conversationId: string) {
     if (!persistedConversationIdsRef.current.has(conversationId)) {
       return true;
@@ -1303,7 +1296,8 @@ export default function AIChatWorkspace({
   async function sendMessage(
     promptOverride = prompt,
     addToHistory = true,
-    supersededAssistantMessageId = ""
+    supersededAssistantMessageId = "",
+    replacementAssistantMessageId = ""
   ) {
     const submittedPrompt = promptOverride.trim();
 
@@ -1320,6 +1314,10 @@ export default function AIChatWorkspace({
       : conversation?.title || generateConversationTitle(submittedPrompt);
     const currentAttachments = attachments;
     const currentMessages = conversation?.messages || [];
+    const replacementMessage = replacementAssistantMessageId
+      ? currentMessages.find((message) => message.id === replacementAssistantMessageId)
+      : undefined;
+    const replacementOriginalContent = replacementMessage?.content || "";
     const reportContextId =
       activeReportMemoryId &&
       (shouldSendReportContext(submittedPrompt, currentMessages) ||
@@ -1362,22 +1360,35 @@ export default function AIChatWorkspace({
       await persistConversationTitle(conversationId, title);
     }
 
-    const assistantMessageId = createMessageId();
-    const assistantMessage: ChatMessage = {
-      id: assistantMessageId,
-      role: "assistant",
-      mode: "chat",
-      content: "",
-      status: "streaming",
-      createdAt: getClientTimestamp(),
-    };
+    const assistantMessageId = replacementAssistantMessageId || createMessageId();
 
-    updateConversation(conversationId, (current) => ({
-      ...current,
-      messages: [...current.messages, assistantMessage],
-      updatedAt: getClientTimestamp(),
-    }));
-    void persistMessage(conversationId, assistantMessage);
+    if (replacementAssistantMessageId) {
+      updateConversation(conversationId, (current) => ({
+        ...current,
+        messages: current.messages.map((message) =>
+          message.id === replacementAssistantMessageId
+            ? { ...message, status: "streaming" }
+            : message
+        ),
+        updatedAt: getClientTimestamp(),
+      }));
+    } else {
+      const assistantMessage: ChatMessage = {
+        id: assistantMessageId,
+        role: "assistant",
+        mode: "chat",
+        content: "",
+        status: "streaming",
+        createdAt: getClientTimestamp(),
+      };
+
+      updateConversation(conversationId, (current) => ({
+        ...current,
+        messages: [...current.messages, assistantMessage],
+        updatedAt: getClientTimestamp(),
+      }));
+      void persistMessage(conversationId, assistantMessage);
+    }
 
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
@@ -1406,15 +1417,19 @@ export default function AIChatWorkspace({
         }),
       });
 
-      const responseText = await readStreamingText(response, (content) =>
-        updateAssistantMessage(assistantMessageId, content, "streaming", conversationId)
-      );
+      const responseText = await readStreamingText(response, (content) => {
+        if (!replacementAssistantMessageId) {
+          updateAssistantMessage(assistantMessageId, content, "streaming", conversationId);
+        }
+      });
       const finalText = responseText || "I could not generate a response. Please try again.";
 
       updateAssistantMessage(assistantMessageId, finalText, "complete", conversationId);
       void updatePersistedMessage(assistantMessageId, finalText, "complete");
-      setPrompt("");
-      setAttachments([]);
+      if (addToHistory) {
+        setPrompt("");
+        setAttachments([]);
+      }
     } catch (error) {
       const aborted = error instanceof DOMException && error.name === "AbortError";
       const errorMessage = aborted
@@ -1425,8 +1440,17 @@ export default function AIChatWorkspace({
           ? error.message
           : "Chat response failed. Please try again.";
 
-      updateAssistantMessage(assistantMessageId, errorMessage, "failed", conversationId);
-      void updatePersistedMessage(assistantMessageId, errorMessage, "failed");
+      if (replacementAssistantMessageId) {
+        updateAssistantMessage(
+          assistantMessageId,
+          replacementOriginalContent,
+          "complete",
+          conversationId
+        );
+      } else {
+        updateAssistantMessage(assistantMessageId, errorMessage, "failed", conversationId);
+        void updatePersistedMessage(assistantMessageId, errorMessage, "failed");
+      }
       if (!aborted) {
         setConversationError(errorMessage);
       } else if (requestTimedOut) {
@@ -1470,18 +1494,12 @@ export default function AIChatWorkspace({
       return;
     }
 
-    if (previousAssistantMessage) {
-      updateConversation(activeConversationId, (conversation) => ({
-        ...conversation,
-        messages: conversation.messages.filter(
-          (message) => message.id !== previousAssistantMessage.id
-        ),
-        updatedAt: getClientTimestamp(),
-      }));
-      await deletePersistedMessage(previousAssistantMessage.id);
-    }
-
-    void sendMessage(lastUserMessage.content, false, previousAssistantMessage?.id);
+    void sendMessage(
+      lastUserMessage.content,
+      false,
+      previousAssistantMessage?.id,
+      previousAssistantMessage?.id
+    );
   }
 
   const activeModel = modelOptions.find((option) => option.value === modelPreference);
@@ -2077,6 +2095,7 @@ export default function AIChatWorkspace({
                   message={message}
                   onSaveEdit={saveEditedMessage}
                   onRegenerate={regenerateResponse}
+                  actionDisabled={loading}
                 />
               ))
             )}
