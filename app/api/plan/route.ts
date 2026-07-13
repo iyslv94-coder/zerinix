@@ -551,6 +551,120 @@ function createSourcesAssumptionsFallback(parsed: Record<string, unknown>) {
     .join("\n");
 }
 
+function coercePlanFieldContent(value: unknown): string {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => coercePlanFieldContent(item))
+      .filter(Boolean)
+      .join("\n");
+  }
+
+  if (value && typeof value === "object") {
+    const extracted = extractTextFromValue(value);
+
+    if (extracted.trim()) {
+      return extracted;
+    }
+
+    return Object.entries(value)
+      .map(([key, item]) => {
+        const content = coercePlanFieldContent(item);
+
+        return content ? `${key}: ${content}` : "";
+      })
+      .filter(Boolean)
+      .join("\n");
+  }
+
+  return "";
+}
+
+function createPlanFieldFallback(
+  field: PlanReportField,
+  parsed: Record<string, unknown>,
+  context?: AiFinancialModelContext
+) {
+  if (field === "sourcesAssumptions") {
+    return createSourcesAssumptionsFallback(parsed);
+  }
+
+  if (context) {
+    switch (field) {
+      case "tamSamSom":
+        return buildCanonicalTamSamSom(context);
+      case "swotAnalysis":
+        return buildCanonicalSwot(context, parsed);
+      case "unitEconomics":
+        return buildCanonicalUnitEconomics(context);
+      case "financialDashboard":
+        return buildCanonicalFinancialDashboard(context);
+      case "scenarioAnalysis":
+        return buildCanonicalScenarioAnalysis(context);
+      case "kpiDashboard":
+        return buildCanonicalKpiDashboard(context);
+      case "executiveRecommendation":
+        return buildCanonicalExecutiveRecommendation(context);
+      case "financialAssumptions":
+        return buildCanonicalFinancialAssumptions(context);
+      case "founderScore":
+        return buildCanonicalFounderScore(context);
+      case "executiveSummary":
+        return [
+          `Decision: ${context.investmentScore.recommendation}`,
+          `Investment Score: ${context.investmentScore.totalScore}/100 with ${context.investmentScore.confidence}% confidence.`,
+          `Thesis: ${context.normalizedBusinessIdea} should be evaluated against ${context.metrics.som.displayValue} obtainable market potential, ${context.metrics.cacPayback.displayValue} payback, and ${context.metrics.runway.displayValue} runway.`,
+          `Next Critical Action: ${context.investmentScore.nextCriticalAction}`,
+        ].join("\n");
+      default:
+        break;
+    }
+  }
+
+  const label = englishPlanFieldLabels[field];
+  const businessContext =
+    context?.normalizedBusinessIdea ||
+    (typeof parsed.businessIdea === "string" && parsed.businessIdea.trim()) ||
+    "the analyzed business model";
+
+  const fallbackByField: Record<PlanReportField, string> = {
+    executiveSummary: `Decision summary: ${businessContext} requires focused validation before scaling capital. The report should be read as a directional founder diligence memo until primary customer, pricing, and cost evidence is verified.`,
+    problem: `Customer pain: ${businessContext} should focus on the most expensive workflow, budget pressure, or adoption friction faced by the target buyer. Validate urgency through direct customer interviews before committing growth spend.`,
+    solution: `Product thesis: The solution must address the core buyer pain with a narrow initial scope, measurable outcome, and a defensible wedge. Validate that users prefer this workflow over current alternatives.`,
+    targetCustomer: `Target customer: Prioritize the beachhead ICP with the clearest pain, budget ownership, short adoption path, and measurable willingness to pay. Exclude segments with weak urgency or long procurement cycles.`,
+    marketOpportunity: `Market opportunity: The opportunity depends on reachable demand, competitive gaps, timing, and expansion potential. Validate market pull before assuming broad category growth converts into obtainable revenue.`,
+    competitorLandscape: `Competitor landscape: Compare direct competitors, substitutes, incumbents, and do-nothing alternatives. The investable gap must be a specific buyer outcome or distribution wedge, not a generic feature difference.`,
+    businessModel: `Business model: Revenue should map directly to the buyer value metric, expected usage, retention loop, and delivery cost. Validate that pricing, gross margin, and payback can compound at the chosen scale.`,
+    tamSamSom: `TAM / SAM / SOM: Market sizing requires verified category boundaries, reachable customer segments, and a defensible near-term obtainable share. Treat any missing sizing input as a validation requirement before investment.`,
+    swotAnalysis: `Strengths:\n- Focused business context and founder-controlled validation path.\nWeaknesses:\n- Evidence quality is incomplete until customer and pricing proof is collected.\nOpportunities:\n- Narrow beachhead execution can reveal a repeatable wedge.\nThreats:\n- Competitive response, CAC inflation, or weak retention can reduce investability.`,
+    portersFiveForces: `Porter's Five Forces: Assess rivalry, new entrants, buyer power, supplier power, and substitutes through the lens of founder execution. The key implication is whether the company can build a protected wedge before CAC or switching friction rises.`,
+    pricingStrategy: `Pricing strategy: Anchor pricing to measurable buyer value, willingness to pay, and delivery cost. Test entry packaging, expansion triggers, and discount discipline before locking the model.`,
+    goToMarketPlan: `Go-to-market plan: Start with the beachhead segment, one primary channel, a clear proof asset, and a measurable first-customer target. Scale only after CAC, conversion, and retention signals are repeatable.`,
+    salesStrategy: `Sales strategy: Use founder-led discovery to identify budget owner, trigger event, buying objections, pilot scope, and close criteria. A repeatable sales signal requires consistent conversion from qualified conversations to paid commitments.`,
+    unitEconomics: `Unit economics: Validate ARPA or ACV, gross margin, CAC, LTV, payback, and retention before scaling. The most important assumption is whether acquisition cost and payback remain viable as the channel expands.`,
+    financialDashboard: `Financial dashboard: Track revenue, gross margin, CAC, LTV, payback, burn, runway, EBITDA, break-even timing, and investment needed from one consistent assumption set. Treat missing values as validation gaps.`,
+    scenarioAnalysis: `Worst Case: Demand or CAC underperforms, extending payback and reducing runway.\nBase Case: The model follows current assumptions with controlled validation spend.\nBest Case: Conversion and retention improve, allowing faster capital deployment after proof points are met.`,
+    kpiDashboard: `KPI dashboard: Monitor acquisition, activation, retention, pipeline quality, revenue signal, product reliability, and learning velocity. Each KPI should have a target threshold and a warning threshold.`,
+    executiveRecommendation: `Decision: WAIT\nConfidence: Medium\nInvestment Recommendation: Hold for validation until the highest-risk assumptions are verified.\nMain Risk: Evidence is not complete enough for a scale decision.\nNext Action: Validate customer demand, pricing, CAC, and retention with primary data.`,
+    risks: `Risks: Track demand uncertainty, CAC escalation, retention weakness, competitive response, regulatory friction, capital intensity, and execution delays. Each risk needs a leading indicator and mitigation plan.`,
+    kpis: `KPI governance: Assign owners, review cadence, decision thresholds, and action triggers for the operating metrics. Missed thresholds should change spend, roadmap, or segment focus.`,
+    founderRoadmap: `Founder roadmap: Tomorrow, define the riskiest assumption. This week, run direct customer validation. In 30 days, prove willingness to pay. In 90 days, validate repeatable acquisition. In 180 days, decide whether to scale or redesign.`,
+    roadmap306090: `30 Days: Validate pain, ICP, and pricing signal.\n90 Days: Secure repeatable early acquisition and delivery proof.\n180 Days: Confirm retention, payback, and operating cadence.\n12 Months: Scale only if decision thresholds are met.`,
+    financialAssumptions: `Key assumptions: Revenue, gross margin, CAC, LTV, payback, burn, runway, EBITDA, break-even timing, and investment needed must come from one assumption set. Missing values require validation with primary data.`,
+    founderScore: `Founder Score: Use the decision engine to evaluate market opportunity, financial health, execution difficulty, competitive pressure, capital efficiency, technology leverage, and founder readiness. Missing evidence lowers confidence.`,
+    sourcesAssumptions: `Sources and Assumptions: Verified external citations were not returned in a complete structured form. No source URLs or publisher metadata have been fabricated. Planning inputs require validation before investment decisions.`,
+  };
+
+  return fallbackByField[field] || `${label}: This section requires validation.`;
+}
+
 function dedupeReportParagraphs(content: string) {
   const seen = new Set<string>();
 
@@ -807,25 +921,22 @@ function parseFullPlanReport(
   }
 
   const report = {} as Record<PlanReportField, string>;
-  const invalidFields: string[] = [];
   const failureFields: string[] = [];
+  const repairedFields: string[] = [];
 
   for (const field of planFields) {
-    const content =
-      field === "sourcesAssumptions" &&
-      (typeof parsed[field] !== "string" || !String(parsed[field]).trim())
-        ? createSourcesAssumptionsFallback(parsed)
-        : parsed[field];
-
-    if (typeof content !== "string" || !content.trim()) {
-      invalidFields.push(field);
-      continue;
-    }
+    const rawContent = coercePlanFieldContent(parsed[field]);
+    const content = rawContent.trim()
+      ? rawContent
+      : createPlanFieldFallback(field, parsed, context);
 
     const sanitizedContent = sanitizeVisibleReportContent(content);
 
     if (!sanitizedContent) {
-      invalidFields.push(field);
+      report[field] = ensureCompleteReportText(
+        createPlanFieldFallback(field, parsed, context)
+      );
+      repairedFields.push(field);
       continue;
     }
 
@@ -835,19 +946,29 @@ function parseFullPlanReport(
     }
 
     report[field] = sanitizedContent;
+
+    if (!rawContent.trim()) {
+      repairedFields.push(field);
+    }
   }
 
-  if (invalidFields.length || failureFields.length) {
+  if (failureFields.length) {
     throw new Error(
       [
         "Full report JSON validation failed.",
-        invalidFields.length ? `Missing/invalid fields: ${invalidFields.join(", ")}.` : "",
         failureFields.length ? `Failure-text fields: ${failureFields.join(", ")}.` : "",
         `outputLength=${value.length}`,
       ]
         .filter(Boolean)
         .join(" ")
     );
+  }
+
+  if (repairedFields.length) {
+    logOperationalInfo("[api:plan] repaired missing structured report fields", {
+      repairedFields,
+      outputLength: value.length,
+    });
   }
 
   return normalizeFullPlanReport(report, context, parsed);
