@@ -65,8 +65,8 @@ export default async function WorkspaceReportsPage({
       <div className="relative z-10 flex min-h-screen flex-col lg:flex-row">
         <DashboardSidebar />
 
-        <section className="flex-1 px-5 py-6 sm:px-8 lg:px-10 lg:py-9">
-          <div className="overflow-hidden rounded-[2.25rem] border border-white/10 bg-white/[0.045] p-6 shadow-2xl shadow-black/35 backdrop-blur-2xl sm:p-8 lg:p-10">
+        <section className="flex-1 px-4 py-5 sm:px-8 lg:px-10 lg:py-9">
+          <div className="overflow-hidden rounded-[2.25rem] border border-white/10 bg-white/[0.045] p-6 shadow-2xl shadow-black/35 ring-1 ring-white/[0.025] backdrop-blur-2xl transition duration-300 hover:border-teal-300/15 hover:bg-white/[0.052] sm:p-8 lg:p-10">
             <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
               <div>
                 <div className="mb-4 flex flex-wrap items-center gap-2 text-sm text-zinc-500">
@@ -80,7 +80,7 @@ export default async function WorkspaceReportsPage({
                 </div>
                 <Link
                   href="/dashboard"
-                  className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.035] px-3 py-2 text-sm font-medium text-zinc-400 transition duration-300 hover:-translate-y-0.5 hover:border-teal-300/25 hover:text-white"
+                  className="inline-flex min-h-11 items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.035] px-3 py-2 text-sm font-medium text-zinc-400 shadow-lg shadow-black/10 transition duration-300 hover:-translate-y-0.5 hover:border-teal-300/25 hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200/30"
                 >
                   <ArrowLeft className="h-4 w-4" />
                   Back to Workspaces
@@ -88,17 +88,17 @@ export default async function WorkspaceReportsPage({
                 <p className="mt-6 text-xs font-semibold tracking-[0.35em] text-teal-300/70">
                   WORKSPACE
                 </p>
-                <h1 className="mt-3 text-4xl font-semibold tracking-tight text-white md:text-5xl">
+                <h1 className="mt-3 text-4xl font-semibold tracking-[-0.035em] text-white md:text-5xl">
                   {data.workspace.name}
                 </h1>
-                <p className="mt-4 max-w-2xl text-base leading-7 text-zinc-400">
+                <p className="mt-4 max-w-2xl text-base leading-8 text-zinc-400">
                   Search, open and export the reports inside this workspace.
                 </p>
               </div>
 
               <Link
                 href={`/plan?workspaceId=${data.workspace.id}`}
-                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-black shadow-xl shadow-white/10 transition duration-300 hover:-translate-y-0.5 hover:bg-zinc-200"
+                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-black shadow-xl shadow-white/10 ring-1 ring-white/20 transition duration-300 hover:-translate-y-0.5 hover:bg-zinc-200 hover:shadow-2xl hover:shadow-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
               >
                 <Plus className="h-4 w-4" />
                 Create New Report
@@ -112,7 +112,7 @@ export default async function WorkspaceReportsPage({
                 return (
                   <div
                     key={stat.label}
-                    className="rounded-2xl border border-white/10 bg-black/25 p-4"
+                    className="min-h-28 rounded-2xl border border-white/10 bg-black/25 p-4 shadow-inner shadow-black/20 ring-1 ring-white/[0.015] transition duration-300 hover:border-teal-300/15 hover:bg-white/[0.035]"
                   >
                     <div className="flex items-center justify-between gap-3">
                       <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">

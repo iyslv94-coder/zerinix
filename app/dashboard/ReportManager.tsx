@@ -277,8 +277,8 @@ export default function ReportManager({
 
   return (
     <section className="mt-8">
-      <div className="overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.045] shadow-2xl shadow-black/30 backdrop-blur-xl">
-        <div className="border-b border-white/10 bg-[radial-gradient(circle_at_top_right,rgba(45,212,191,0.12),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.02))] p-5 sm:p-6">
+      <div className="overflow-hidden rounded-[2.05rem] border border-white/10 bg-white/[0.045] shadow-2xl shadow-black/35 ring-1 ring-white/[0.025] backdrop-blur-xl">
+        <div className="border-b border-white/10 bg-[radial-gradient(circle_at_top_right,rgba(45,212,191,0.12),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.065),rgba(255,255,255,0.02))] p-5 sm:p-6">
           <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
             <div>
               <div className="flex flex-wrap items-center gap-2 text-sm text-zinc-500">
@@ -291,7 +291,7 @@ export default function ReportManager({
               <p className="mt-5 text-xs font-semibold uppercase tracking-[0.24em] text-teal-200/70">
                 Report Management
               </p>
-              <h2 className="mt-2 text-3xl font-semibold tracking-tight text-white">
+              <h2 className="mt-2 text-3xl font-semibold tracking-[-0.03em] text-white">
                 Browse, organize and reopen reports.
               </h2>
               <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-500">
@@ -302,7 +302,7 @@ export default function ReportManager({
 
             <Link
               href={createReportHref}
-              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-black shadow-xl shadow-white/10 transition duration-300 hover:-translate-y-0.5 hover:bg-zinc-200"
+              className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-black shadow-xl shadow-white/10 ring-1 ring-white/20 transition duration-300 hover:-translate-y-0.5 hover:bg-zinc-200 hover:shadow-2xl hover:shadow-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
             >
               <Plus className="h-4 w-4" />
               New report
@@ -316,7 +316,7 @@ export default function ReportManager({
               ["Market analysis", reportCounts.market],
               ["Archived", reportCounts.archived],
             ].map(([label, value]) => (
-              <div key={label} className="rounded-2xl border border-white/10 bg-black/25 p-4">
+              <div key={label} className="min-h-28 rounded-2xl border border-white/10 bg-black/25 p-4 shadow-inner shadow-black/20 ring-1 ring-white/[0.015] transition duration-300 hover:border-teal-300/15 hover:bg-white/[0.035]">
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
                   {label}
                 </p>
@@ -335,7 +335,7 @@ export default function ReportManager({
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Search reports by title, type or prompt..."
-                className="w-full rounded-[1.35rem] border border-white/10 bg-black/35 py-4 pl-12 pr-4 text-sm text-white outline-none shadow-xl shadow-black/20 transition duration-300 placeholder:text-zinc-600 focus:border-teal-300/40 focus:bg-black/50 focus:ring-2 focus:ring-teal-200/10"
+                className="min-h-14 w-full rounded-[1.35rem] border border-white/10 bg-black/35 py-4 pl-12 pr-4 text-sm text-white outline-none shadow-xl shadow-black/20 ring-1 ring-white/[0.02] transition duration-300 placeholder:text-zinc-600 hover:bg-black/45 focus:border-teal-300/40 focus:bg-black/50 focus:ring-2 focus:ring-teal-200/10"
               />
             </div>
 
@@ -343,7 +343,7 @@ export default function ReportManager({
               <select
                 value={typeFilter}
                 onChange={(event) => setTypeFilter(event.target.value as ReportTypeFilter)}
-                className="rounded-2xl border border-white/10 bg-black/35 px-4 py-3 text-sm text-zinc-200 outline-none transition focus:border-teal-300/40"
+                className="min-h-12 rounded-2xl border border-white/10 bg-black/35 px-4 py-3 text-sm text-zinc-200 shadow-lg shadow-black/10 outline-none ring-1 ring-white/[0.015] transition hover:bg-black/45 focus:border-teal-300/40 focus:ring-2 focus:ring-teal-200/10"
                 aria-label="Filter by report type"
               >
                 <option value="all">All types</option>
@@ -353,7 +353,7 @@ export default function ReportManager({
               <select
                 value={statusFilter}
                 onChange={(event) => setStatusFilter(event.target.value as ReportStatusFilter)}
-                className="rounded-2xl border border-white/10 bg-black/35 px-4 py-3 text-sm text-zinc-200 outline-none transition focus:border-teal-300/40"
+                className="min-h-12 rounded-2xl border border-white/10 bg-black/35 px-4 py-3 text-sm text-zinc-200 shadow-lg shadow-black/10 outline-none ring-1 ring-white/[0.015] transition hover:bg-black/45 focus:border-teal-300/40 focus:ring-2 focus:ring-teal-200/10"
                 aria-label="Filter by status"
               >
                 <option value="all">All statuses</option>
@@ -364,7 +364,7 @@ export default function ReportManager({
               <select
                 value={sort}
                 onChange={(event) => setSort(event.target.value as ReportSort)}
-                className="rounded-2xl border border-white/10 bg-black/35 px-4 py-3 text-sm text-zinc-200 outline-none transition focus:border-teal-300/40"
+                className="min-h-12 rounded-2xl border border-white/10 bg-black/35 px-4 py-3 text-sm text-zinc-200 shadow-lg shadow-black/10 outline-none ring-1 ring-white/[0.015] transition hover:bg-black/45 focus:border-teal-300/40 focus:ring-2 focus:ring-teal-200/10"
                 aria-label="Sort reports"
               >
                 <option value="newest">Newest first</option>
@@ -379,7 +379,7 @@ export default function ReportManager({
             <button
               type="button"
               onClick={() => setViewFilter("active")}
-              className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold transition ${
+              className={`inline-flex min-h-10 items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold shadow-sm shadow-black/10 transition duration-300 hover:-translate-y-0.5 ${
                 viewFilter === "active"
                   ? "border-teal-200/30 bg-teal-200/10 text-teal-100"
                   : "border-white/10 bg-white/[0.035] text-zinc-400 hover:text-white"
@@ -391,7 +391,7 @@ export default function ReportManager({
             <button
               type="button"
               onClick={() => setViewFilter("archived")}
-              className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold transition ${
+              className={`inline-flex min-h-10 items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold shadow-sm shadow-black/10 transition duration-300 hover:-translate-y-0.5 ${
                 viewFilter === "archived"
                   ? "border-teal-200/30 bg-teal-200/10 text-teal-100"
                   : "border-white/10 bg-white/[0.035] text-zinc-400 hover:text-white"
@@ -403,7 +403,7 @@ export default function ReportManager({
             <button
               type="button"
               onClick={() => setFavoritesOnly((value) => !value)}
-              className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold transition ${
+              className={`inline-flex min-h-10 items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold shadow-sm shadow-black/10 transition duration-300 hover:-translate-y-0.5 ${
                 favoritesOnly
                   ? "border-teal-200/30 bg-teal-200/10 text-teal-100"
                   : "border-white/10 bg-white/[0.035] text-zinc-400 hover:text-white"
@@ -422,7 +422,7 @@ export default function ReportManager({
                   setViewFilter("active");
                   setFavoritesOnly(false);
                 }}
-                className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.035] px-3 py-2 text-xs font-semibold text-zinc-400 transition hover:text-white"
+                className="inline-flex min-h-10 items-center gap-2 rounded-full border border-white/10 bg-white/[0.035] px-3 py-2 text-xs font-semibold text-zinc-400 shadow-sm shadow-black/10 transition duration-300 hover:-translate-y-0.5 hover:bg-white/[0.06] hover:text-white"
               >
                 <X className="h-3.5 w-3.5" />
                 Clear filters
@@ -453,19 +453,21 @@ export default function ReportManager({
                   return (
                     <article
                       key={report.id}
-                      className="group rounded-[1.75rem] border border-white/10 bg-white/[0.045] p-5 shadow-2xl shadow-black/30 backdrop-blur-xl transition duration-300 hover:-translate-y-1 hover:border-teal-300/20 hover:bg-white/[0.065]"
+                      className="group relative min-h-[22rem] overflow-hidden rounded-[1.75rem] border border-white/10 bg-white/[0.045] p-5 shadow-2xl shadow-black/30 ring-1 ring-white/[0.025] backdrop-blur-xl transition duration-300 hover:-translate-y-1 hover:border-teal-300/20 hover:bg-white/[0.065] hover:shadow-teal-950/10"
                     >
+                      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/15 to-transparent" />
+                      <div className="pointer-events-none absolute -right-10 -top-10 h-28 w-28 rounded-full bg-teal-300/5 blur-2xl transition duration-300 group-hover:bg-teal-300/10" />
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex h-12 w-12 items-center justify-center rounded-[1.1rem] border border-white/10 bg-white/5 transition duration-300 group-hover:border-teal-300/25 group-hover:bg-teal-300/10">
                           <TypeIcon className="h-5 w-5 text-teal-200" />
                         </div>
                         <div className="flex items-center gap-2">
                           {isPinned ? (
-                            <span className="rounded-full border border-teal-300/20 bg-teal-300/10 px-2.5 py-1 text-xs font-medium text-teal-100">
+                            <span className="rounded-full border border-teal-300/20 bg-teal-300/10 px-2.5 py-1 text-xs font-medium text-teal-100 shadow-sm shadow-teal-950/10 ring-1 ring-teal-200/10">
                               Pinned
                             </span>
                           ) : null}
-                          <span className="rounded-full border border-white/10 bg-black/25 px-2.5 py-1 text-xs font-medium capitalize text-zinc-300">
+                          <span className="rounded-full border border-white/10 bg-black/25 px-2.5 py-1 text-xs font-medium capitalize text-zinc-300 shadow-sm shadow-black/10">
                             {report.status}
                           </span>
                         </div>
@@ -476,11 +478,11 @@ export default function ReportManager({
                           {report.title}
                         </h3>
                         <div className="mt-4 grid gap-2 text-sm text-zinc-400">
-                          <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-black/25 px-3 py-2">
+                          <div className="flex min-h-11 items-center gap-2 rounded-2xl border border-white/10 bg-black/25 px-3 py-2 shadow-inner shadow-black/15">
                             <CalendarDays className="h-4 w-4 text-zinc-500" />
                             {formatDate(report.createdAt)}
                           </div>
-                          <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-black/25 px-3 py-2">
+                          <div className="flex min-h-11 items-center gap-2 rounded-2xl border border-white/10 bg-black/25 px-3 py-2 shadow-inner shadow-black/15">
                             <Sparkles className="h-4 w-4 text-teal-200" />
                             {report.type}
                           </div>
@@ -490,14 +492,14 @@ export default function ReportManager({
                       <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-white/10 pt-4">
                         <Link
                           href={`/dashboard/${report.id}`}
-                          className="inline-flex items-center gap-2 rounded-xl border border-teal-300/15 bg-teal-300/[0.06] px-3 py-2 text-sm font-medium text-teal-100 transition duration-300 hover:-translate-y-0.5 hover:border-teal-300/30 hover:bg-teal-300/10"
+                          className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-teal-300/15 bg-teal-300/[0.06] px-3 py-2 text-sm font-medium text-teal-100 shadow-lg shadow-teal-950/10 transition duration-300 hover:-translate-y-0.5 hover:border-teal-300/30 hover:bg-teal-300/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200/30"
                         >
                           Open
                         </Link>
                         <button
                           type="button"
                           onClick={() => updatePinnedReports(report.id)}
-                          className="inline-flex items-center justify-center rounded-xl border border-white/10 bg-white/5 p-2 text-zinc-300 transition hover:-translate-y-0.5 hover:border-teal-300/25 hover:text-white"
+                          className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 p-2 text-zinc-300 shadow-sm shadow-black/10 transition duration-300 hover:-translate-y-0.5 hover:border-teal-300/25 hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200/30"
                           aria-label={isPinned ? "Unpin report" : "Pin report"}
                           title={isPinned ? "Unpin report" : "Pin report"}
                         >
@@ -506,7 +508,7 @@ export default function ReportManager({
                         <button
                           type="button"
                           onClick={() => updateFavoriteReports(report.id)}
-                          className="inline-flex items-center justify-center rounded-xl border border-white/10 bg-white/5 p-2 text-zinc-300 transition hover:-translate-y-0.5 hover:border-teal-300/25 hover:text-white"
+                          className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 p-2 text-zinc-300 shadow-sm shadow-black/10 transition duration-300 hover:-translate-y-0.5 hover:border-teal-300/25 hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200/30"
                           aria-label={isFavorite ? "Remove favorite" : "Favorite report"}
                           title={isFavorite ? "Remove favorite" : "Favorite report"}
                         >
@@ -515,7 +517,7 @@ export default function ReportManager({
                         <button
                           type="button"
                           onClick={() => updateArchivedReports(report.id)}
-                          className="inline-flex items-center justify-center rounded-xl border border-white/10 bg-white/5 p-2 text-zinc-300 transition hover:-translate-y-0.5 hover:border-teal-300/25 hover:text-white"
+                          className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 p-2 text-zinc-300 shadow-sm shadow-black/10 transition duration-300 hover:-translate-y-0.5 hover:border-teal-300/25 hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200/30"
                           aria-label={isArchived ? "Restore report" : "Archive report locally"}
                           title={isArchived ? "Restore report" : "Archive report locally"}
                         >
@@ -524,7 +526,7 @@ export default function ReportManager({
                         <button
                           type="button"
                           onClick={() => void copyReportLink(report.id)}
-                          className="inline-flex items-center justify-center rounded-xl border border-white/10 bg-white/5 p-2 text-zinc-300 transition hover:-translate-y-0.5 hover:border-teal-300/25 hover:text-white"
+                          className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 p-2 text-zinc-300 shadow-sm shadow-black/10 transition duration-300 hover:-translate-y-0.5 hover:border-teal-300/25 hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200/30"
                           aria-label="Copy report link"
                           title="Copy report link"
                         >
@@ -541,7 +543,7 @@ export default function ReportManager({
               </div>
 
               {reports.length === 0 ? (
-                <div className="rounded-[1.75rem] border border-white/10 bg-white/[0.045] p-10 text-center shadow-2xl shadow-black/30 backdrop-blur-xl">
+                <div className="rounded-[1.75rem] border border-dashed border-white/10 bg-white/[0.045] p-10 text-center shadow-2xl shadow-black/30 ring-1 ring-white/[0.025] backdrop-blur-xl">
                   <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-[1.2rem] border border-teal-300/20 bg-teal-300/10">
                     <FileText className="h-6 w-6 text-teal-200" />
                   </div>
@@ -553,7 +555,7 @@ export default function ReportManager({
                   </p>
                   <Link
                     href={createReportHref}
-                    className="mt-6 inline-flex items-center justify-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-black shadow-xl shadow-white/10 transition duration-300 hover:-translate-y-0.5 hover:bg-zinc-200"
+                    className="mt-6 inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-black shadow-xl shadow-white/10 ring-1 ring-white/20 transition duration-300 hover:-translate-y-0.5 hover:bg-zinc-200 hover:shadow-2xl hover:shadow-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
                   >
                     <Plus className="h-4 w-4" />
                     Create New Report
@@ -562,7 +564,7 @@ export default function ReportManager({
               ) : null}
 
               {reports.length > 0 && filteredReports.length === 0 ? (
-                <div className="rounded-[1.75rem] border border-white/10 bg-white/[0.045] p-10 text-center shadow-2xl shadow-black/30 backdrop-blur-xl">
+                <div className="rounded-[1.75rem] border border-dashed border-white/10 bg-white/[0.045] p-10 text-center shadow-2xl shadow-black/30 ring-1 ring-white/[0.025] backdrop-blur-xl">
                   <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-[1.2rem] border border-teal-300/20 bg-teal-300/10">
                     <Search className="h-6 w-6 text-teal-200" />
                   </div>
@@ -578,7 +580,7 @@ export default function ReportManager({
             </div>
 
             <aside className="space-y-4">
-              <div className="rounded-[1.5rem] border border-white/10 bg-black/30 p-5">
+              <div className="rounded-[1.5rem] border border-white/10 bg-black/30 p-5 shadow-xl shadow-black/20 ring-1 ring-white/[0.02]">
                 <div className="flex items-center gap-3">
                   <Clock3 className="h-5 w-5 text-teal-200" />
                   <div>
@@ -597,7 +599,7 @@ export default function ReportManager({
                         <Link
                           key={`activity-${report.id}`}
                           href={`/dashboard/${report.id}`}
-                          className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/[0.035] p-3 transition hover:border-teal-200/25 hover:bg-white/[0.06]"
+                          className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/[0.035] p-3 shadow-sm shadow-black/10 transition duration-300 hover:-translate-y-0.5 hover:border-teal-200/25 hover:bg-white/[0.06]"
                         >
                           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-black/25">
                             <TypeIcon className="h-4 w-4 text-teal-200" />
@@ -621,7 +623,7 @@ export default function ReportManager({
                 </div>
               </div>
 
-              <div className="rounded-[1.5rem] border border-white/10 bg-black/30 p-5">
+              <div className="rounded-[1.5rem] border border-white/10 bg-black/30 p-5 shadow-xl shadow-black/20 ring-1 ring-white/[0.02]">
                 <div className="flex items-center gap-3">
                   <FolderOpen className="h-5 w-5 text-teal-200" />
                   <div>
