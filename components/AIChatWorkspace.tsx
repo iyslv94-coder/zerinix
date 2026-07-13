@@ -489,8 +489,11 @@ function CodeBlock({ language, code }: { language: string; code: string }) {
           {copied ? "Copied" : "Copy"}
         </button>
       </div>
-      <pre className="max-w-full overflow-x-auto overscroll-x-contain p-4 font-mono text-sm leading-6 text-zinc-200 [tab-size:2]">
-        <code className="block min-w-max whitespace-pre" dangerouslySetInnerHTML={{ __html: highlightCode(code) }} />
+      <pre className="max-w-full overflow-x-auto overscroll-x-contain p-4 font-mono text-sm leading-6 text-zinc-200 [overflow-wrap:normal] [tab-size:2]">
+        <code
+          className="block min-w-max whitespace-pre [overflow-wrap:normal] [word-break:normal]"
+          dangerouslySetInnerHTML={{ __html: highlightCode(code) }}
+        />
       </pre>
     </div>
   );
@@ -585,6 +588,20 @@ function parseMarkdownSegments(content: string) {
   let codeLanguage = "";
   let inCode = false;
 
+  const getFence = (line: string) => {
+    const match = line.match(/^\s*(`{3,}|~{3,})[ \t]*([^`]*)$/);
+
+    if (!match) {
+      return null;
+    }
+
+    const marker = match[1][0];
+    const info = (match[2] || "").trim();
+    const language = info.split(/\s+/)[0]?.replace(/[^\w.+-]/g, "") || "";
+
+    return { marker, language };
+  };
+
   const flushMarkdown = () => {
     if (!markdownLines.length) {
       return;
@@ -605,7 +622,7 @@ function parseMarkdownSegments(content: string) {
   };
 
   for (const line of lines) {
-    const fence = line.match(/^```\s*([A-Za-z0-9_+.-]*)\s*$/);
+    const fence = getFence(line);
 
     if (fence) {
       if (inCode) {
@@ -614,7 +631,7 @@ function parseMarkdownSegments(content: string) {
       } else {
         flushMarkdown();
         inCode = true;
-        codeLanguage = fence[1] || "";
+        codeLanguage = fence.language;
       }
       continue;
     }
