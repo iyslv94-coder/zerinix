@@ -17,6 +17,7 @@ import {
   WalletCards,
 } from "lucide-react";
 import { createClient } from "@/app/lib/supabase/server";
+import { dashboardTheme } from "@/app/lib/ui/dashboard-theme";
 import {
   getUserPlanTier,
   loadUserUsageSummary,
@@ -157,9 +158,9 @@ export default async function DashboardPage() {
   ];
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-black text-white">
-      <div className="pointer-events-none absolute inset-0 z-0 bg-[radial-gradient(circle_at_top_right,rgba(45,212,191,0.14),transparent_30%),radial-gradient(circle_at_18%_18%,rgba(255,255,255,0.055),transparent_28%),linear-gradient(180deg,rgba(255,255,255,0.025),transparent_36%)]" />
-      <div className="pointer-events-none absolute inset-0 z-0 bg-[linear-gradient(rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.035)_1px,transparent_1px)] bg-[size:64px_64px] opacity-40" />
+    <main className={dashboardTheme.page}>
+      <div className={dashboardTheme.atmosphere} />
+      <div className={dashboardTheme.grid} />
       <div className="relative z-10 flex min-h-screen flex-col lg:flex-row">
         <DashboardSidebar />
 

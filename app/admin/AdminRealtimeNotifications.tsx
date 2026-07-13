@@ -78,7 +78,7 @@ export function AdminRealtimeNotifications({
       count: summary.newUsers.length,
       href: "/admin/users",
       icon: UserPlus,
-      className: "border-purple-300/25 bg-purple-400/10 text-purple-100",
+      className: "border-teal-300/20 bg-teal-300/10 text-teal-100",
     },
     {
       label: "Reports",
@@ -97,12 +97,12 @@ export function AdminRealtimeNotifications({
   ];
 
   return (
-    <section className="mt-5 rounded-[1.55rem] border border-white/10 bg-white/[0.055] p-5 shadow-[0_22px_90px_rgba(0,0,0,0.25)] backdrop-blur-xl">
+    <section className="mt-5 rounded-[1.55rem] border border-white/10 bg-white/[0.045] p-5 shadow-2xl shadow-black/25 backdrop-blur-xl">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
-          <span className="relative flex h-10 w-10 items-center justify-center rounded-[1rem] border border-purple-300/20 bg-purple-400/10">
-            <span className="absolute h-3 w-3 animate-ping rounded-full bg-purple-300/35" />
-            <Bell className="relative h-5 w-5 text-purple-100" />
+          <span className="relative flex h-10 w-10 items-center justify-center rounded-[1rem] border border-teal-300/20 bg-teal-300/10">
+            <span className="absolute h-3 w-3 animate-ping rounded-full bg-teal-300/35" />
+            <Bell className="relative h-5 w-5 text-teal-100" />
           </span>
           <div>
             <h2 className="text-[15px] font-semibold text-white">Realtime notifications</h2>
@@ -124,7 +124,7 @@ export function AdminRealtimeNotifications({
             <Link
               key={group.label}
               href={group.href}
-              className="rounded-[1.2rem] border border-white/10 bg-white/[0.045] p-4 transition duration-300 hover:-translate-y-0.5 hover:border-purple-300/28 hover:bg-white/[0.07]"
+              className="rounded-[1.2rem] border border-white/10 bg-black/25 p-4 transition duration-300 hover:-translate-y-0.5 hover:border-teal-300/25 hover:bg-white/[0.065]"
             >
               <div className="flex items-center justify-between gap-3">
                 <span className={`flex h-9 w-9 items-center justify-center rounded-[0.95rem] border ${group.className}`}>

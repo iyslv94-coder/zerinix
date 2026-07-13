@@ -54,8 +54,8 @@ function TrendPill({ data }: { data: ChartPoint[] }) {
     trend.direction === "down"
       ? "border-red-300/20 bg-red-950/20 text-red-100"
       : trend.direction === "up"
-        ? "border-purple-300/25 bg-purple-400/10 text-purple-100"
-        : "border-[#262626] bg-white/[0.04] text-zinc-400";
+        ? "border-teal-300/20 bg-teal-300/10 text-teal-100"
+        : "border-white/10 bg-white/[0.04] text-zinc-400";
 
   return (
     <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${className}`}>
@@ -86,7 +86,7 @@ function AnalyticsChart({
     .join(" ");
 
   return (
-    <article className={`group relative overflow-hidden rounded-[1.55rem] border border-[#262626] bg-white/[0.045] p-5 shadow-[0_18px_60px_rgba(0,0,0,0.24)] backdrop-blur-xl transition duration-300 hover:-translate-y-1 hover:border-purple-300/22 hover:bg-white/[0.065] ${featured ? "md:col-span-2 2xl:col-span-2" : ""}`}>
+    <article className={`group relative overflow-hidden rounded-[1.55rem] border border-white/10 bg-white/[0.045] p-5 shadow-2xl shadow-black/25 backdrop-blur-xl transition duration-300 hover:-translate-y-1 hover:border-teal-300/25 hover:bg-white/[0.065] ${featured ? "md:col-span-2 2xl:col-span-2" : ""}`}>
       <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-white/18 to-transparent opacity-0 transition duration-300 group-hover:opacity-100" />
       <div className="flex items-start justify-between gap-4">
         <div>
@@ -103,18 +103,18 @@ function AnalyticsChart({
               {valuePrefix}
               {formatNumber(latest)}
             </p>
-            <div className="inline-flex items-center gap-2 rounded-full border border-[#262626] bg-black/25 px-2.5 py-1 text-[11px] text-zinc-500">
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/25 px-2.5 py-1 text-[11px] text-zinc-500">
               <Clock className="h-3.5 w-3.5" />
               Last point
             </div>
           </div>
 
-          <div className={`${featured ? "h-56" : "h-40"} mt-5 overflow-hidden rounded-[1.2rem] border border-[#262626] bg-black/25 p-3.5`} aria-label={`${title} live analytics chart`}>
+          <div className={`${featured ? "h-56" : "h-40"} mt-5 overflow-hidden rounded-[1.2rem] border border-white/10 bg-black/25 p-3.5`} aria-label={`${title} live analytics chart`}>
             <svg className="h-full w-full overflow-visible" viewBox="0 0 100 100" role="img">
               <defs>
                 <linearGradient id={`${chartId}-area`} x1="0" x2="0" y1="0" y2="1">
-                  <stop offset="0%" stopColor="rgb(192 132 252)" stopOpacity="0.34" />
-                  <stop offset="100%" stopColor="rgb(192 132 252)" stopOpacity="0.02" />
+                  <stop offset="0%" stopColor="rgb(45 212 191)" stopOpacity="0.3" />
+                  <stop offset="100%" stopColor="rgb(45 212 191)" stopOpacity="0.02" />
                 </linearGradient>
               </defs>
               {[24, 48, 72].map((line) => (
@@ -134,7 +134,7 @@ function AnalyticsChart({
               />
               <polyline
                 fill="none"
-                stroke="rgb(216 180 254)"
+                stroke="rgb(45 212 191)"
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 strokeWidth="3"
@@ -150,7 +150,7 @@ function AnalyticsChart({
                     cx={x}
                     cy={y}
                     r="2.6"
-                    className="fill-[#0b0b0f] stroke-purple-200"
+                    className="fill-black stroke-teal-200"
                     strokeWidth="1.5"
                   />
                 );
@@ -165,7 +165,7 @@ function AnalyticsChart({
           </div>
         </>
       ) : (
-        <div className="mt-5 rounded-[1.1rem] border border-dashed border-[#262626] bg-black/25 p-5 text-sm text-zinc-500">
+        <div className="mt-5 rounded-[1.1rem] border border-dashed border-white/10 bg-black/25 p-5 text-sm text-zinc-500">
           <AreaChart className="mb-3 h-5 w-5 text-zinc-600" />
           {unavailableLabel}
         </div>

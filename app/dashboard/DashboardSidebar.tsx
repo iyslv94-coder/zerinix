@@ -10,6 +10,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { signOut } from "@/app/auth/actions";
+import { dashboardTheme } from "@/app/lib/ui/dashboard-theme";
 
 export default function DashboardSidebar() {
   const items = [
@@ -21,7 +22,7 @@ export default function DashboardSidebar() {
   ];
 
   return (
-    <aside className="flex border-b border-white/10 bg-black/85 px-4 py-4 shadow-2xl shadow-black/30 backdrop-blur-2xl lg:sticky lg:top-0 lg:min-h-screen lg:w-72 lg:flex-col lg:border-b-0 lg:border-r lg:border-white/10 lg:bg-black/70 lg:px-5 lg:py-6">
+    <aside className={`flex ${dashboardTheme.sidebar} lg:sticky lg:top-0 lg:min-h-screen lg:w-72 lg:flex-col lg:px-5 lg:py-6`}>
       <div className="hidden lg:block">
         <Link
           href="/"

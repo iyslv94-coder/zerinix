@@ -17,6 +17,7 @@ import {
   SlidersHorizontal,
   Users,
 } from "lucide-react";
+import { dashboardTheme } from "@/app/lib/ui/dashboard-theme";
 
 const navGroups = [
   {
@@ -79,18 +80,18 @@ export function AdminNavigation() {
                   aria-current={active ? "page" : undefined}
                   className={`group relative flex h-[2.65rem] shrink-0 items-center gap-2.5 rounded-[1rem] px-2.5 text-[13px] font-medium transition duration-300 xl:w-full ${
                     active
-                      ? "border border-purple-400/24 bg-white/[0.065] text-white shadow-[0_16px_48px_rgba(0,0,0,0.22)]"
-                      : "border border-transparent text-zinc-400 hover:-translate-y-0.5 hover:border-[#262626] hover:bg-white/[0.045] hover:text-white"
+                      ? "border border-teal-300/25 bg-teal-300/[0.055] text-white shadow-xl shadow-teal-950/10"
+                      : `border border-transparent text-zinc-400 ${dashboardTheme.hoverSurface} hover:text-white`
                   }`}
                 >
                   {active ? (
-                    <span className="absolute left-0 top-1/2 hidden h-7 w-1 -translate-y-1/2 rounded-r-full bg-purple-300 shadow-[0_0_16px_rgba(216,180,254,0.38)] xl:block" />
+                    <span className="absolute left-0 top-1/2 hidden h-7 w-1 -translate-y-1/2 rounded-r-full bg-teal-300 shadow-[0_0_18px_rgba(45,212,191,0.45)] xl:block" />
                   ) : null}
                   <span
                     className={`flex h-7 w-7 items-center justify-center rounded-[0.75rem] transition duration-300 ${
                       active
-                        ? "bg-[#7c3aed] text-white shadow-[0_10px_24px_rgba(124,58,237,0.16)]"
-                        : "bg-white/[0.045] text-zinc-300 group-hover:bg-white/[0.075] group-hover:text-purple-200"
+                        ? "border border-teal-200/20 bg-teal-200/10 text-teal-200"
+                        : "border border-white/10 bg-black/25 text-zinc-300 group-hover:border-teal-200/25 group-hover:bg-teal-200/10 group-hover:text-teal-200"
                     }`}
                   >
                     <Icon className="h-3.5 w-3.5" />

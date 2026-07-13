@@ -12,6 +12,7 @@ import { AdminDateRangeControls } from "./AdminDateRangeControls";
 import { AdminExports } from "./AdminExports";
 import { AdminShell } from "./AdminShell";
 import { AdminSystemHealth } from "./AdminSystemHealth";
+import { dashboardTheme } from "@/app/lib/ui/dashboard-theme";
 import {
   loadAdminDashboardData,
   resolveAdminDateRange,
@@ -81,10 +82,10 @@ function trendClass(direction: Trend["direction"]) {
   }
 
   if (direction === "up") {
-    return "border-purple-300/25 bg-purple-400/10 text-purple-100";
+    return "border-teal-300/20 bg-teal-300/10 text-teal-100";
   }
 
-  return "border-[#262626] bg-white/[0.04] text-zinc-400";
+  return "border-white/10 bg-white/[0.04] text-zinc-400";
 }
 
 function MetricCard({
@@ -102,7 +103,7 @@ function MetricCard({
   value: string;
   detail: string;
   icon: typeof Users;
-  accent: "green" | "blue" | "orange" | "purple";
+  accent: "green" | "blue" | "orange" | "teal";
   animatedValue?: number;
   valueFormat?: AdminAnimatedValueFormat;
   animatedEmptyLabel?: string;
@@ -110,14 +111,14 @@ function MetricCard({
 }) {
   const TrendIcon = trend?.direction === "down" ? TrendingDown : TrendingUp;
   const accentClasses = {
-    green: "border-emerald-400/18 bg-emerald-400/10 text-emerald-200 group-hover:border-emerald-300/30",
-    blue: "border-sky-400/18 bg-sky-400/10 text-sky-200 group-hover:border-sky-300/30",
-    orange: "border-orange-400/18 bg-orange-400/10 text-orange-200 group-hover:border-orange-300/30",
-    purple: "border-purple-400/20 bg-purple-400/10 text-purple-200 group-hover:border-purple-300/32",
+    green: "border-emerald-300/20 bg-emerald-300/10 text-emerald-200 group-hover:border-emerald-300/30",
+    blue: "border-white/15 bg-white/[0.06] text-teal-200 group-hover:border-teal-300/25",
+    orange: "border-amber-300/20 bg-amber-300/10 text-amber-200 group-hover:border-amber-300/30",
+    teal: "border-teal-300/20 bg-teal-300/10 text-teal-200 group-hover:border-teal-300/30",
   }[accent];
 
   return (
-    <article className="group relative min-h-[10.25rem] overflow-hidden rounded-[1.35rem] border border-[#262626] bg-white/[0.045] p-4.5 shadow-[0_18px_60px_rgba(0,0,0,0.24)] backdrop-blur-xl transition duration-300 ease-out hover:-translate-y-1 hover:border-[#343434] hover:bg-white/[0.065] hover:shadow-[0_24px_76px_rgba(0,0,0,0.3)]">
+    <article className={`group relative min-h-[10.25rem] overflow-hidden rounded-[1.35rem] p-4.5 transition duration-300 ease-out hover:shadow-2xl hover:shadow-black/35 ${dashboardTheme.surface} ${dashboardTheme.hoverSurface}`}>
       <div className="pointer-events-none absolute inset-x-5 top-0 h-px bg-gradient-to-r from-transparent via-white/18 to-transparent opacity-0 transition duration-300 group-hover:opacity-100" />
       <div className="flex items-center justify-between gap-4">
         <span className={`flex h-10 w-10 items-center justify-center rounded-[1rem] border transition duration-300 group-hover:scale-105 ${accentClasses}`}>
@@ -129,7 +130,7 @@ function MetricCard({
             {trend.label}
           </span>
         ) : (
-          <span className="rounded-full border border-[#262626] bg-black/25 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
+          <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${dashboardTheme.mutedPill}`}>
             Live
           </span>
         )}
@@ -177,23 +178,23 @@ function LineChartCard({
     .join(" ");
 
   return (
-    <section className="rounded-[1.35rem] border border-[#262626] bg-white/[0.045] p-5 shadow-[0_18px_60px_rgba(0,0,0,0.24)] backdrop-blur-xl xl:col-span-6">
+    <section className={`rounded-[1.35rem] p-5 xl:col-span-6 ${dashboardTheme.surface}`}>
       <div className="flex items-start justify-between gap-4">
         <div>
           <h2 className="text-[17px] font-semibold tracking-tight text-white">{title}</h2>
           <p className="mt-1 text-xs text-zinc-500">{periodLabel}</p>
         </div>
-        <div className="rounded-full border border-purple-400/18 bg-purple-400/10 px-3 py-1 text-xs font-semibold text-purple-100">
+        <div className="rounded-full border border-teal-300/20 bg-teal-300/10 px-3 py-1 text-xs font-semibold text-teal-100">
           {formatNumber(latest)}
         </div>
       </div>
-      <div className="mt-5 h-[21rem] overflow-hidden rounded-[1.1rem] border border-[#262626] bg-black/25 p-4">
+      <div className={`mt-5 h-[21rem] overflow-hidden rounded-[1.1rem] p-4 ${dashboardTheme.innerSurface}`}>
         {data.length ? (
           <svg className="h-full w-full overflow-visible" viewBox="0 0 100 100" role="img" aria-label={`${title} chart`}>
             <defs>
               <linearGradient id="admin-user-growth-area" x1="0" x2="0" y1="0" y2="1">
-                <stop offset="0%" stopColor="rgb(168 85 247)" stopOpacity="0.24" />
-                <stop offset="100%" stopColor="rgb(168 85 247)" stopOpacity="0.02" />
+                <stop offset="0%" stopColor="rgb(45 212 191)" stopOpacity="0.24" />
+                <stop offset="100%" stopColor="rgb(45 212 191)" stopOpacity="0.02" />
               </linearGradient>
             </defs>
             {[24, 48, 72].map((line) => (
@@ -210,7 +211,7 @@ function LineChartCard({
             <polyline fill="url(#admin-user-growth-area)" points={`0,100 ${points} 100,100`} />
             <polyline
               fill="none"
-              stroke="rgb(168 85 247)"
+              stroke="rgb(45 212 191)"
               strokeLinecap="round"
               strokeLinejoin="round"
               strokeWidth="3"
@@ -226,7 +227,7 @@ function LineChartCard({
                   cx={x}
                   cy={y}
                   r="2.6"
-                  className="fill-[#0b0b0f] stroke-purple-300"
+                  className="fill-black stroke-teal-200"
                   strokeWidth="1.5"
                 />
               );
@@ -248,7 +249,7 @@ function DonutChartCard({
   data: Array<{ label: string; value: number }>;
 }) {
   const total = data.reduce((sum, item) => sum + item.value, 0);
-  const colors = ["#c084fc", "#8b5cf6", "#a78bfa", "#6d28d9", "#ddd6fe"];
+  const colors = ["#2dd4bf", "#ffffff", "#10b981", "#f59e0b", "#71717a"];
   let cursor = 0;
   const gradient = data.length && total > 0
     ? data
@@ -263,14 +264,14 @@ function DonutChartCard({
     : "rgba(255,255,255,0.08) 0% 100%";
 
   return (
-    <section className="rounded-[1.35rem] border border-[#262626] bg-white/[0.045] p-5 shadow-[0_18px_60px_rgba(0,0,0,0.24)] backdrop-blur-xl xl:col-span-3">
+    <section className={`rounded-[1.35rem] p-5 xl:col-span-3 ${dashboardTheme.surface}`}>
       <h2 className="text-[17px] font-semibold tracking-tight text-white">{title}</h2>
       <div className="mt-5 flex items-center justify-center">
         <div
-          className="relative h-40 w-40 rounded-full border border-[#262626] shadow-[0_22px_70px_rgba(0,0,0,0.2)]"
+          className="relative h-40 w-40 rounded-full border border-white/10 shadow-xl shadow-black/20"
           style={{ background: `conic-gradient(${gradient})` }}
         >
-          <div className="absolute inset-7 rounded-full border border-[#262626] bg-[#101217]" />
+          <div className="absolute inset-7 rounded-full border border-white/10 bg-black" />
           <div className="absolute inset-0 flex flex-col items-center justify-center">
             <span className="text-2xl font-semibold tracking-tight text-white">{formatNumber(total)}</span>
             <span className="mt-1 text-[10px] uppercase tracking-[0.18em] text-zinc-500">Total</span>
@@ -285,11 +286,11 @@ function DonutChartCard({
                 <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: colors[index % colors.length] }} />
                 <span className="truncate">{item.label}</span>
               </span>
-              <span className="font-medium text-purple-100">{formatNumber(item.value)}</span>
+              <span className="font-medium text-teal-100">{formatNumber(item.value)}</span>
             </div>
           ))
         ) : (
-          <p className="rounded-[1rem] border border-[#262626] bg-black/25 p-4 text-sm text-zinc-500">
+          <p className={`rounded-[1rem] p-4 text-sm text-zinc-500 ${dashboardTheme.innerSurface}`}>
             Not configured
           </p>
         )}
@@ -345,7 +346,7 @@ export default async function AdminDashboardPage({
       value: formatCurrency(data.monthlyRecurringRevenue),
       detail: "Payment provider not connected",
       icon: DollarSign,
-      accent: "purple" as const,
+      accent: "teal" as const,
     },
   ];
 
@@ -384,13 +385,13 @@ export default async function AdminDashboardPage({
       </div>
 
       <div className="mt-4 grid gap-4 xl:grid-cols-[1.45fr_0.85fr] [&>section]:mt-0">
-        <div className="rounded-[1.35rem] border border-[#262626] bg-white/[0.045] p-5 shadow-[0_18px_60px_rgba(0,0,0,0.24)] backdrop-blur-xl">
+        <div className={`rounded-[1.35rem] p-5 ${dashboardTheme.surface}`}>
           <div className="flex items-center justify-between gap-4">
             <div>
               <h2 className="text-[17px] font-semibold tracking-tight text-white">Recent users</h2>
               <p className="mt-1 text-xs text-zinc-500">Latest accounts from Supabase Auth.</p>
             </div>
-            <Link href="/admin/users" className="rounded-full border border-purple-400/18 bg-purple-400/10 px-3 py-1 text-xs font-semibold text-purple-100 transition hover:bg-purple-400/15">
+            <Link href="/admin/users" className="rounded-full border border-teal-300/20 bg-teal-300/10 px-3 py-1 text-xs font-semibold text-teal-100 transition hover:bg-teal-300/15">
               Manage
             </Link>
           </div>
@@ -408,30 +409,30 @@ export default async function AdminDashboardPage({
               <tbody>
                 {data.recentUsers.map((user) => (
                   <tr key={user.id} className="group text-zinc-300 transition">
-                    <td className="rounded-l-[0.95rem] border-y border-l border-[#262626] bg-black/25 px-3 py-3 transition group-hover:border-[#343434] group-hover:bg-white/[0.055]">
+                    <td className="rounded-l-[0.95rem] border-y border-l border-white/10 bg-black/25 px-3 py-3 transition group-hover:border-teal-300/25 group-hover:bg-white/[0.055]">
                       <span className="block font-medium text-white">{user.email}</span>
                       <span className="text-xs text-zinc-500">
                         {user.displayName || "No display name"}
                       </span>
                     </td>
-                    <td className="border-y border-[#262626] bg-black/25 px-3 py-3 transition group-hover:border-[#343434] group-hover:bg-white/[0.055]">
-                      <span className="rounded-full border border-purple-400/18 bg-purple-400/10 px-2.5 py-1 text-xs font-medium capitalize text-purple-100">
+                    <td className="border-y border-white/10 bg-black/25 px-3 py-3 transition group-hover:border-teal-300/25 group-hover:bg-white/[0.055]">
+                      <span className="rounded-full border border-teal-300/20 bg-teal-300/10 px-2.5 py-1 text-xs font-medium capitalize text-teal-100">
                         {user.plan}
                       </span>
                     </td>
-                    <td className="border-y border-[#262626] bg-black/25 px-3 py-3 transition group-hover:border-[#343434] group-hover:bg-white/[0.055]">
-                      <span className="rounded-full border border-[#262626] bg-white/[0.045] px-2.5 py-1 text-xs font-medium capitalize text-zinc-300">
+                    <td className="border-y border-white/10 bg-black/25 px-3 py-3 transition group-hover:border-teal-300/25 group-hover:bg-white/[0.055]">
+                      <span className="rounded-full border border-white/10 bg-white/[0.045] px-2.5 py-1 text-xs font-medium capitalize text-zinc-300">
                         {user.accountStatus}
                       </span>
                     </td>
-                    <td className="border-y border-[#262626] bg-black/25 px-3 py-3 transition group-hover:border-[#343434] group-hover:bg-white/[0.055]">{formatNumber(user.reportCount)}</td>
-                    <td className="rounded-r-[0.95rem] border-y border-r border-[#262626] bg-black/25 px-3 py-3 transition group-hover:border-[#343434] group-hover:bg-white/[0.055]">{formatDate(user.lastSignInAt)}</td>
+                    <td className="border-y border-white/10 bg-black/25 px-3 py-3 transition group-hover:border-teal-300/25 group-hover:bg-white/[0.055]">{formatNumber(user.reportCount)}</td>
+                    <td className="rounded-r-[0.95rem] border-y border-r border-white/10 bg-black/25 px-3 py-3 transition group-hover:border-teal-300/25 group-hover:bg-white/[0.055]">{formatDate(user.lastSignInAt)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
             {!data.recentUsers.length ? (
-              <p className="rounded-2xl border border-[#262626] bg-black/25 p-4 text-sm text-zinc-500">
+              <p className={`rounded-2xl p-4 text-sm text-zinc-500 ${dashboardTheme.innerSurface}`}>
                 No users found yet.
               </p>
             ) : null}
