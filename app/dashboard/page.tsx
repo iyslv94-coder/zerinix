@@ -97,10 +97,10 @@ export default async function DashboardPage() {
   const usageEfficiency =
     usage.totalRequests > 0
       ? `${formatCompactNumber(Math.round(usage.totalTokens / usage.totalRequests))} avg tokens`
-      : "No AI usage yet";
+      : "No platform usage yet";
   const dashboardStats = [
     {
-      label: "Workspaces",
+      label: "Decision Workspaces",
       value: String(workspaces.length),
       detail: `${activeWorkspaces} active`,
       icon: Folder,
@@ -108,7 +108,7 @@ export default async function DashboardPage() {
       href: "/dashboard#workspaces",
     },
     {
-      label: "Reports",
+      label: "Strategic Reports",
       value: String(reports.length || totalReports),
       detail: `${completedReports} completed`,
       icon: FileText,
@@ -116,7 +116,7 @@ export default async function DashboardPage() {
       href: "/dashboard#reports",
     },
     {
-      label: "AI Requests",
+      label: "Intelligence Runs",
       value: formatNumber(usage.totalRequests),
       detail: `${formatNumber(usage.totalTokens)} tokens recorded`,
       icon: Gauge,
@@ -124,7 +124,7 @@ export default async function DashboardPage() {
       href: "/dashboard/usage",
     },
     {
-      label: "Estimated AI Cost",
+      label: "Estimated Platform Cost",
       value: formatCurrency(usage.estimatedCostUsd),
       detail: "Based on stored usage records",
       icon: Activity,
@@ -132,7 +132,7 @@ export default async function DashboardPage() {
       href: "/dashboard/usage",
     },
     {
-      label: "Latest Activity",
+      label: "Decision Activity",
       value: formatDashboardDate(latestWorkspaceUpdate || ""),
       detail: latestWorkspaceUpdate ? "Last workspace update" : "Create your first report",
       icon: Clock3,
@@ -142,23 +142,23 @@ export default async function DashboardPage() {
   ];
   const quickActions = [
     {
-      title: "New Report",
-      description: "Create an AI Plan or Market Analysis.",
+      title: "Create Strategic Analysis",
+      description: "Start an AI Plan or Market Analysis report.",
       href: "/plan?new=1&mode=plan",
       icon: Plus,
       primary: true,
     },
     {
-      title: "AI Chat",
-      description: "Ask follow-up questions with workspace memory.",
-      href: "/chat",
-      icon: MessageSquareText,
+      title: "Reports & Workspaces",
+      description: "Review saved analysis and organize decisions.",
+      href: "/dashboard#reports",
+      icon: Folder,
     },
     {
-      title: "Workspaces",
-      description: "Organize saved reports by venture or theme.",
-      href: "/dashboard#workspaces",
-      icon: Folder,
+      title: "AI Advisor",
+      description: "Ask follow-up questions after reviewing reports.",
+      href: "/chat",
+      icon: MessageSquareText,
     },
   ];
 
@@ -177,14 +177,14 @@ export default async function DashboardPage() {
                 <div>
                   <div className="inline-flex items-center gap-2 rounded-full border border-teal-300/20 bg-teal-300/10 px-3 py-1.5 text-xs font-semibold tracking-[0.24em] text-teal-100 shadow-lg shadow-teal-950/20 ring-1 ring-teal-200/10">
                     <Sparkles className="h-3.5 w-3.5" />
-                    USER DASHBOARD
+                    BUSINESS INTELLIGENCE
                   </div>
                   <h1 className="mt-5 max-w-3xl text-4xl font-semibold tracking-[-0.035em] text-white md:text-6xl">
-                    Your AI business command center.
+                    Strategic decisions, backed by structured analysis.
                   </h1>
                   <p className="mt-4 max-w-2xl text-base leading-8 text-zinc-400">
-                    Reopen strategic reports, track usage, manage workspaces and
-                    move from rough idea to sharper founder decisions.
+                    Create board-ready reports, organize venture workspaces and
+                    use ZERINIX as an advisor around your decision history.
                   </p>
                 </div>
 
@@ -231,7 +231,7 @@ export default async function DashboardPage() {
               </div>
 
               <div className="relative mt-8 grid gap-3 border-t border-white/10 pt-5 sm:grid-cols-3">
-                {["Workspace reports", "Live sync", "PDF export"].map((item) => (
+                {["Strategic reports", "Decision workspaces", "PDF export"].map((item) => (
                   <div key={item} className="flex min-h-11 items-center gap-2 rounded-2xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-zinc-400 shadow-lg shadow-black/10 ring-1 ring-white/[0.02]">
                     <BadgeCheck className="h-4 w-4 text-teal-200" />
                     {item}

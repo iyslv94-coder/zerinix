@@ -128,10 +128,10 @@ const modelOptions: Array<{
 ];
 
 const promptStarters = [
-  "Review this business idea and pressure-test the risks.",
-  "Turn these notes into a sharper founder pitch.",
-  "Compare bootstrapping versus raising capital for my company.",
-  "Analyze this customer segment and suggest a better ICP.",
+  "Evaluate this business idea and identify the highest-risk assumptions.",
+  "Turn these notes into a sharper strategic recommendation.",
+  "Compare bootstrapping versus raising capital for this company.",
+  "Assess this customer segment and recommend a stronger ICP.",
 ];
 
 function getChatIssue(rawValue: string): ChatIssue {
@@ -141,7 +141,7 @@ function getChatIssue(rawValue: string): ChatIssue {
   if (!raw) {
     return {
       title: "Something went wrong",
-      message: "The response could not be completed. Please try again.",
+      message: "The advisory response could not be completed. Please try again.",
       tone: "error",
       retryable: true,
     };
@@ -150,7 +150,7 @@ function getChatIssue(rawValue: string): ChatIssue {
   if (/stopped|abort|previous answer is still available/.test(normalized)) {
     return {
       title: "Generation stopped",
-      message: "Your prompt and conversation are safe. You can retry when you are ready.",
+      message: "Your prompt and advisory session are safe. You can retry when you are ready.",
       tone: "info",
       retryable: true,
     };
@@ -158,7 +158,7 @@ function getChatIssue(rawValue: string): ChatIssue {
 
   if (/timeout|timed out|stream completed|too long to finish|too long to/.test(normalized)) {
     return {
-      title: "Response timed out",
+      title: "Advisor timed out",
       message: "ZERINIX took too long to finish the answer. Your prompt was kept, and you can retry safely.",
       tone: "warning",
       retryable: true,
@@ -190,7 +190,7 @@ function getChatIssue(rawValue: string): ChatIssue {
   if (/auth|sign in|authenticated|session/.test(normalized)) {
     return {
       title: "Session needs attention",
-      message: "Your session could not be verified. Sign in again, then continue the conversation.",
+      message: "Your session could not be verified. Sign in again, then continue with your advisor.",
       tone: "warning",
       retryable: false,
     };
@@ -202,16 +202,16 @@ function getChatIssue(rawValue: string): ChatIssue {
     )
   ) {
     return {
-      title: "AI response unavailable",
-      message: "The AI service could not complete this response. Your prompt was kept, and you can retry.",
+      title: "Advisor response unavailable",
+      message: "The AI service could not complete this advisory response. Your prompt was kept, and you can retry.",
       tone: "error",
       retryable: true,
     };
   }
 
   return {
-    title: "Chat needs a retry",
-    message: "The last action could not be completed cleanly. Your conversation is safe, and you can try again.",
+    title: "Advisor needs a retry",
+    message: "The last advisory response could not be completed cleanly. Your session is safe, and you can try again.",
     tone: "error",
     retryable: true,
   };
@@ -299,7 +299,7 @@ function createConversation(id = createMessageId()): Conversation {
 
   return {
     id,
-    title: "New conversation",
+    title: "New advisory session",
     messages: [],
     createdAt: now,
     updatedAt: now,
@@ -340,6 +340,7 @@ function shouldSendReportContext(prompt: string, messages: ChatMessage[]) {
 function shouldAutoTitleConversation(title: string) {
   return (
     title === "New conversation" ||
+    title === "New advisory session" ||
     title === "New ZERINIX conversation" ||
     title === "Untitled conversation"
   );
@@ -352,7 +353,7 @@ function generateConversationTitle(content: string) {
     .trim();
 
   if (!cleanTitle) {
-    return "New conversation";
+    return "New advisory session";
   }
 
   const title =
@@ -440,11 +441,11 @@ function getConversationPreview(conversation: Conversation) {
     .find((item) => item.content.trim());
 
   if (!message) {
-    return "Start a new AI chat";
+    return "Start a strategic advisory session";
   }
 
   if (message.status === "failed") {
-    return message.content || "Chat response failed";
+    return message.content || "Advisory response failed";
   }
 
   return message.content.replace(/\s+/g, " ").slice(0, 86);
@@ -821,7 +822,7 @@ function TypingIndicator() {
         <div className="min-w-0">
           <p className="text-sm font-semibold text-white">AI is thinking</p>
           <p className="text-xs text-zinc-500">
-            Preparing a careful response before streaming begins.
+            Preparing careful guidance before streaming begins.
           </p>
         </div>
         <span className="ml-auto flex gap-1.5">
@@ -934,7 +935,7 @@ const ChatBubble = memo(function ChatBubble({
                 className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-xs text-zinc-300 transition hover:border-teal-300/20 hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <RefreshCcw className="h-3.5 w-3.5 text-teal-200" />
-                {message.status === "failed" ? "Retry" : "Regenerate"}
+                {message.status === "failed" ? "Retry" : "Regenerate advice"}
               </button>
             )}
           </div>
@@ -1235,7 +1236,7 @@ export default function AIChatWorkspace({
 
     setProfile(cleanProfile);
     setProfileDraft(cleanProfile);
-    setProfileMessage("Profile saved. Future chats will use these preferences.");
+    setProfileMessage("Profile saved. Future advisory sessions will use these preferences.");
   }
 
   async function clearProfile() {
@@ -1278,7 +1279,7 @@ export default function AIChatWorkspace({
     const userId = await getCurrentUserId();
 
     if (!userId) {
-      setConversationError("No authenticated user was available for chat persistence.");
+      setConversationError("No authenticated user was available for advisor session persistence.");
       window.location.assign("/login?next=/chat");
       return false;
     }
@@ -1397,7 +1398,7 @@ export default function AIChatWorkspace({
 
     if (error) {
       console.error("[ai_conversations delete failed]", error);
-      setConversationError("Conversation could not be deleted. Please try again.");
+      setConversationError("Advisory session could not be deleted. Please try again.");
       return false;
     }
 
@@ -1442,7 +1443,7 @@ export default function AIChatWorkspace({
     const cleanTitle = renameDraft.trim();
 
     if (!cleanTitle) {
-      setRenameError("Conversation name cannot be empty.");
+      setRenameError("Advisory session name cannot be empty.");
       return;
     }
 
@@ -1546,7 +1547,7 @@ export default function AIChatWorkspace({
     onChunk: (content: string) => void
   ) {
     if (!response.ok || !response.body) {
-      let errorMessage = "Chat response failed. Please try again.";
+      let errorMessage = "Advisor response failed. Please try again.";
 
       try {
         const data = await response.json();
@@ -1574,7 +1575,7 @@ export default function AIChatWorkspace({
             () =>
               reject(
                 new Error(
-                  "Chat response timed out before the stream completed. Please try again."
+                  "Advisor response timed out before the stream completed. Please try again."
                 )
               ),
             CHAT_STREAM_IDLE_TIMEOUT_MS
@@ -1731,7 +1732,7 @@ export default function AIChatWorkspace({
           updateAssistantMessage(assistantMessageId, content, "streaming", conversationId);
         }
       });
-      const finalText = responseText || "I could not generate a response. Please try again.";
+      const finalText = responseText || "I could not generate advisory guidance. Please try again.";
 
       updateAssistantMessage(assistantMessageId, finalText, "complete", conversationId);
       void updatePersistedMessage(assistantMessageId, finalText, "complete");
@@ -1743,11 +1744,11 @@ export default function AIChatWorkspace({
       const aborted = error instanceof DOMException && error.name === "AbortError";
       const errorMessage = aborted
         ? requestTimedOut
-          ? "Chat response timed out before the server responded. Please try again."
+          ? "Advisor response timed out before the server responded. Please try again."
           : "Generation stopped."
         : error instanceof Error
           ? error.message
-          : "Chat response failed. Please try again.";
+          : "Advisor response failed. Please try again.";
       const friendlyMessage = getChatIssue(errorMessage).message;
 
       if (replacementAssistantMessageId) {
@@ -1852,13 +1853,13 @@ export default function AIChatWorkspace({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-xl">
           <div className="w-full max-w-md rounded-[2rem] border border-white/10 bg-zinc-950 p-6 shadow-2xl shadow-black/60">
             <p className="text-xs font-semibold uppercase tracking-[0.26em] text-teal-200/70">
-              Rename conversation
+              Rename advisory session
             </p>
             <h2 className="mt-3 text-2xl font-semibold tracking-tight text-white">
-              Update conversation title
+              Update session title
             </h2>
             <p className="mt-2 text-sm leading-6 text-zinc-500">
-              Use a clear title so this conversation is easy to find later.
+              Use a clear title so this advisory session is easy to find later.
             </p>
             <input
               value={renameDraft}
@@ -1878,7 +1879,7 @@ export default function AIChatWorkspace({
               }}
               autoFocus
               className="mt-5 h-12 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition placeholder:text-zinc-600 focus:border-teal-300/40"
-              placeholder="Conversation title"
+              placeholder="Advisory session title"
             />
             {renameError ? (
               <p className="mt-3 text-sm text-red-300">{renameError}</p>
@@ -1910,13 +1911,13 @@ export default function AIChatWorkspace({
               <Trash2 className="h-5 w-5 text-red-200" />
             </div>
             <p className="mt-5 text-xs font-semibold uppercase tracking-[0.26em] text-red-200/70">
-              Delete conversation
+              Delete advisory session
             </p>
             <h2 className="mt-3 text-2xl font-semibold tracking-tight text-white">
               {deleteTarget.title}
             </h2>
             <p className="mt-2 text-sm leading-6 text-zinc-400">
-              This will permanently delete the conversation and its saved messages.
+              This will permanently delete the advisory session and its saved insights.
               This action cannot be undone.
             </p>
             <div className="mt-6 flex gap-3">
@@ -1952,10 +1953,10 @@ export default function AIChatWorkspace({
               Clear AI profile
             </p>
             <h2 className="mt-3 text-2xl font-semibold tracking-tight text-white">
-              Remove saved chat preferences?
+              Remove saved advisor preferences?
             </h2>
             <p className="mt-2 text-sm leading-6 text-zinc-400">
-              Future conversations will stop using your saved country, industry,
+              Future advisory sessions will stop using your saved country, industry,
               budget, risk and goal preferences until you save a new profile.
             </p>
             <div className="mt-6 flex gap-3">
@@ -1984,7 +1985,7 @@ export default function AIChatWorkspace({
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl border border-teal-200/25 bg-teal-200/10">
               <FileUp className="h-7 w-7 text-teal-200" />
             </div>
-            <p className="mt-4 text-lg font-semibold">Drop files into ZERINIX Chat</p>
+            <p className="mt-4 text-lg font-semibold">Drop files into ZERINIX Advisor</p>
             <p className="mt-2 text-sm text-zinc-500">
               Text files are read as context; other files are attached as references.
             </p>
@@ -2021,7 +2022,7 @@ export default function AIChatWorkspace({
           className="mt-6 inline-flex items-center justify-center gap-2 rounded-2xl border border-teal-200/25 bg-teal-200/10 px-4 py-3 text-sm font-semibold text-teal-50 shadow-lg shadow-teal-950/10 transition hover:-translate-y-0.5 hover:bg-teal-200/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200/30"
         >
           <Plus className="h-4 w-4" />
-          New conversation
+          New advisory session
         </button>
 
         <div className="mt-4 grid grid-cols-2 gap-2">
@@ -2044,7 +2045,7 @@ export default function AIChatWorkspace({
           <input
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
-            placeholder="Search conversations..."
+            placeholder="Search advisory sessions..."
             className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-zinc-600"
           />
         </div>
@@ -2052,16 +2053,16 @@ export default function AIChatWorkspace({
         <div className="mt-3 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
           {sortedConversations.length === 0 ? (
             <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-5 text-sm leading-6 text-zinc-500">
-              <p className="font-semibold text-white">No conversations yet</p>
+              <p className="font-semibold text-white">No advisory sessions yet</p>
               <p className="mt-2">
-                Start a new chat to build your ZERINIX conversation history.
+                Start a new advisor session to build your ZERINIX decision history.
               </p>
             </div>
           ) : visibleConversations.length === 0 ? (
             <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-5 text-sm leading-6 text-zinc-500">
-              <p className="font-semibold text-white">No conversations found</p>
+              <p className="font-semibold text-white">No advisory sessions found</p>
               <p className="mt-2">
-                Try another title or clear the search field.
+                Try another session title or clear the search field.
               </p>
             </div>
           ) : null}
@@ -2099,7 +2100,7 @@ export default function AIChatWorkspace({
                       type="button"
                       onClick={() => startRename(conversation)}
                       className="min-h-10 min-w-10 rounded-lg border border-white/10 p-2 text-zinc-400 transition hover:bg-white/10 hover:text-white"
-                      aria-label="Rename conversation"
+                      aria-label="Rename advisory session"
                     >
                       <Edit3 className="h-3.5 w-3.5" />
                     </button>
@@ -2107,7 +2108,7 @@ export default function AIChatWorkspace({
                       type="button"
                       onClick={() => setDeleteTarget(conversation)}
                       className="min-h-10 min-w-10 rounded-lg border border-white/10 p-2 text-zinc-400 transition hover:bg-red-400/10 hover:text-red-200"
-                      aria-label="Delete conversation"
+                      aria-label="Delete advisory session"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
@@ -2129,7 +2130,7 @@ export default function AIChatWorkspace({
             className="flex w-full items-center justify-between gap-3 text-left"
           >
             <span>
-              <span className="block text-xs font-medium text-white">AI Chat Profile</span>
+              <span className="block text-xs font-medium text-white">Advisor Profile</span>
               <span className="mt-1 block text-xs text-zinc-500">
                 {hasProfileContent(profile)
                   ? "Saved preferences active"
@@ -2345,10 +2346,10 @@ export default function AIChatWorkspace({
             </div>
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold text-white">
-                {activeConversation?.title || "AI Chat"}
+                {activeConversation?.title || "ZERINIX AI Advisor"}
               </p>
               <p className="text-xs text-zinc-500">
-                AI Chat · {activeModel?.label || "Fast"} model · Streaming enabled
+                AI Advisor · {activeModel?.label || "Fast"} mode · Live guidance
               </p>
             </div>
           </div>
@@ -2380,7 +2381,7 @@ export default function AIChatWorkspace({
               onClick={regenerateResponse}
               disabled={loading || !messages.some((message) => message.role === "user")}
               className="min-h-11 min-w-11 rounded-2xl border border-white/10 bg-white/[0.04] p-3 text-zinc-200 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
-              aria-label="Regenerate response"
+              aria-label="Regenerate advisory response"
             >
               <RefreshCcw className="h-4 w-4" />
             </button>
@@ -2410,10 +2411,10 @@ export default function AIChatWorkspace({
                     <Sparkles className="h-6 w-6 text-teal-200" />
                   </div>
                   <h1 className="mt-6 text-3xl font-semibold tracking-tight text-white sm:text-5xl">
-                    Chat with ZERINIX AI.
+                    Work with your ZERINIX AI Advisor.
                   </h1>
                   <p className="mx-auto mt-3 max-w-2xl text-sm leading-6 text-zinc-500">
-                    Ask questions, upload context, edit messages, regenerate answers, and keep a persistent conversation history.
+                    Pressure-test decisions, upload business context, refine recommendations and keep a persistent advisory history.
                   </p>
                   <div className="mt-6 grid gap-3 text-left md:grid-cols-2">
                     {promptStarters.map((starter) => (
@@ -2473,10 +2474,10 @@ export default function AIChatWorkspace({
             <div className="rounded-[2rem] border border-white/10 bg-white/[0.06] p-3 shadow-2xl shadow-black/50 ring-1 ring-white/[0.03] backdrop-blur-2xl">
               <div className="mb-2 flex flex-wrap items-center justify-between gap-2 px-2 pt-1">
                 <span className="rounded-full border border-teal-200/20 bg-teal-200/10 px-3 py-1 text-xs font-medium text-teal-100">
-                  AI Chat
+                  AI Advisor
                 </span>
                 <span className="text-xs text-zinc-600">
-                  Markdown, code blocks, tables, file context and persistent memory.
+                  Strategic reasoning, file context, report memory and persistent preferences.
                 </span>
               </div>
               <textarea
@@ -2498,7 +2499,7 @@ export default function AIChatWorkspace({
                   }
                 }}
                 className="max-h-[32dvh] min-h-24 w-full resize-none overflow-y-auto rounded-2xl bg-black/35 p-4 text-base leading-7 text-white outline-none ring-1 ring-white/5 transition placeholder:text-zinc-600 focus:ring-teal-200/25 sm:min-h-28"
-                placeholder="Ask ZERINIX anything, paste context, or upload a file..."
+                placeholder="Ask for strategic analysis, paste business context, or upload a file..."
               />
 
               <div className="flex flex-col gap-3 pt-3 md:flex-row md:items-center md:justify-between">
@@ -2519,7 +2520,7 @@ export default function AIChatWorkspace({
                       setModelPreference(event.target.value as ChatModelPreference)
                     }
                     className="min-h-11 rounded-2xl border border-white/10 bg-black/40 px-4 py-2 text-sm font-medium text-zinc-200 outline-none transition hover:bg-white/10"
-                    aria-label="Select chat model"
+                    aria-label="Select advisor response mode"
                   >
                     {modelOptions.map((option) => (
                       <option key={option.value} value={option.value}>
@@ -2546,7 +2547,7 @@ export default function AIChatWorkspace({
                     onClick={() => void sendMessage()}
                     className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-teal-300 px-5 py-3 text-sm font-semibold text-black shadow-lg shadow-teal-950/40 transition hover:-translate-y-0.5 hover:bg-teal-200 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
                   >
-                    {loading ? "Streaming..." : "Send"}
+                    {loading ? "Advising..." : "Ask advisor"}
                     {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                   </button>
                 </div>

@@ -16,15 +16,34 @@ import { signOut } from "@/app/auth/actions";
 import { dashboardTheme } from "@/app/lib/ui/dashboard-theme";
 
 export default function DashboardSidebar() {
-  const items = [
-    { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-    { label: "New Report", href: "/plan?new=1&mode=plan", icon: Plus },
-    { label: "AI Chat", href: "/chat", icon: Bot },
-    { label: "Reports", href: "/dashboard#reports", icon: FileText },
-    { label: "Workspaces", href: "/dashboard#workspaces", icon: Folder },
-    { label: "Billing", href: "/dashboard/billing", icon: WalletCards },
-    { label: "Usage", href: "/dashboard/usage", icon: Activity },
-    { label: "Account", href: "/dashboard/settings", icon: UserRound },
+  const navigationGroups = [
+    {
+      label: "COMMAND CENTER",
+      items: [{ label: "Dashboard", href: "/dashboard", icon: LayoutDashboard }],
+    },
+    {
+      label: "INTELLIGENCE",
+      items: [
+        { label: "Create Strategic Analysis", href: "/plan?new=1&mode=plan", icon: Plus },
+        { label: "Reports", href: "/dashboard#reports", icon: FileText },
+        { label: "Workspaces", href: "/dashboard#workspaces", icon: Folder },
+      ],
+    },
+    {
+      label: "ADVISOR",
+      items: [{ label: "AI Advisor", href: "/chat", icon: Bot }],
+    },
+    {
+      label: "OPERATIONS",
+      items: [
+        { label: "Billing", href: "/dashboard/billing", icon: WalletCards },
+        { label: "Usage", href: "/dashboard/usage", icon: Activity },
+      ],
+    },
+    {
+      label: "ACCOUNT",
+      items: [{ label: "Account", href: "/dashboard/settings", icon: UserRound }],
+    },
   ];
 
   return (
@@ -43,7 +62,7 @@ export default function DashboardSidebar() {
               ZERINIX
             </span>
             <span className="mt-0.5 block text-xs text-zinc-500">
-              AI operating system
+              Decision intelligence
             </span>
           </span>
           <ChevronRight className="ml-auto h-4 w-4 text-zinc-700 transition group-hover:text-teal-200" />
@@ -57,31 +76,38 @@ export default function DashboardSidebar() {
             <div>
               <p className="text-sm font-semibold text-white">Secure workspace</p>
               <p className="mt-1 text-xs text-teal-100/65">
-                Reports and AI history
+                Reports and decisions
               </p>
             </div>
           </div>
         </div>
       </div>
 
-      <nav className="flex flex-1 items-center gap-2 overflow-x-auto scrollbar-thin lg:mt-8 lg:block lg:space-y-2" aria-label="Dashboard navigation">
-        {items.map((item) => {
-          const Icon = item.icon;
+      <nav className="flex flex-1 items-center gap-2 overflow-x-auto scrollbar-thin lg:mt-8 lg:block lg:space-y-5" aria-label="Dashboard navigation">
+        {navigationGroups.map((group) => (
+          <div key={group.label} className="contents lg:block lg:space-y-2">
+            <p className="hidden px-3 text-[10px] font-semibold uppercase tracking-[0.24em] text-zinc-600 lg:block">
+              {group.label}
+            </p>
+            {group.items.map((item) => {
+              const Icon = item.icon;
 
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="group flex min-h-12 shrink-0 items-center gap-3 rounded-[1.15rem] border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-medium text-zinc-300 shadow-sm shadow-black/10 ring-1 ring-white/[0.015] transition duration-300 hover:-translate-y-0.5 hover:border-teal-300/25 hover:bg-white/[0.065] hover:text-white hover:shadow-lg hover:shadow-black/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200/40 lg:w-full"
-            >
-              <span className="flex h-8 w-8 items-center justify-center rounded-xl border border-white/10 bg-black/25 shadow-inner shadow-white/[0.02] transition duration-300 group-hover:border-teal-200/25 group-hover:bg-teal-200/10">
-                <Icon className="h-4 w-4 text-teal-200" />
-              </span>
-              <span className="whitespace-nowrap">{item.label}</span>
-              <ChevronRight className="ml-auto hidden h-4 w-4 text-zinc-700 transition group-hover:text-teal-200 lg:block" />
-            </Link>
-          );
-        })}
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className="group flex min-h-12 shrink-0 items-center gap-3 rounded-[1.15rem] border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-medium text-zinc-300 shadow-sm shadow-black/10 ring-1 ring-white/[0.015] transition duration-300 hover:-translate-y-0.5 hover:border-teal-300/25 hover:bg-white/[0.065] hover:text-white hover:shadow-lg hover:shadow-black/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200/40 lg:w-full"
+                >
+                  <span className="flex h-8 w-8 items-center justify-center rounded-xl border border-white/10 bg-black/25 shadow-inner shadow-white/[0.02] transition duration-300 group-hover:border-teal-200/25 group-hover:bg-teal-200/10">
+                    <Icon className="h-4 w-4 text-teal-200" />
+                  </span>
+                  <span className="whitespace-nowrap">{item.label}</span>
+                  <ChevronRight className="ml-auto hidden h-4 w-4 text-zinc-700 transition group-hover:text-teal-200 lg:block" />
+                </Link>
+              );
+            })}
+          </div>
+        ))}
       </nav>
 
       <form action={signOut} className="ml-2 lg:ml-0 lg:mt-6">
