@@ -200,6 +200,7 @@ type InitialReport = {
 type PlannerProps = {
   initialConversations?: Conversation[];
   conversationLoadError?: string;
+  initialMode?: ChatMode;
   initialWorkspaces?: PlannerWorkspace[];
   initialWorkspaceId?: string;
   initialReport?: InitialReport | null;
@@ -3252,7 +3253,7 @@ function ConversationSidebar({
 
       <nav className="mt-5 hidden space-y-2 rounded-3xl border border-white/10 bg-white/[0.025] p-2 md:block">
         <Link
-          href="/plan"
+          href="/plan?new=1&mode=plan"
           className="flex items-center justify-between rounded-2xl bg-white/[0.06] px-3 py-2.5 text-sm font-medium text-white"
         >
           <span className="inline-flex items-center gap-2">
@@ -3264,14 +3265,14 @@ function ConversationSidebar({
           </span>
         </Link>
         <Link
-          href="/dashboard#workspaces"
+          href="/dashboard#reports"
           className="flex items-center gap-2 rounded-2xl px-3 py-2.5 text-sm font-medium text-zinc-400 transition hover:bg-white/[0.05] hover:text-white"
         >
           <LayoutDashboard className="h-4 w-4 text-zinc-500" />
           Reports
         </Link>
         <Link
-          href="/dashboard"
+          href="/dashboard#workspaces"
           className="flex items-center gap-2 rounded-2xl px-3 py-2.5 text-sm font-medium text-zinc-400 transition hover:bg-white/[0.05] hover:text-white"
         >
           <FolderKanban className="h-4 w-4 text-zinc-500" />
@@ -4880,6 +4881,7 @@ function ReportGenerationShell({
 export default function Planner({
   initialConversations = [],
   conversationLoadError = "",
+  initialMode,
   initialWorkspaces = [],
   initialWorkspaceId = "",
   initialReport = null,
@@ -4935,7 +4937,9 @@ export default function Planner({
       : [createConversation(initialConversationId)]
   );
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
-  const [activeMode, setActiveMode] = useState<ChatMode>(restoredReportMode || "chat");
+  const [activeMode, setActiveMode] = useState<ChatMode>(
+    restoredReportMode || initialMode || "chat"
+  );
   const [chatModelPreference, setChatModelPreference] =
     useState<ChatModelPreference>("fast");
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState(

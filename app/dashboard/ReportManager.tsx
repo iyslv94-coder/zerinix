@@ -273,7 +273,9 @@ export default function ReportManager({
     statusFilter !== "all" ||
     viewFilter !== "active" ||
     favoritesOnly;
-  const createReportHref = workspaceId ? `/plan?workspaceId=${workspaceId}` : "/plan";
+  const createReportHref = workspaceId
+    ? `/plan?new=1&mode=plan&workspaceId=${encodeURIComponent(workspaceId)}`
+    : "/plan?new=1&mode=plan";
 
   return (
     <section className="mt-8">

@@ -3,12 +3,14 @@ import {
   Activity,
   Bot,
   ChevronRight,
+  FileText,
   Folder,
   LayoutDashboard,
   LogOut,
   Plus,
   ShieldCheck,
   UserRound,
+  WalletCards,
 } from "lucide-react";
 import { signOut } from "@/app/auth/actions";
 import { dashboardTheme } from "@/app/lib/ui/dashboard-theme";
@@ -16,9 +18,11 @@ import { dashboardTheme } from "@/app/lib/ui/dashboard-theme";
 export default function DashboardSidebar() {
   const items = [
     { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-    { label: "New Report", href: "/plan", icon: Plus },
+    { label: "New Report", href: "/plan?new=1&mode=plan", icon: Plus },
     { label: "AI Chat", href: "/chat", icon: Bot },
+    { label: "Reports", href: "/dashboard#reports", icon: FileText },
     { label: "Workspaces", href: "/dashboard#workspaces", icon: Folder },
+    { label: "Billing", href: "/dashboard/billing", icon: WalletCards },
     { label: "Usage", href: "/dashboard/usage", icon: Activity },
     { label: "Account", href: "/dashboard/settings", icon: UserRound },
   ];

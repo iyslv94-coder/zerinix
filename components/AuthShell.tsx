@@ -32,7 +32,7 @@ export default function AuthShell({
           </Link>
 
           <Link
-            href="/plan"
+            href="/plan?new=1&mode=plan"
             className="rounded-full border border-white/10 px-4 py-2 text-sm text-gray-300 transition hover:border-white/30 hover:text-white"
           >
             Plan My Business

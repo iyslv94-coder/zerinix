@@ -100,7 +100,7 @@ export default async function WorkspaceReportsPage({
               </div>
 
               <Link
-                href={`/plan?workspaceId=${data.workspace.id}`}
+                href={`/plan?new=1&mode=plan&workspaceId=${data.workspace.id}`}
                 className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-black shadow-xl shadow-white/10 ring-1 ring-white/20 transition duration-300 hover:-translate-y-0.5 hover:bg-zinc-200 hover:shadow-2xl hover:shadow-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
               >
                 <Plus className="h-4 w-4" />

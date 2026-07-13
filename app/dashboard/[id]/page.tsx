@@ -1517,7 +1517,7 @@ export default async function ReportDetailPage({
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center md:shrink-0">
                 <ReportPdfButton report={report} />
                 <Link
-                  href="/plan"
+                  href="/plan?new=1&mode=plan"
                   className="inline-flex min-h-12 items-center justify-center gap-2 whitespace-nowrap rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-black shadow-xl shadow-white/10 ring-1 ring-white/20 transition duration-300 hover:-translate-y-0.5 hover:bg-zinc-200 hover:shadow-2xl hover:shadow-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
                 >
                   <Plus className="h-4 w-4" />

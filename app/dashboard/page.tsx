@@ -105,6 +105,7 @@ export default async function DashboardPage() {
       detail: `${activeWorkspaces} active`,
       icon: Folder,
       tone: "teal",
+      href: "/dashboard#workspaces",
     },
     {
       label: "Reports",
@@ -112,6 +113,7 @@ export default async function DashboardPage() {
       detail: `${completedReports} completed`,
       icon: FileText,
       tone: "white",
+      href: "/dashboard#reports",
     },
     {
       label: "AI Requests",
@@ -119,6 +121,7 @@ export default async function DashboardPage() {
       detail: `${formatNumber(usage.totalTokens)} tokens recorded`,
       icon: Gauge,
       tone: "teal",
+      href: "/dashboard/usage",
     },
     {
       label: "Estimated AI Cost",
@@ -126,6 +129,7 @@ export default async function DashboardPage() {
       detail: "Based on stored usage records",
       icon: Activity,
       tone: usage.error ? "amber" : "emerald",
+      href: "/dashboard/usage",
     },
     {
       label: "Latest Activity",
@@ -133,13 +137,14 @@ export default async function DashboardPage() {
       detail: latestWorkspaceUpdate ? "Last workspace update" : "Create your first report",
       icon: Clock3,
       tone: "zinc",
+      href: latestWorkspaceUpdate ? "/dashboard#workspaces" : "/plan?new=1&mode=plan",
     },
   ];
   const quickActions = [
     {
       title: "New Report",
       description: "Create an AI Plan or Market Analysis.",
-      href: "/plan",
+      href: "/plan?new=1&mode=plan",
       icon: Plus,
       primary: true,
     },
@@ -239,6 +244,8 @@ export default async function DashboardPage() {
           <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
             {dashboardStats.map((stat) => {
               const Icon = stat.icon;
+              const cardClass =
+                "group relative min-h-[12.25rem] overflow-hidden rounded-[1.65rem] border border-white/10 bg-white/[0.045] p-5 shadow-2xl shadow-black/25 ring-1 ring-white/[0.025] backdrop-blur-xl transition duration-300 hover:-translate-y-1 hover:border-teal-300/20 hover:bg-white/[0.065] hover:shadow-teal-950/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200/30";
               const accentClass =
                 stat.tone === "emerald"
                   ? "border-emerald-300/20 bg-emerald-300/10"
@@ -249,12 +256,8 @@ export default async function DashboardPage() {
                       : stat.tone === "teal"
                         ? "border-teal-300/20 bg-teal-300/10"
                         : "border-zinc-400/15 bg-white/[0.04]";
-
-              return (
-                <article
-                  key={stat.label}
-                  className="group relative min-h-[12.25rem] overflow-hidden rounded-[1.65rem] border border-white/10 bg-white/[0.045] p-5 shadow-2xl shadow-black/25 ring-1 ring-white/[0.025] backdrop-blur-xl transition duration-300 hover:-translate-y-1 hover:border-teal-300/20 hover:bg-white/[0.065] hover:shadow-teal-950/10"
-                >
+              const cardContent = (
+                <>
                   <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent opacity-60" />
                   <div className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full bg-teal-300/5 blur-2xl transition duration-300 group-hover:bg-teal-300/10" />
                   <div className="flex items-center justify-between gap-4">
@@ -274,6 +277,23 @@ export default async function DashboardPage() {
                   <p className="mt-2 text-sm leading-5 text-zinc-500">
                     {stat.detail}
                   </p>
+                </>
+              );
+
+              if (stat.href) {
+                return (
+                  <Link key={stat.label} href={stat.href} className={cardClass}>
+                    {cardContent}
+                  </Link>
+                );
+              }
+
+              return (
+                <article
+                  key={stat.label}
+                  className={cardClass}
+                >
+                  {cardContent}
                 </article>
               );
             })}
@@ -292,7 +312,7 @@ export default async function DashboardPage() {
           ) : null}
 
           <div className="mt-8 grid gap-5 2xl:grid-cols-[1.05fr_0.95fr]">
-            <section className="rounded-[1.85rem] border border-white/10 bg-white/[0.045] p-5 shadow-2xl shadow-black/25 ring-1 ring-white/[0.025] backdrop-blur-xl sm:p-6">
+            <section id="reports" className="scroll-mt-6 rounded-[1.85rem] border border-white/10 bg-white/[0.045] p-5 shadow-2xl shadow-black/25 ring-1 ring-white/[0.025] backdrop-blur-xl sm:p-6">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.24em] text-teal-200/70">
@@ -303,7 +323,7 @@ export default async function DashboardPage() {
                   </h2>
                 </div>
                 <Link
-                  href="/plan"
+                  href="/plan?new=1&mode=plan"
                   className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-teal-300/15 bg-teal-300/[0.06] px-4 py-2 text-sm font-medium text-teal-100 shadow-lg shadow-teal-950/10 transition duration-300 hover:-translate-y-0.5 hover:border-teal-300/30 hover:bg-teal-300/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200/30"
                 >
                   <Plus className="h-4 w-4" />
@@ -349,7 +369,10 @@ export default async function DashboardPage() {
             </section>
 
             <section className="grid gap-5 lg:grid-cols-2 2xl:grid-cols-1">
-              <div className="min-h-[15rem] rounded-[1.85rem] border border-white/10 bg-white/[0.045] p-5 shadow-2xl shadow-black/25 ring-1 ring-white/[0.025] backdrop-blur-xl transition duration-300 hover:border-teal-300/15 hover:bg-white/[0.055] sm:p-6">
+              <Link
+                href="/dashboard/billing"
+                className="block min-h-[15rem] rounded-[1.85rem] border border-white/10 bg-white/[0.045] p-5 shadow-2xl shadow-black/25 ring-1 ring-white/[0.025] backdrop-blur-xl transition duration-300 hover:-translate-y-0.5 hover:border-teal-300/15 hover:bg-white/[0.055] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200/30 sm:p-6"
+              >
                 <div className="flex items-start gap-4">
                   <span className="flex h-12 w-12 items-center justify-center rounded-2xl border border-teal-300/20 bg-teal-300/10">
                     <WalletCards className="h-5 w-5 text-teal-200" />
@@ -366,6 +389,10 @@ export default async function DashboardPage() {
                       applied through the ZERINIX usage governance system.
                     </p>
                   </div>
+                </div>
+                <div className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-teal-100">
+                  Manage billing
+                  <ArrowRight className="h-4 w-4" />
                 </div>
                 <div className="mt-5 grid gap-3 sm:grid-cols-2">
                   <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
@@ -385,7 +412,7 @@ export default async function DashboardPage() {
                     </p>
                   </div>
                 </div>
-              </div>
+              </Link>
 
               <div className="min-h-[15rem] rounded-[1.85rem] border border-white/10 bg-white/[0.045] p-5 shadow-2xl shadow-black/25 ring-1 ring-white/[0.025] backdrop-blur-xl transition duration-300 hover:border-teal-300/15 hover:bg-white/[0.055] sm:p-6">
                 <div className="flex items-start gap-4">
