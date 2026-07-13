@@ -22,7 +22,6 @@ import DashboardSidebar from "../DashboardSidebar";
 import { getAuthenticatedUser } from "../report-utils";
 import {
   requestAccountDeletion,
-  requestPersonalDataExport,
   signOutAllDevices,
   updatePassword,
   updateProfileSettings,
@@ -50,6 +49,7 @@ export default async function SettingsPage({
     searchParams,
     loadUserSettingsProfile(supabase, user),
   ]);
+  const displayNameLabel = settings.displayName || "Display name not set";
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-black text-white">
@@ -81,9 +81,10 @@ export default async function SettingsPage({
                     Signed in as
                   </p>
                   <p className="mt-3 truncate text-xl font-semibold text-white">
-                    {settings.email}
+                    {displayNameLabel}
                   </p>
-                  <p className="mt-2 inline-flex items-center gap-2 text-sm text-zinc-500">
+                  <p className="mt-1 truncate text-sm text-zinc-500">{settings.email}</p>
+                  <p className="mt-3 inline-flex items-center gap-2 text-sm text-zinc-500">
                     {settings.emailVerified ? (
                       <CheckCircle2 className="h-4 w-4 text-teal-200" />
                     ) : (
@@ -131,9 +132,12 @@ export default async function SettingsPage({
                   <input
                     name="display_name"
                     defaultValue={settings.displayName}
-                    placeholder="Your name"
+                    placeholder="Add a display name"
                     className="min-h-12 rounded-2xl border border-white/10 bg-black/35 px-4 text-sm text-white outline-none transition placeholder:text-zinc-600 focus:border-teal-300/40 focus:ring-2 focus:ring-teal-200/10"
                   />
+                  <span className="text-xs font-normal leading-5 text-zinc-600">
+                    This name appears in your private workspace only. Your email stays unchanged.
+                  </span>
                 </label>
 
                 <label className="grid gap-2 text-sm font-medium text-zinc-300">
@@ -159,10 +163,15 @@ export default async function SettingsPage({
                       )}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-white">Avatar upload</p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-sm font-semibold text-white">Avatar upload</p>
+                        <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
+                          Coming soon
+                        </span>
+                      </div>
                       <p className="mt-1 text-sm leading-6 text-zinc-500">
-                        Avatar storage is not connected yet. Upload controls are disabled
-                        until secure storage is configured.
+                        Secure avatar storage is not configured yet. Upload controls are
+                        intentionally disabled until file ownership and signed URLs are ready.
                       </p>
                     </div>
                     <button
@@ -221,6 +230,10 @@ export default async function SettingsPage({
                       </option>
                     ))}
                   </select>
+                  <span className="text-xs font-normal leading-5 text-zinc-600">
+                    The product interface remains English. Report content follows the
+                    language of your prompt when possible.
+                  </span>
                 </label>
 
                 <label className="grid gap-2 text-sm font-medium text-zinc-300">
@@ -420,8 +433,16 @@ export default async function SettingsPage({
                 </div>
               </div>
               <div className="mt-6 rounded-2xl border border-white/10 bg-black/25 p-4 text-sm leading-6 text-zinc-500">
-                Device-level session inventory is not connected yet. You can still
-                revoke all active sessions securely.
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-semibold text-white">Device inventory</span>
+                  <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
+                    Coming soon
+                  </span>
+                </div>
+                <p className="mt-2">
+                  Device-level session inventory is not connected yet. You can still
+                  revoke all active sessions securely using the confirmation action below.
+                </p>
               </div>
               <form action={signOutAllDevices} className="mt-4 grid gap-3">
                 <input type="hidden" name="intent" value="sign_out_all_devices" />
@@ -449,12 +470,12 @@ export default async function SettingsPage({
               {
                 icon: KeyRound,
                 title: "API Keys",
-                body: "User API keys are not supported yet. No credentials or access tokens are displayed in this settings area.",
+                body: "Coming soon. User API keys are not supported yet, so no credentials or access tokens are displayed in this settings area.",
               },
               {
                 icon: Globe2,
                 title: "Regional controls",
-                body: `Timezone preference: ${settings.timezonePreference}. Regional billing and tax settings are not connected yet.`,
+                body: `Timezone preference: ${settings.timezonePreference}. Regional billing and tax controls are coming soon and remain disabled until billing configuration is complete.`,
               },
               {
                 icon: Languages,
@@ -496,31 +517,40 @@ export default async function SettingsPage({
             </div>
 
             <div className="mt-6 grid gap-4 xl:grid-cols-2">
-              <form action={requestPersonalDataExport} className="rounded-2xl border border-white/10 bg-black/25 p-4">
-                <input type="hidden" name="intent" value="export_personal_data" />
+              <section className="rounded-2xl border border-white/10 bg-black/25 p-4">
                 <Download className="h-5 w-5 text-teal-200" />
-                <h3 className="mt-3 font-semibold text-white">Export personal data</h3>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <h3 className="font-semibold text-white">Export personal data</h3>
+                  <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
+                    Coming soon
+                  </span>
+                </div>
                 <p className="mt-2 text-sm leading-6 text-zinc-500">
-                  Automated exports are not connected yet. Use this manual request
-                  path only when support is ready to process the export securely.
+                  Automated exports are not connected yet. This action is disabled
+                  until the secure export workflow is available.
                 </p>
                 <button
-                  type="submit"
+                  type="button"
                   disabled
                   aria-disabled="true"
                   className="mt-4 inline-flex min-h-10 cursor-not-allowed items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-semibold text-zinc-500"
                 >
-                  Manual export unavailable
+                  Export unavailable
                 </button>
-              </form>
+              </section>
 
               <form action={requestAccountDeletion} className="rounded-2xl border border-red-300/20 bg-red-950/20 p-4">
                 <input type="hidden" name="intent" value="delete_account" />
                 <Trash2 className="h-5 w-5 text-red-100" />
-                <h3 className="mt-3 font-semibold text-white">Delete account</h3>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <h3 className="font-semibold text-white">Delete account</h3>
+                  <span className="rounded-full border border-red-300/20 bg-red-300/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-red-100/70">
+                    Manual review
+                  </span>
+                </div>
                 <p className="mt-2 text-sm leading-6 text-red-100/75">
-                  Automatic deletion is disabled until a full data-retention workflow
-                  is connected. Type DELETE only when you are ready to request a manual review.
+                  Automatic deletion is not available yet. This request starts a manual
+                  security review and does not immediately remove your account or data.
                 </p>
                 <input
                   name="confirmation"

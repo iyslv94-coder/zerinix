@@ -37,6 +37,25 @@ function readMetadataBoolean(
   return typeof value === "boolean" ? value : fallback;
 }
 
+function normalizeDisplayName(value: string, email: string) {
+  const cleanValue = value.trim();
+  const cleanEmail = email.trim().toLowerCase();
+
+  if (!cleanValue) {
+    return "";
+  }
+
+  if (cleanValue.toLowerCase() === cleanEmail) {
+    return "";
+  }
+
+  if (cleanEmail && cleanValue.toLowerCase() === cleanEmail.split("@")[0]) {
+    return "";
+  }
+
+  return cleanValue;
+}
+
 export async function loadUserSettingsProfile(
   supabase: SupabaseClient,
   user: User
@@ -48,13 +67,17 @@ export async function loadUserSettingsProfile(
     .maybeSingle();
   const chatProfile = (data || {}) as AiChatProfileRow;
   const metadata = user.user_metadata || {};
-
-  return {
-    displayName:
-      readMetadataString(metadata, "full_name") ||
+  const email = user.email || "";
+  const displayName = normalizeDisplayName(
+    readMetadataString(metadata, "full_name") ||
       readMetadataString(metadata, "name") ||
       "",
-    email: user.email || "",
+    email
+  );
+
+  return {
+    displayName,
+    email,
     emailVerified: Boolean(user.email_confirmed_at),
     avatarUrl: readMetadataString(metadata, "avatar_url"),
     themePreference: readMetadataString(metadata, "theme_preference") || "system",
