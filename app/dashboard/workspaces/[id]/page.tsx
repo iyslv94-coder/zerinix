@@ -70,7 +70,10 @@ export default async function WorkspaceReportsPage({
             <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
               <div>
                 <div className="mb-4 flex flex-wrap items-center gap-2 text-sm text-zinc-500">
-                  <Link href="/dashboard" className="transition hover:text-white">
+                  <Link
+                    href="/dashboard"
+                    className="rounded-md transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200/30"
+                  >
                     Dashboard
                   </Link>
                   <span>/</span>

@@ -121,7 +121,7 @@ export function AdminSystemHealth({ initialStatuses }: AdminSystemHealthProps) {
           onClick={() => {
             void refreshHealth();
           }}
-          className="inline-flex h-9 items-center justify-center gap-2 rounded-[0.85rem] border border-white/10 bg-black/25 px-3 text-[11px] text-zinc-300 transition duration-300 hover:-translate-y-0.5 hover:border-teal-300/25 hover:bg-white/[0.065] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+          className="inline-flex h-9 items-center justify-center gap-2 rounded-[0.85rem] border border-white/10 bg-black/25 px-3 text-[11px] text-zinc-300 transition duration-300 hover:-translate-y-0.5 hover:border-teal-300/25 hover:bg-white/[0.065] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200/30 disabled:cursor-not-allowed disabled:opacity-60"
           disabled={refreshing}
         >
           <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />

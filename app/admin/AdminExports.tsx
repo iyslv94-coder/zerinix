@@ -108,7 +108,7 @@ export function AdminExports({
                   <button
                     type="button"
                     onClick={() => exportCsv(table)}
-                    className="inline-flex h-8 items-center gap-1.5 rounded-[0.75rem] border border-teal-300/20 bg-teal-300/10 px-2.5 text-[11px] font-semibold text-teal-100 transition hover:bg-teal-300/15"
+                    className="inline-flex h-8 items-center gap-1.5 rounded-[0.75rem] border border-teal-300/20 bg-teal-300/10 px-2.5 text-[11px] font-semibold text-teal-100 transition hover:bg-teal-300/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200/30"
                   >
                     <Download className="h-3 w-3" />
                     CSV
@@ -116,7 +116,7 @@ export function AdminExports({
                   <button
                     type="button"
                     onClick={() => exportPdf(table)}
-                    className="inline-flex h-8 items-center gap-1.5 rounded-[0.75rem] border border-white/10 bg-black/25 px-2.5 text-[11px] font-semibold text-zinc-300 transition hover:border-teal-300/30 hover:text-white"
+                    className="inline-flex h-8 items-center gap-1.5 rounded-[0.75rem] border border-white/10 bg-black/25 px-2.5 text-[11px] font-semibold text-zinc-300 transition hover:border-teal-300/30 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200/30"
                   >
                     <FileText className="h-3 w-3" />
                     PDF
@@ -151,7 +151,7 @@ export function AdminExports({
               <button
                 type="button"
                 onClick={() => exportCsv(table)}
-                className="inline-flex h-9 items-center gap-2 rounded-[0.85rem] border border-teal-300/20 bg-teal-300/10 px-3 text-xs font-semibold text-teal-100 transition duration-300 hover:border-teal-300/35 hover:bg-teal-300/15 hover:text-white"
+                className="inline-flex h-9 items-center gap-2 rounded-[0.85rem] border border-teal-300/20 bg-teal-300/10 px-3 text-xs font-semibold text-teal-100 transition duration-300 hover:border-teal-300/35 hover:bg-teal-300/15 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200/30"
               >
                 <Download className="h-3.5 w-3.5" />
                 CSV
@@ -159,7 +159,7 @@ export function AdminExports({
               <button
                 type="button"
                 onClick={() => exportPdf(table)}
-                className="inline-flex h-9 items-center gap-2 rounded-[0.85rem] border border-white/10 bg-white/[0.04] px-3 text-xs font-semibold text-zinc-300 transition duration-300 hover:border-teal-300/30 hover:text-white"
+                className="inline-flex h-9 items-center gap-2 rounded-[0.85rem] border border-white/10 bg-white/[0.04] px-3 text-xs font-semibold text-zinc-300 transition duration-300 hover:border-teal-300/30 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200/30"
               >
                 <FileText className="h-3.5 w-3.5" />
                 PDF

@@ -156,7 +156,7 @@ export function AdminGlobalSearch() {
                 active
                   ? "border-teal-300/25 bg-teal-300/10 text-teal-100"
                   : "border-white/10 bg-black/25 text-zinc-500 hover:border-white/15 hover:bg-white/[0.055] hover:text-white"
-              }`}
+              } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200/30`}
             >
               {filter.label}
             </button>

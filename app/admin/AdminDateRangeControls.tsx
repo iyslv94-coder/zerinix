@@ -54,7 +54,7 @@ export function AdminDateRangeControls({
               activeRange === range.key
                 ? "bg-white text-black shadow-[0_10px_26px_rgba(255,255,255,0.08)]"
                 : "text-zinc-400 hover:text-white"
-            }`}
+            } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200/30`}
           >
             {range.label}
           </button>
@@ -66,18 +66,20 @@ export function AdminDateRangeControls({
           type="date"
           value={from}
           onChange={(event) => setFrom(event.target.value)}
-          className="h-9 rounded-[0.8rem] border border-white/10 bg-black/25 px-2.5 text-[11px] text-white outline-none transition focus:border-teal-300/40"
+          aria-label="Custom range start date"
+          className="h-9 rounded-[0.8rem] border border-white/10 bg-black/25 px-2.5 text-[11px] text-white outline-none transition focus:border-teal-300/40 focus:ring-2 focus:ring-teal-200/10"
         />
         <input
           type="date"
           value={to}
           onChange={(event) => setTo(event.target.value)}
-          className="h-9 rounded-[0.8rem] border border-white/10 bg-black/25 px-2.5 text-[11px] text-white outline-none transition focus:border-teal-300/40"
+          aria-label="Custom range end date"
+          className="h-9 rounded-[0.8rem] border border-white/10 bg-black/25 px-2.5 text-[11px] text-white outline-none transition focus:border-teal-300/40 focus:ring-2 focus:ring-teal-200/10"
         />
         <button
           type="button"
           onClick={() => updateRange("custom", from, to)}
-          className="h-9 rounded-[0.8rem] border border-teal-300/20 bg-teal-300/10 px-3 text-[11px] font-semibold text-teal-100 transition duration-300 hover:-translate-y-0.5 hover:bg-teal-300/15"
+          className="h-9 rounded-[0.8rem] border border-teal-300/20 bg-teal-300/10 px-3 text-[11px] font-semibold text-teal-100 transition duration-300 hover:-translate-y-0.5 hover:bg-teal-300/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200/30"
         >
           Apply custom
         </button>
