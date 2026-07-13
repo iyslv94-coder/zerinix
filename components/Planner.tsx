@@ -777,6 +777,10 @@ function shouldAutoTitleConversation(title: string) {
   );
 }
 
+function getAnalysisSessionTitle(title: string) {
+  return title === "New conversation" ? "New analysis session" : title;
+}
+
 function createConversation(id: string): Conversation {
   const now = Date.now();
 
@@ -3068,13 +3072,13 @@ function ConversationSidebar({
   const normalizedSearchQuery = searchQuery.trim().toLowerCase();
   const visibleConversations = normalizedSearchQuery
     ? sortedConversations.filter((conversation) =>
-        conversation.title.toLowerCase().includes(normalizedSearchQuery)
+        getAnalysisSessionTitle(conversation.title).toLowerCase().includes(normalizedSearchQuery)
       )
     : sortedConversations;
 
   function startRename(conversation: Conversation) {
     setRenameTarget(conversation);
-    setRenameDraft(conversation.title);
+    setRenameDraft(getAnalysisSessionTitle(conversation.title));
     setRenameError("");
   }
 
@@ -3185,7 +3189,7 @@ function ConversationSidebar({
             Delete analysis session
           </p>
           <h2 className="mt-3 text-2xl font-semibold tracking-tight text-white">
-            {deleteTarget.title}
+            {getAnalysisSessionTitle(deleteTarget.title)}
           </h2>
           <p className="mt-2 text-sm leading-6 text-zinc-400">
             This will permanently delete the analysis session and its saved report context.
@@ -3330,7 +3334,7 @@ function ConversationSidebar({
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0 flex-1">
                 <p className="line-clamp-1 font-medium text-white">
-                  {conversation.title}
+                  {getAnalysisSessionTitle(conversation.title)}
                 </p>
                 <p className="mt-2 line-clamp-2 text-zinc-500">
                   {getConversationPreview(conversation)}
@@ -6600,7 +6604,9 @@ export default function Planner({
               </span>
             </div>
             <h1 className="mt-1 truncate text-xl font-semibold text-white md:text-2xl">
-              {activeConversation?.title || "Strategic Analysis Builder"}
+              {activeConversation
+                ? getAnalysisSessionTitle(activeConversation.title)
+                : "Strategic Analysis Builder"}
             </h1>
           </div>
           <div className="flex shrink-0 items-center gap-2">
