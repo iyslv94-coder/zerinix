@@ -1058,6 +1058,74 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
           isOrphanBulletText
         );
 
+      const wrapPdfText = (text: string, width: number) =>
+        pdf.splitTextToSize(normalizePdfText(text), width) as string[];
+
+      const conciseCoverText = (text: string, maxLength = 94) => {
+        const normalized = normalizePdfText(text)
+          .replace(/^[-*•]\s+/, "")
+          .replace(/^(strengths?|risks?|top\s+\d+\s+\w+)\s*[:\-–—]\s*/i, "")
+          .trim();
+        const firstThought = normalized
+          .split(/\s+(?:because|due to|as a result|which means|therefore)\s+/i)[0]
+          .split(/[.;]\s+/)[0]
+          .trim();
+        const candidate = firstThought || normalized;
+
+        if (candidate.length <= maxLength) {
+          return candidate;
+        }
+
+        const clipped = candidate.slice(0, maxLength + 1);
+        const lastSpace = clipped.lastIndexOf(" ");
+
+        return `${clipped.slice(0, Math.max(32, lastSpace)).trim()}…`;
+      };
+
+      const conciseFundingStage = (value: string) => {
+        const normalized = normalizePdfText(value).trim();
+        const stageMatch = normalized.match(
+          /\b(pre[-\s]?seed|seed|series\s+[a-c]|growth|expansion|bootstrap(?:ped)?|mvp|pilot|validation|scale[-\s]?up|pre[-\s]?revenue)\b/i
+        );
+
+        if (stageMatch?.[0]) {
+          return stageMatch[0].replace(/\s+/g, " ");
+        }
+
+        return conciseCoverText(normalized, 34)
+          .split(/\s+/)
+          .slice(0, 5)
+          .join(" ");
+      };
+
+      const getExecutiveSummaryPreview = (content: string, decision: string) => {
+        const cleaned = normalizePdfText(content)
+          .split("\n")
+          .map((line) =>
+            line
+              .replace(/^[-*•]\s+/, "")
+              .replace(/^#{1,6}\s+/, "")
+              .replace(/\*\*/g, "")
+              .trim()
+          )
+          .filter((line) => line && !/^executive summary\b/i.test(line))
+          .join(" ")
+          .replace(/\s+/g, " ")
+          .trim();
+        const sentences = cleaned
+          .split(/(?<=[.!?])\s+/)
+          .map((sentence) => sentence.trim())
+          .filter(Boolean);
+        const decisionSentence =
+          sentences.find((sentence) =>
+            /\b(invest|recommend|go|wait|pass|validate|hold|risk|opportunity|priority)\b/i.test(sentence)
+          ) ||
+          sentences[0] ||
+          `${formatDecisionLabel(decision)} pending the validation priorities detailed in the Executive Summary.`;
+
+        return conciseCoverText(decisionSentence, 150);
+      };
+
       const drawCoverPage = () => {
         const investmentScore =
           extractScore(fullReportContent, "Total Investment Score") ??
@@ -1087,6 +1155,13 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
           fullReportContent,
           ["Top 3 Risks", "Top Risks", "Risks"],
           3
+        );
+        const executiveSummaryContent =
+          report.sections.find((section) => section.title.toLowerCase().includes("executive summary"))
+            ?.content || fullReportContent;
+        const executiveSummaryPreview = getExecutiveSummaryPreview(
+          executiveSummaryContent,
+          recommendation
         );
         const recommendationFill =
           recommendation === "GO"
@@ -1127,11 +1202,30 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
           maxWidth: contentWidth - 24,
         });
 
-        drawTag("Investor Ready", margin + 12, 90, 36);
-        drawTag(report.type, margin + 52, 90, 42);
+        const previewY = 88;
+        const previewLines = wrapPdfText(executiveSummaryPreview, contentWidth - 38).slice(0, 2);
+        const previewHeight = Math.max(21, 13 + previewLines.length * 4.1);
+        pdf.setFillColor("#030712");
+        pdf.setDrawColor("#115e59");
+        pdf.roundedRect(margin + 12, previewY, contentWidth - 24, previewHeight, 5, 5, "FD");
+        pdf.setFillColor("#14b8a6");
+        pdf.rect(margin + 12, previewY + 4, 1.2, previewHeight - 8, "F");
+        pdf.setFontSize(6.8);
+        pdf.setTextColor("#99f6e4");
+        pdf.text("EXECUTIVE SUMMARY PREVIEW", margin + 18, previewY + 7.5);
+        pdf.setFontSize(8.4);
+        pdf.setTextColor("#e4e4e7");
+        pdf.text(previewLines, margin + 18, previewY + 14.7, {
+          lineHeightFactor: 1.16,
+          maxWidth: contentWidth - 38,
+        });
+
+        const tagY = previewY + previewHeight + 5;
+        drawTag("Investor Ready", margin + 12, tagY, 36);
+        drawTag(report.type, margin + 52, tagY, 42);
 
         const scoreX = margin + 12;
-        const scoreY = 112;
+        const scoreY = tagY + 16;
         const scoreSize = 58;
         pdf.setFillColor("#030712");
         pdf.setDrawColor("#115e59");
@@ -1158,67 +1252,130 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
         pdf.setFontSize(18);
         pdf.text(recommendation, scoreX + 72, scoreY + 20);
 
+        const cardWidth = (contentWidth - 86) / 2;
         const kpis = [
           ["Confidence", confidence === null ? "—" : `${confidence}%`],
           ["Estimated Valuation", valuation || "From report model"],
-          ["Funding Stage", fundingStage || report.type],
+          ["Funding Stage", conciseFundingStage(fundingStage || report.type)],
           ["Status", report.status],
-        ];
+        ].map(([label, value]) => {
+          const labelLines = wrapPdfText(label.toUpperCase(), cardWidth - 8).slice(0, 2);
+          const valueLines = wrapPdfText(
+            label === "Funding Stage" ? value : conciseCoverText(value, 46),
+            cardWidth - 8
+          ).slice(0, label === "Funding Stage" ? 1 : 2);
+          const height = Math.max(18, 7 + labelLines.length * 3.1 + valueLines.length * 4.2);
 
-        kpis.forEach(([label, value], index) => {
-          const cardWidth = (contentWidth - 86) / 2;
+          return { labelLines, valueLines, height };
+        });
+        const rowHeights = [0, 1].map((row) =>
+          Math.max(kpis[row * 2]?.height ?? 18, kpis[row * 2 + 1]?.height ?? 18)
+        );
+
+        kpis.forEach(({ labelLines, valueLines }, index) => {
+          const row = Math.floor(index / 2);
           const cardX = scoreX + 66 + (index % 2) * (cardWidth + 4);
-          const cardY = scoreY + 32 + Math.floor(index / 2) * 20;
+          const cardY = scoreY + 32 + rowHeights.slice(0, row).reduce((sum, height) => sum + height + 4, 0);
+          const cardHeight = rowHeights[row];
           pdf.setFillColor("#09090b");
           pdf.setDrawColor("#27272a");
-          pdf.roundedRect(cardX, cardY, cardWidth, 16, 3, 3, "FD");
+          pdf.roundedRect(cardX, cardY, cardWidth, cardHeight, 3, 3, "FD");
           pdf.setFontSize(7.5);
           pdf.setTextColor("#71717a");
-          pdf.text(label.toUpperCase(), cardX + 4, cardY + 5.5, { maxWidth: cardWidth - 8 });
+          pdf.text(labelLines, cardX + 4, cardY + 5.2, {
+            lineHeightFactor: 1.05,
+            maxWidth: cardWidth - 8,
+          });
           pdf.setFontSize(9.5);
           pdf.setTextColor("#f4f4f5");
-          pdf.text(value, cardX + 4, cardY + 11.8, { maxWidth: cardWidth - 8 });
+          pdf.text(valueLines, cardX + 4, cardY + 7 + labelLines.length * 3.1, {
+            lineHeightFactor: 1.08,
+            maxWidth: cardWidth - 8,
+          });
         });
+
+        const getInsightPanelLayout = (items: string[], panelWidth: number) => {
+          const lineBlocks = (items.length ? items : ["See detailed section analysis."])
+            .slice(0, 3)
+            .map((item) => wrapPdfText(conciseCoverText(item), panelWidth - 15).slice(0, 2));
+          const height = Math.max(
+            46,
+            17 + lineBlocks.reduce((sum, lines) => sum + Math.max(4.2, lines.length * 3.55) + 2.4, 0)
+          );
+
+          return { lineBlocks, height };
+        };
 
         const drawInsightPanel = (
           title: string,
-          items: string[],
+          lineBlocks: string[][],
           x: number,
           panelY: number,
           panelWidth: number,
+          panelHeight: number,
           accent: string
         ) => {
           pdf.setFillColor("#0a0a0a");
           pdf.setDrawColor("#27272a");
-          pdf.roundedRect(x, panelY, panelWidth, 46, 4, 4, "FD");
+          pdf.roundedRect(x, panelY, panelWidth, panelHeight, 4, 4, "FD");
           pdf.setFillColor(accent);
-          pdf.rect(x, panelY, 1.5, 46, "F");
+          pdf.rect(x, panelY, 1.5, panelHeight, "F");
           pdf.setFontSize(8);
           pdf.setTextColor("#ccfbf1");
           pdf.text(title.toUpperCase(), x + 5, panelY + 7);
           pdf.setFontSize(6.6);
           pdf.setTextColor("#d4d4d8");
-          (items.length ? items : ["See detailed section analysis."]).slice(0, 3).forEach((item, index) => {
+          let itemY = panelY + 16;
+          lineBlocks.forEach((lines) => {
             pdf.setFillColor(accent);
-            pdf.circle(x + 5, panelY + 15 + index * 9, 1, "F");
-            pdf.text(item, x + 9, panelY + 16.2 + index * 9, {
+            pdf.circle(x + 5, itemY - 1.3, 1, "F");
+            pdf.text(lines, x + 9, itemY, {
+              lineHeightFactor: 1.12,
               maxWidth: panelWidth - 14,
             });
+            itemY += Math.max(4.2, lines.length * 3.55) + 2.4;
           });
         };
 
-        drawInsightPanel("Top 3 Strengths", strengths, margin + 12, 186, (contentWidth - 31) / 2, "#14b8a6");
-        drawInsightPanel("Top 3 Risks", risks, margin + 21 + (contentWidth - 31) / 2, 186, (contentWidth - 31) / 2, "#f97316");
+        const insightWidth = (contentWidth - 31) / 2;
+        const strengthsLayout = getInsightPanelLayout(strengths, insightWidth);
+        const risksLayout = getInsightPanelLayout(risks, insightWidth);
+        const insightHeight = Math.max(strengthsLayout.height, risksLayout.height);
+        const insightY = scoreY + 72;
+        drawInsightPanel(
+          "Top 3 Strengths",
+          strengthsLayout.lineBlocks,
+          margin + 12,
+          insightY,
+          insightWidth,
+          insightHeight,
+          "#14b8a6"
+        );
+        drawInsightPanel(
+          "Top 3 Risks",
+          risksLayout.lineBlocks,
+          margin + 21 + insightWidth,
+          insightY,
+          insightWidth,
+          insightHeight,
+          "#f97316"
+        );
 
+        const nextActionY = insightY + insightHeight + 9;
+        const nextActionLines = wrapPdfText(nextAction, contentWidth - 36).slice(0, 2);
+        const nextActionHeight = Math.max(21, 14 + nextActionLines.length * 4.1);
         pdf.setFillColor("#042f2e");
         pdf.setDrawColor("#115e59");
-        pdf.roundedRect(margin + 12, 241, contentWidth - 24, 22, 5, 5, "FD");
+        pdf.roundedRect(margin + 12, nextActionY, contentWidth - 24, nextActionHeight, 5, 5, "FD");
         pdf.setFontSize(7);
         pdf.setTextColor("#99f6e4");
-        pdf.text("NEXT CRITICAL ACTION", margin + 18, 249);
+        pdf.text("NEXT CRITICAL ACTION", margin + 18, nextActionY + 8);
         pdf.setFontSize(9);
         pdf.setTextColor("#f8fafc");
-        pdf.text(nextAction, margin + 18, 257, { maxWidth: contentWidth - 36 });
+        pdf.text(nextActionLines, margin + 18, nextActionY + 16, {
+          lineHeightFactor: 1.12,
+          maxWidth: contentWidth - 36,
+        });
 
         drawFooter();
       };
@@ -1270,21 +1427,28 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
         `${report.sections.length} Sections`,
         report.type,
         "Investor Ready",
-      ];
+      ].map((label) => wrapPdfText(label, (contentWidth - 8) / 3 - 8).slice(0, 2));
+      const summaryCardHeight = Math.max(
+        12,
+        6 + Math.max(...summaryCards.map((lines) => lines.length)) * 3.9
+      );
 
-      summaryCards.forEach((label, index) => {
+      summaryCards.forEach((lines, index) => {
         const cardWidth = (contentWidth - 8) / 3;
         const cardX = margin + index * (cardWidth + 4);
 
         pdf.setFillColor("#09090b");
         pdf.setDrawColor("#27272a");
-        pdf.roundedRect(cardX, y, cardWidth, 12, 3, 3, "FD");
+        pdf.roundedRect(cardX, y, cardWidth, summaryCardHeight, 3, 3, "FD");
         pdf.setFontSize(7.5);
         pdf.setTextColor(index === 2 ? "#ccfbf1" : "#a1a1aa");
-        pdf.text(label, cardX + 4, y + 7.5, { maxWidth: cardWidth - 8 });
+        pdf.text(lines, cardX + 4, y + 6.4, {
+          lineHeightFactor: 1.06,
+          maxWidth: cardWidth - 8,
+        });
       });
 
-      y += 18;
+      y += summaryCardHeight + 6;
 
       const getTamRows = (content: string, width: number) =>
         ([
@@ -1345,23 +1509,25 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
         const labels = getFinancialDashboardMetrics(metricContent);
         const columns = 3;
         const itemWidth = (width - (columns - 1) * 3) / columns;
-        const itemHeight = 18;
         const items = labels
           .map((item) => {
             const value = formatMetricCardValue(extractMetricValueFromAliases(metricContent, item.aliases));
             const compactValue = compactPdfMetricValue(value);
+            const labelLines = wrapPdfText(item.label, itemWidth - 4).slice(0, 2);
             const description = extractShortDescription(metricContent, item.aliases);
             const descriptionLines = description
               ? (pdf.splitTextToSize(`${item.label}: ${description}`, width - 6) as string[])
               : [];
+            const cardHeight = Math.max(21, 8 + labelLines.length * 3.3 + 8.2);
 
             return {
               label: item.label,
               aliases: item.aliases,
               value,
               compactValue,
+              labelLines,
               descriptionLines,
-              height: itemHeight,
+              height: cardHeight,
             };
           })
           .filter((item) => item.compactValue);
@@ -1667,7 +1833,7 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
               : 0;
             const itemHeight = isFinancialDashboard && financialLayout
               ? financialLayout.rowHeights[rowIndex]
-              : isKpiDashboard ? 23 : isScenario ? 20 : isUnitEconomics ? 14 : 10;
+              : isKpiDashboard ? 28 : isScenario ? 20 : isUnitEconomics ? 19 : 10;
             const itemY = isFinancialDashboard && financialLayout
               ? visualY + priorRowHeight + rowIndex * 3
               : visualY + rowIndex * (itemHeight + 3);
@@ -1676,20 +1842,29 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
               ? item.value
               : formatMetricCardValue(extractMetricValueFromAliases(metricContent, aliases));
             const compactValue = compactPdfMetricValue(value);
+            const labelLines =
+              typeof item !== "string" && "labelLines" in item
+                ? item.labelLines
+                : wrapPdfText(label, itemWidth - 4).slice(0, 2);
+            const labelBottomY = itemY + 3.2 + Math.max(0, labelLines.length - 1) * 3.2;
+            const primaryValueY = labelBottomY + 5.4;
 
             pdf.setFillColor("#18181b");
             pdf.setDrawColor("#27272a");
             pdf.roundedRect(x, itemY, itemWidth, itemHeight, 2.5, 2.5, "FD");
             pdf.setFontSize(6.2);
             pdf.setTextColor("#a1a1aa");
-            pdf.text(label, x + 2, itemY + 3.2, { maxWidth: itemWidth - 4 });
+            pdf.text(labelLines, x + 2, itemY + 3.2, {
+              lineHeightFactor: 1.05,
+              maxWidth: itemWidth - 4,
+            });
             if (isFinancialDashboard && value) {
               pdf.setTextColor("#f4f4f5");
-              drawSingleLine(compactValue || "—", x + 2, itemY + 11.7, itemWidth - 4, 8.8, 4.2, false);
+              drawSingleLine(compactValue || "—", x + 2, primaryValueY, itemWidth - 4, 8.8, 4.2, false);
               return;
             }
             if (isUnitEconomics) {
-              drawSingleLine(compactValue || "—", x + 2, itemY + 8.8, itemWidth - 4, 7.2, 4.2, false);
+              drawSingleLine(compactValue || "—", x + 2, primaryValueY, itemWidth - 4, 7.2, 4.2, false);
               return;
             }
             if (isKpiDashboard) {
@@ -1697,15 +1872,15 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
               const target = extractKpiTarget(content, label);
               const status = extractKpiStatus(content, label);
               pdf.setTextColor("#f4f4f5");
-              drawSingleLine(kpiValue, x + 2, itemY + 8.4, itemWidth - 4, 7.5, 4.2, false);
+              drawSingleLine(kpiValue, x + 2, primaryValueY, itemWidth - 4, 7.5, 4.2, false);
               pdf.setFontSize(5.3);
               pdf.setTextColor("#a1a1aa");
-              pdf.text(`Target: ${target || kpiValue || "—"}`, x + 2, itemY + 12.1, { maxWidth: itemWidth - 4 });
-              pdf.text(`Status: ${status}`, x + 2, itemY + 15.5, { maxWidth: itemWidth - 4 });
+              pdf.text(`Target: ${target || kpiValue || "—"}`, x + 2, primaryValueY + 3.7, { maxWidth: itemWidth - 4 });
+              pdf.text(`Status: ${status}`, x + 2, primaryValueY + 7.1, { maxWidth: itemWidth - 4 });
               pdf.setFillColor("#27272a");
-              pdf.roundedRect(x + 2, itemY + 18.8, itemWidth - 4, 1.5, 0.7, 0.7, "F");
+              pdf.roundedRect(x + 2, itemY + itemHeight - 4.2, itemWidth - 4, 1.5, 0.7, 0.7, "F");
               pdf.setFillColor("#5eead4");
-              pdf.roundedRect(x + 2, itemY + 18.8, Math.max(3, ((itemWidth - 4) * score) / 100), 1.5, 0.7, 0.7, "F");
+              pdf.roundedRect(x + 2, itemY + itemHeight - 4.2, Math.max(3, ((itemWidth - 4) * score) / 100), 1.5, 0.7, 0.7, "F");
               return;
             }
             if (isScenario) {
@@ -1758,7 +1933,7 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
           }
 
           if (isKpiDashboard) {
-            return 52;
+            return 62;
           }
 
           if (isScenario) {
@@ -1766,7 +1941,7 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
           }
 
           if (isUnitEconomics) {
-            return 18;
+            return 23;
           }
 
           return labels.length > 6 ? 38 : 22;
@@ -1803,11 +1978,11 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
         }
 
         if (normalizedTitle.includes("kpi")) {
-          return 52;
+          return 62;
         }
 
         if (normalizedTitle.includes("unit economics")) {
-          return 18;
+          return 23;
         }
 
         if (normalizedTitle.includes("executive recommendation")) {
@@ -1862,11 +2037,13 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
         const bodyLines = splitPdfReadableLines(sectionBodyContent, bodyWidth);
         const hasBodyText = sectionBodyContent.trim().length > 0;
         const safeBodyLines = bodyLines.length > 0 ? bodyLines : [""];
+        const isExecutiveSummarySection = section.title.toLowerCase().includes("executive summary");
+        const sectionBodyLineHeight = isExecutiveSummarySection ? 5.75 : bodyLineHeight;
         let lineIndex = 0;
 
         while (lineIndex < safeBodyLines.length) {
           const activeVisualHeight = lineIndex === 0 ? visualHeight : 0;
-          const bodyTextHeight = hasBodyText ? bodyLineHeight : 0;
+          const bodyTextHeight = hasBodyText ? sectionBodyLineHeight : 0;
           const minimumCardHeight =
             cardHeaderHeight + activeVisualHeight + bodyTextHeight + cardBottomPadding + 3;
 
@@ -1881,14 +2058,14 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
 
           const availableHeight =
             pageHeight - margin - y - cardHeaderHeight - activeVisualHeight - cardBottomPadding;
-          const maxLines = Math.max(1, Math.floor(availableHeight / bodyLineHeight));
+          const maxLines = Math.max(1, Math.floor(availableHeight / sectionBodyLineHeight));
           const lines = safeBodyLines.slice(lineIndex, lineIndex + maxLines);
           const isContinued = lineIndex > 0;
           const cardHeight = Math.max(
             31,
             cardHeaderHeight +
               activeVisualHeight +
-              (hasBodyText ? lines.length * bodyLineHeight : 0) +
+              (hasBodyText ? lines.length * sectionBodyLineHeight : 0) +
               cardBottomPadding
           );
 
@@ -1923,10 +2100,10 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
               : 0;
 
           if (hasBodyText) {
-            pdf.setFontSize(8.8);
+            pdf.setFontSize(isExecutiveSummarySection ? 9.2 : 8.8);
             pdf.setTextColor("#d4d4d8");
             pdf.text(lines, bodyX, y + 24 + drawnVisualHeight, {
-              lineHeightFactor: 1.3,
+              lineHeightFactor: isExecutiveSummarySection ? 1.38 : 1.3,
               maxWidth: bodyWidth,
             });
           }

@@ -257,10 +257,10 @@ const modeSuggestions: Record<ChatMode, string[]> = {
 const modeEmptyState: Record<ChatMode, { title: string; description: string; placeholder: string }> =
   {
     chat: {
-      title: "Ask ZERINIX anything.",
+      title: "Ask your ZERINIX AI Advisor.",
       description:
-        "Use a continuous AI chat with conversation memory, markdown answers, file context, and fast model routing.",
-      placeholder: "Ask a strategy question, paste notes, or upload context for ZERINIX to analyze...",
+        "Use a continuous advisor session with memory, markdown answers, file context, and fast model routing.",
+      placeholder: "Ask a strategic question, paste notes, or upload context for ZERINIX to analyze...",
     },
     plan: {
       title: "Create an investor-ready business plan.",
@@ -301,9 +301,9 @@ const modeCards: Array<{
   },
   {
     mode: "chat",
-    label: "AI Chat",
-    description: "Fast conversational advisor with memory.",
-    output: "Live advisor response",
+    label: "AI Advisor",
+    description: "Strategic advisor with memory.",
+    output: "Live guidance",
     icon: Bot,
   },
 ];
@@ -751,7 +751,7 @@ function generateConversationTitle(content: string) {
     .trim();
 
   if (!cleanTitle) {
-    return "New ZERINIX conversation";
+    return "New analysis session";
   }
 
   let title = cleanTitle
@@ -771,6 +771,7 @@ function generateConversationTitle(content: string) {
 function shouldAutoTitleConversation(title: string) {
   return (
     title === "New conversation" ||
+    title === "New analysis session" ||
     title === "New ZERINIX conversation" ||
     title === "Untitled conversation"
   );
@@ -781,7 +782,7 @@ function createConversation(id: string): Conversation {
 
   return {
     id,
-    title: "New conversation",
+    title: "New analysis session",
     messages: [],
     createdAt: now,
     updatedAt: now,
@@ -3085,7 +3086,7 @@ function ConversationSidebar({
     const cleanTitle = renameDraft.trim();
 
     if (!cleanTitle) {
-      setRenameError("Conversation name cannot be empty.");
+      setRenameError("Analysis session name cannot be empty.");
       return;
     }
 
@@ -3123,13 +3124,13 @@ function ConversationSidebar({
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-xl">
         <div className="w-full max-w-md rounded-[2rem] border border-white/10 bg-zinc-950 p-6 shadow-2xl shadow-black/60">
           <p className="text-xs font-semibold uppercase tracking-[0.26em] text-teal-200/70">
-            Rename conversation
+            Rename analysis session
           </p>
           <h2 className="mt-3 text-2xl font-semibold tracking-tight text-white">
-            Update conversation title
+            Update analysis title
           </h2>
           <p className="mt-2 text-sm leading-6 text-zinc-500">
-            Use a clear title so this conversation is easy to find later.
+            Use a clear title so this analysis is easy to find later.
           </p>
           <input
             value={renameDraft}
@@ -3149,7 +3150,7 @@ function ConversationSidebar({
             }}
             autoFocus
             className="mt-5 h-12 w-full rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-white outline-none transition placeholder:text-zinc-600 focus:border-teal-300/40"
-            placeholder="Conversation title"
+            placeholder="Analysis session title"
           />
           {renameError ? (
             <p className="mt-3 text-sm text-red-300">{renameError}</p>
@@ -3181,13 +3182,13 @@ function ConversationSidebar({
             <ShieldAlert className="h-5 w-5 text-red-200" />
           </div>
           <p className="mt-5 text-xs font-semibold uppercase tracking-[0.26em] text-red-200/70">
-            Delete conversation
+            Delete analysis session
           </p>
           <h2 className="mt-3 text-2xl font-semibold tracking-tight text-white">
             {deleteTarget.title}
           </h2>
           <p className="mt-2 text-sm leading-6 text-zinc-400">
-            This will permanently delete the conversation and its saved messages.
+            This will permanently delete the analysis session and its saved report context.
             This action cannot be undone.
           </p>
           <div className="mt-6 flex gap-3">
@@ -3231,11 +3232,11 @@ function ConversationSidebar({
           <div className="mt-5 hidden grid-cols-2 gap-2 md:grid">
             <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-3">
               <p className="text-lg font-semibold text-white">{conversations.length}</p>
-              <p className="mt-1 text-[11px] text-zinc-500">Conversations</p>
+              <p className="mt-1 text-[11px] text-zinc-500">Analysis sessions</p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-3">
               <p className="text-lg font-semibold text-white">{reportCount}</p>
-              <p className="mt-1 text-[11px] text-zinc-500">AI outputs</p>
+              <p className="mt-1 text-[11px] text-zinc-500">Saved outputs</p>
             </div>
           </div>
         </div>
@@ -3243,11 +3244,11 @@ function ConversationSidebar({
           type="button"
           onClick={() => void onCreateConversation()}
           className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-teal-200/20 bg-teal-200/10 text-teal-100 shadow-lg shadow-teal-950/10 transition hover:-translate-y-0.5 hover:border-teal-200/40 hover:bg-teal-200/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200/30 md:mt-5 md:w-full md:gap-2 md:px-4 md:text-sm md:font-semibold"
-          aria-label="New conversation"
-          title="New conversation"
+          aria-label="New analysis session"
+          title="New analysis session"
         >
           <Plus className="h-4 w-4 text-teal-200" />
-          <span className="hidden md:inline">Create new report</span>
+          <span className="hidden md:inline">New analysis session</span>
         </button>
       </div>
 
@@ -3258,10 +3259,10 @@ function ConversationSidebar({
         >
           <span className="inline-flex items-center gap-2">
             <MessageSquare className="h-4 w-4 text-teal-200" />
-            AI Workspace
+            Analysis Workspace
           </span>
           <span className="rounded-full border border-teal-200/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.16em] text-teal-100">
-            {activeMode === "plan" ? "Plan" : activeMode === "market" ? "Market" : "Chat"}
+            {activeMode === "plan" ? "Plan" : activeMode === "market" ? "Market" : "Advisor"}
           </span>
         </Link>
         <Link
@@ -3281,7 +3282,7 @@ function ConversationSidebar({
       </nav>
 
       <div className="mt-4 hidden items-center justify-between px-1 text-xs font-semibold uppercase tracking-[0.22em] text-zinc-600 md:flex">
-        <span>Conversations</span>
+        <span>Analysis History</span>
         <span>{visibleConversations.length}</span>
       </div>
 
@@ -3290,7 +3291,7 @@ function ConversationSidebar({
         <input
           value={searchQuery}
           onChange={(event) => setSearchQuery(event.target.value)}
-          placeholder="Search conversations..."
+          placeholder="Search analysis history..."
           className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-zinc-600"
         />
       </label>
@@ -3298,14 +3299,14 @@ function ConversationSidebar({
       <div className="flex flex-1 gap-3 overflow-x-auto pl-3 md:mt-3 md:block md:space-y-3 md:overflow-y-auto md:pl-0">
         {sortedConversations.length === 0 ? (
           <div className="min-w-64 rounded-3xl border border-white/10 bg-white/[0.035] p-5 text-sm leading-6 text-zinc-500">
-            <p className="font-semibold text-white">No conversations yet</p>
+            <p className="font-semibold text-white">No analysis sessions yet</p>
             <p className="mt-2">
-              Start a new chat or generate a report to build your workspace history.
+              Generate a report or start an advisor session to build your decision history.
             </p>
           </div>
         ) : visibleConversations.length === 0 ? (
           <div className="min-w-64 rounded-3xl border border-white/10 bg-white/[0.035] p-5 text-sm leading-6 text-zinc-500">
-            <p className="font-semibold text-white">No conversations found</p>
+            <p className="font-semibold text-white">No analysis sessions found</p>
             <p className="mt-2">
               Try another title or clear the search field.
             </p>
@@ -4656,7 +4657,7 @@ const ReportPanel = memo(function ReportPanel({
             Your AI report will appear here.
           </p>
           <p className="mt-2 text-sm leading-6 text-zinc-500">
-            Send a business prompt to generate a structured ZERINIX report.
+            Enter business context to generate a structured ZERINIX report.
           </p>
         </div>
       </div>
@@ -5116,7 +5117,7 @@ export default function Planner({
   }
 
   function renameConversation(id: string, title: string) {
-    const cleanTitle = title.trim() || "Untitled conversation";
+    const cleanTitle = title.trim() || "Untitled analysis";
 
     setConversations((current) =>
       current.map((conversation) =>
@@ -5179,7 +5180,7 @@ export default function Planner({
 
     if (!userId) {
       console.error("[ai_conversations insert skipped] No authenticated user");
-      setConversationError("No authenticated user was available for conversation persistence.");
+      setConversationError("No authenticated user was available for analysis history persistence.");
       window.location.assign("/login?next=/plan");
       return false;
     }
@@ -5251,7 +5252,7 @@ export default function Planner({
 
     if (error) {
       console.error("[ai_conversations delete failed]", error);
-      setConversationError("Conversation could not be deleted. Please try again.");
+      setConversationError("Analysis session could not be deleted. Please try again.");
       return false;
     }
 
@@ -5639,7 +5640,7 @@ export default function Planner({
     const conversationId = activeConversationId;
     const responseLanguage = detectResponseLanguage(submittedPrompt);
     const shouldUpdateTitle = shouldAutoTitleConversation(
-      activeConversation?.title || "New conversation"
+      activeConversation?.title || "New analysis session"
     );
     const title =
       shouldUpdateTitle
@@ -5965,7 +5966,7 @@ export default function Planner({
             () =>
               reject(
                 new Error(
-                  "Chat response timed out before the stream completed. Please try again."
+                  "Advisor response timed out before the stream completed. Please try again."
                 )
               ),
             CHAT_STREAM_IDLE_TIMEOUT_MS
@@ -6017,7 +6018,7 @@ export default function Planner({
 
     const conversationId = activeConversationId;
     const shouldUpdateTitle = shouldAutoTitleConversation(
-      activeConversation?.title || "New conversation"
+      activeConversation?.title || "New analysis session"
     );
     const title = shouldUpdateTitle
       ? generateConversationTitle(submittedPrompt)
@@ -6091,7 +6092,7 @@ export default function Planner({
       const responseText = await readStreamingText(
         res,
         (content) => updateAssistantMessage(assistantMessageId, content, "streaming", conversationId),
-        "Chat response failed. Please try again."
+        "Advisor response failed. Please try again."
       );
       const finalText = responseText || "I could not generate a response. Please try again.";
 
@@ -6102,10 +6103,10 @@ export default function Planner({
       const aborted = error instanceof DOMException && error.name === "AbortError";
       const errorMessage =
         aborted && requestTimedOut
-          ? "Chat response timed out before the server responded. Please try again."
+          ? "Advisor response timed out before the server responded. Please try again."
           : getReportGenerationErrorMessage(
               error,
-              aborted ? "Generation stopped." : "Chat response failed. Please try again."
+              aborted ? "Generation stopped." : "Advisor response failed. Please try again."
             );
 
       setReportGenerationError(errorMessage);
@@ -6137,7 +6138,7 @@ export default function Planner({
     const conversationId = activeConversationId;
     const reportRequestId = createMessageId();
     const shouldUpdateTitle = shouldAutoTitleConversation(
-      activeConversation?.title || "New conversation"
+      activeConversation?.title || "New analysis session"
     );
     const title = shouldUpdateTitle
       ? generateConversationTitle(submittedPrompt)
@@ -6324,7 +6325,7 @@ export default function Planner({
     const conversationId = activeConversationId;
     const reportRequestId = createMessageId();
     const shouldUpdateTitle = shouldAutoTitleConversation(
-      activeConversation?.title || "New conversation"
+      activeConversation?.title || "New analysis session"
     );
     const title = shouldUpdateTitle
       ? generateConversationTitle(submittedPrompt)
@@ -6578,7 +6579,7 @@ export default function Planner({
                 Drop files into ZERINIX
               </p>
               <p className="mt-2 text-sm text-zinc-500">
-                They will attach to your next message.
+                They will attach to your next analysis request.
               </p>
             </div>
           </div>
@@ -6595,11 +6596,11 @@ export default function Planner({
                   ? "AI Plan mode"
                   : activeMode === "market"
                     ? "Market Analysis mode"
-                    : "AI Chat mode"}
+                    : "AI Advisor mode"}
               </span>
             </div>
             <h1 className="mt-1 truncate text-xl font-semibold text-white md:text-2xl">
-              {activeConversation?.title || "Entrepreneur Operating Chat"}
+              {activeConversation?.title || "Strategic Analysis Builder"}
             </h1>
           </div>
           <div className="flex shrink-0 items-center gap-2">
@@ -6609,7 +6610,7 @@ export default function Planner({
               className="hidden items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-medium text-zinc-200 transition hover:bg-white/10 md:inline-flex"
             >
               <Plus className="h-4 w-4 text-teal-200" />
-              New chat
+              New analysis
             </button>
             <button
               type="button"
@@ -6647,7 +6648,7 @@ export default function Planner({
             {conversationError ? (
               <div className="rounded-3xl border border-red-300/20 bg-red-950/30 p-4 text-sm leading-6 text-red-100 shadow-2xl shadow-black/30">
                 <p className="font-semibold text-red-50">
-                  Conversation history could not be loaded or saved.
+                  Analysis history could not be loaded or saved.
                 </p>
                 <p className="mt-1 break-words text-red-100/80">
                   Your workspace is safe. Please refresh the page or try again shortly.
@@ -6748,12 +6749,12 @@ export default function Planner({
                     ? "AI Plan"
                     : activeMode === "market"
                       ? "Market Analysis"
-                      : "AI Chat"}
+                      : "AI Advisor"}
                 </span>
                 <span className="text-xs text-zinc-600">
                   {activeMode === "chat"
-                    ? `AI Chat · ${chatModelOptions.find((option) => option.value === chatModelPreference)?.label || "Fast"} model`
-                    : "Structured report mode"}
+                    ? `AI Advisor · ${chatModelOptions.find((option) => option.value === chatModelPreference)?.label || "Fast"} mode`
+                    : "Structured report builder"}
                 </span>
                 {activeMode !== "chat" && initialWorkspaces.length > 0 ? (
                   <label className="ml-auto flex items-center gap-2 text-xs text-zinc-500">
@@ -6886,7 +6887,7 @@ export default function Planner({
                         : "border border-white/10 bg-white/[0.04] text-zinc-300 hover:bg-white/10"
                     }`}
                   >
-                    AI Chat
+                    AI Advisor
                   </button>
                   {activeMode === "chat" ? (
                     <div className="flex flex-wrap items-center gap-1 rounded-2xl border border-white/10 bg-black/25 p-1">
@@ -6924,7 +6925,13 @@ export default function Planner({
                   onClick={() => void submitPrompt()}
                   className="inline-flex items-center justify-center gap-2 rounded-2xl bg-teal-300 px-5 py-3 text-sm font-semibold text-black shadow-lg shadow-teal-950/40 transition hover:-translate-y-0.5 hover:bg-teal-200 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
                 >
-                  {isWorking ? "Streaming..." : "Send"}
+                  {isWorking
+                    ? activeMode === "chat"
+                      ? "Advising..."
+                      : "Generating..."
+                    : activeMode === "chat"
+                      ? "Ask Advisor"
+                      : "Generate Report"}
                   <Send className="h-4 w-4" />
                 </button>
               </div>
@@ -6935,7 +6942,7 @@ export default function Planner({
                 <CornerDownLeft className="h-3.5 w-3.5" />
                 {activeMode === "chat"
                   ? "Enter to send · Shift + Enter for newline"
-                  : "Cmd/Ctrl + Enter to send"}
+                  : "Cmd/Ctrl + Enter to generate report"}
               </span>
               <span className="inline-flex items-center gap-1">
                 <Search className="h-3.5 w-3.5" />
