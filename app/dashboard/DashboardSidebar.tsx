@@ -26,7 +26,7 @@ export default function DashboardSidebar() {
       <div className="hidden lg:block">
         <Link
           href="/"
-          className="group flex items-center gap-3 rounded-[1.65rem] border border-white/10 bg-white/[0.045] p-3 shadow-xl shadow-black/20 transition duration-300 hover:-translate-y-0.5 hover:border-teal-300/25 hover:bg-white/[0.065]"
+          className="group flex items-center gap-3 rounded-[1.65rem] border border-white/10 bg-white/[0.045] p-3 shadow-xl shadow-black/20 ring-1 ring-white/[0.025] transition duration-300 hover:-translate-y-0.5 hover:border-teal-300/25 hover:bg-white/[0.065] hover:shadow-2xl hover:shadow-teal-950/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200/30"
         >
           <span className="flex h-11 w-11 items-center justify-center rounded-[1.15rem] bg-white text-sm font-black tracking-[0.12em] text-black shadow-lg shadow-white/10">
             ZX
@@ -42,7 +42,7 @@ export default function DashboardSidebar() {
           <ChevronRight className="ml-auto h-4 w-4 text-zinc-700 transition group-hover:text-teal-200" />
         </Link>
 
-        <div className="mt-4 rounded-[1.65rem] border border-teal-300/15 bg-teal-300/[0.055] p-4 shadow-xl shadow-teal-950/10">
+        <div className="mt-4 rounded-[1.65rem] border border-teal-300/15 bg-teal-300/[0.055] p-4 shadow-xl shadow-teal-950/10 ring-1 ring-teal-200/10">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-[1rem] border border-teal-200/20 bg-teal-200/10">
               <ShieldCheck className="h-5 w-5 text-teal-200" />
@@ -65,9 +65,9 @@ export default function DashboardSidebar() {
             <Link
               key={item.href}
               href={item.href}
-              className="group flex shrink-0 items-center gap-3 rounded-[1.15rem] border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-medium text-zinc-300 shadow-sm shadow-black/10 transition duration-300 hover:-translate-y-0.5 hover:border-teal-300/25 hover:bg-white/[0.065] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200/40 lg:w-full"
+              className="group flex min-h-12 shrink-0 items-center gap-3 rounded-[1.15rem] border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-medium text-zinc-300 shadow-sm shadow-black/10 ring-1 ring-white/[0.015] transition duration-300 hover:-translate-y-0.5 hover:border-teal-300/25 hover:bg-white/[0.065] hover:text-white hover:shadow-lg hover:shadow-black/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200/40 lg:w-full"
             >
-              <span className="flex h-8 w-8 items-center justify-center rounded-xl border border-white/10 bg-black/25 transition duration-300 group-hover:border-teal-200/25 group-hover:bg-teal-200/10">
+              <span className="flex h-8 w-8 items-center justify-center rounded-xl border border-white/10 bg-black/25 shadow-inner shadow-white/[0.02] transition duration-300 group-hover:border-teal-200/25 group-hover:bg-teal-200/10">
                 <Icon className="h-4 w-4 text-teal-200" />
               </span>
               <span>{item.label}</span>
@@ -80,7 +80,7 @@ export default function DashboardSidebar() {
       <form action={signOut} className="ml-2 lg:ml-0 lg:mt-6">
         <button
           type="submit"
-          className="flex items-center gap-3 rounded-[1.15rem] border border-white/10 bg-zinc-950/80 px-4 py-3 text-sm font-medium text-zinc-300 transition duration-300 hover:-translate-y-0.5 hover:border-red-300/30 hover:bg-red-950/30 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-200/30 lg:w-full"
+          className="flex min-h-12 items-center gap-3 rounded-[1.15rem] border border-white/10 bg-zinc-950/80 px-4 py-3 text-sm font-medium text-zinc-300 shadow-sm shadow-black/10 transition duration-300 hover:-translate-y-0.5 hover:border-red-300/30 hover:bg-red-950/30 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-200/30 lg:w-full"
         >
           <LogOut className="h-4 w-4 text-red-200" />
           Logout

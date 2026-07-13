@@ -67,7 +67,7 @@ export default function WorkspaceManager({
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-teal-200/70">
             Workspaces
           </p>
-          <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">
+          <h2 className="mt-2 text-2xl font-semibold tracking-[-0.025em] text-white">
             Organize reports by venture, market or decision.
           </h2>
         </div>
@@ -79,7 +79,7 @@ export default function WorkspaceManager({
 
       <form
         action={createWorkspace}
-        className="rounded-[1.85rem] border border-white/10 bg-white/[0.045] p-4 shadow-2xl shadow-black/30 backdrop-blur-xl"
+        className="rounded-[1.85rem] border border-white/10 bg-white/[0.045] p-4 shadow-2xl shadow-black/30 ring-1 ring-white/[0.025] backdrop-blur-xl transition duration-300 hover:border-teal-300/15 hover:bg-white/[0.052]"
       >
         <div className="flex flex-col gap-3 md:flex-row md:items-center">
           <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[1.1rem] border border-teal-300/20 bg-teal-300/10 shadow-lg shadow-teal-950/10">
@@ -93,7 +93,7 @@ export default function WorkspaceManager({
           />
           <button
             type="submit"
-            className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-white px-5 text-sm font-semibold text-black shadow-xl shadow-white/10 transition duration-300 hover:-translate-y-0.5 hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+            className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-white px-5 text-sm font-semibold text-black shadow-xl shadow-white/10 transition duration-300 hover:-translate-y-0.5 hover:bg-zinc-200 hover:shadow-2xl hover:shadow-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
           >
             <FolderPlus className="h-4 w-4" />
             Create Workspace
@@ -110,10 +110,10 @@ export default function WorkspaceManager({
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Search workspaces..."
-              className="w-full rounded-[1.35rem] border border-white/10 bg-white/[0.045] py-4 pl-12 pr-4 text-sm text-white outline-none shadow-2xl shadow-black/25 backdrop-blur-xl transition duration-300 placeholder:text-zinc-600 focus:border-teal-300/40 focus:bg-white/[0.065]"
+              className="min-h-14 w-full rounded-[1.35rem] border border-white/10 bg-white/[0.045] py-4 pl-12 pr-4 text-sm text-white outline-none shadow-2xl shadow-black/25 ring-1 ring-white/[0.025] backdrop-blur-xl transition duration-300 placeholder:text-zinc-600 hover:bg-white/[0.055] focus:border-teal-300/40 focus:bg-white/[0.065] focus:ring-2 focus:ring-teal-200/10"
             />
           </div>
-          <label className="flex items-center gap-2 rounded-[1.35rem] border border-white/10 bg-white/[0.045] px-4 text-sm text-zinc-400 shadow-2xl shadow-black/25 backdrop-blur-xl">
+          <label className="flex min-h-14 items-center gap-2 rounded-[1.35rem] border border-white/10 bg-white/[0.045] px-4 text-sm text-zinc-400 shadow-2xl shadow-black/25 ring-1 ring-white/[0.025] backdrop-blur-xl transition duration-300 hover:bg-white/[0.055]">
             <ArrowDownUp className="h-4 w-4 text-teal-200" />
             <span className="sr-only">Sort workspaces</span>
             <select
@@ -130,7 +130,7 @@ export default function WorkspaceManager({
       ) : null}
 
       {workspaces.length === 0 ? (
-        <div className="mt-6 rounded-[1.85rem] border border-white/10 bg-white/[0.04] p-10 text-center shadow-2xl shadow-black/30 backdrop-blur-xl">
+        <div className="mt-6 rounded-[1.85rem] border border-dashed border-white/10 bg-white/[0.04] p-10 text-center shadow-2xl shadow-black/30 ring-1 ring-white/[0.025] backdrop-blur-xl">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-[1.2rem] border border-teal-300/20 bg-teal-300/10">
             <Inbox className="h-6 w-6 text-teal-200" />
           </div>
@@ -157,13 +157,15 @@ export default function WorkspaceManager({
           return (
             <article
               key={workspace.id}
-              className="group rounded-[1.85rem] border border-white/10 bg-white/[0.045] p-5 shadow-2xl shadow-black/30 backdrop-blur-xl transition duration-300 hover:-translate-y-1 hover:border-teal-300/20 hover:bg-white/[0.065]"
+              className="group relative min-h-[25.5rem] overflow-hidden rounded-[1.85rem] border border-white/10 bg-white/[0.045] p-5 shadow-2xl shadow-black/30 ring-1 ring-white/[0.025] backdrop-blur-xl transition duration-300 hover:-translate-y-1 hover:border-teal-300/20 hover:bg-white/[0.065] hover:shadow-teal-950/10"
             >
+              <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/15 to-transparent" />
+              <div className="pointer-events-none absolute -right-10 -top-10 h-28 w-28 rounded-full bg-teal-300/5 blur-2xl transition duration-300 group-hover:bg-teal-300/10" />
               <div className="flex items-start justify-between gap-4">
                 <div className="flex h-12 w-12 items-center justify-center rounded-[1.1rem] border border-white/10 bg-white/5 transition duration-300 group-hover:border-teal-300/25 group-hover:bg-teal-300/10">
                   <Folder className="h-5 w-5 text-teal-200" />
                 </div>
-                <span className="rounded-full border border-teal-300/20 bg-teal-300/10 px-3 py-1 text-xs font-medium text-teal-100 shadow-lg shadow-teal-950/10">
+                <span className="rounded-full border border-teal-300/20 bg-teal-300/10 px-3 py-1 text-xs font-medium text-teal-100 shadow-lg shadow-teal-950/10 ring-1 ring-teal-200/10">
                   {statusLabel}
                 </span>
               </div>
@@ -172,7 +174,7 @@ export default function WorkspaceManager({
                 {workspace.name}
               </h2>
               <div className="mt-4 grid grid-cols-2 gap-3">
-                <div className="rounded-2xl border border-white/10 bg-black/25 p-3">
+                <div className="rounded-2xl border border-white/10 bg-black/25 p-3 shadow-inner shadow-black/15">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
                     Reports
                   </p>
@@ -180,7 +182,7 @@ export default function WorkspaceManager({
                     {workspace.reportCount}
                   </p>
                 </div>
-                <div className="rounded-2xl border border-white/10 bg-black/25 p-3">
+                <div className="rounded-2xl border border-white/10 bg-black/25 p-3 shadow-inner shadow-black/15">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
                     Updated
                   </p>
@@ -192,7 +194,7 @@ export default function WorkspaceManager({
 
               <Link
                 href={`/dashboard/workspaces/${workspace.id}`}
-                className="mt-5 inline-flex items-center gap-2 rounded-xl border border-teal-300/15 bg-teal-300/[0.06] px-3 py-2 text-sm font-medium text-teal-100 transition duration-300 hover:-translate-y-0.5 hover:border-teal-300/30 hover:bg-teal-300/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200/30"
+                className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-xl border border-teal-300/15 bg-teal-300/[0.06] px-3 py-2 text-sm font-medium text-teal-100 shadow-lg shadow-teal-950/10 transition duration-300 hover:-translate-y-0.5 hover:border-teal-300/30 hover:bg-teal-300/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200/30"
               >
                 <FileText className="h-4 w-4" />
                 Open workspace
@@ -209,11 +211,11 @@ export default function WorkspaceManager({
                     name="name"
                     defaultValue={workspace.name}
                     required
-                    className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black/35 px-3 py-2 text-sm text-zinc-200 outline-none transition duration-300 focus:border-teal-300/40 focus:ring-2 focus:ring-teal-200/10"
+                    className="min-h-11 min-w-0 flex-1 rounded-xl border border-white/10 bg-black/35 px-3 py-2 text-sm text-zinc-200 outline-none transition duration-300 hover:bg-black/45 focus:border-teal-300/40 focus:ring-2 focus:ring-teal-200/10"
                   />
                   <button
                     type="submit"
-                    className="inline-flex items-center justify-center rounded-xl border border-white/10 bg-white/5 px-3 text-zinc-200 transition duration-300 hover:-translate-y-0.5 hover:border-teal-300/25 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200/30"
+                    className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-3 text-zinc-200 transition duration-300 hover:-translate-y-0.5 hover:border-teal-300/25 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200/30"
                     aria-label="Rename workspace"
                   >
                     <Pencil className="h-4 w-4 text-teal-200" />
@@ -229,7 +231,7 @@ export default function WorkspaceManager({
                   <button
                     type="submit"
                     disabled={isDeleteDisabled}
-                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-zinc-300 transition duration-300 hover:-translate-y-0.5 hover:border-red-300/30 hover:bg-red-950/30 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-200/30 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0"
+                    className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-zinc-300 transition duration-300 hover:-translate-y-0.5 hover:border-red-300/30 hover:bg-red-950/30 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-200/30 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0"
                   >
                     <Trash2 className="h-4 w-4 text-red-200" />
                     {isDeleteDisabled ? "Delete disabled while reports exist" : "Delete workspace"}
@@ -242,7 +244,7 @@ export default function WorkspaceManager({
       </div>
 
       {workspaces.length > 0 && filteredWorkspaces.length === 0 ? (
-        <div className="mt-6 rounded-[1.85rem] border border-white/10 bg-white/[0.04] p-10 text-center shadow-2xl shadow-black/30 backdrop-blur-xl">
+        <div className="mt-6 rounded-[1.85rem] border border-dashed border-white/10 bg-white/[0.04] p-10 text-center shadow-2xl shadow-black/30 ring-1 ring-white/[0.025] backdrop-blur-xl">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-[1.2rem] border border-teal-300/20 bg-teal-300/10">
             <Search className="h-6 w-6 text-teal-200" />
           </div>

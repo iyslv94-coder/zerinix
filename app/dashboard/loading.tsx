@@ -1,7 +1,7 @@
 function SkeletonBlock({ className = "" }: { className?: string }) {
   return (
     <div
-      className={`animate-pulse rounded-2xl border border-white/10 bg-white/[0.055] ${className}`}
+      className={`animate-pulse rounded-2xl border border-white/10 bg-white/[0.055] shadow-xl shadow-black/20 ring-1 ring-white/[0.02] ${className}`}
     />
   );
 }
@@ -28,21 +28,21 @@ export default function DashboardLoading() {
         </aside>
 
         <section className="flex-1 px-5 py-6 sm:px-8 lg:px-10 lg:py-9">
-          <div className="rounded-[2.35rem] border border-white/10 bg-white/[0.045] p-6 shadow-2xl shadow-black/35 backdrop-blur-2xl sm:p-8 lg:p-10">
+          <div className="rounded-[2.35rem] border border-white/10 bg-white/[0.045] p-6 shadow-2xl shadow-black/35 ring-1 ring-white/[0.025] backdrop-blur-2xl sm:p-8 lg:p-10">
             <SkeletonBlock className="h-8 w-48 rounded-full" />
             <SkeletonBlock className="mt-6 h-16 max-w-2xl" />
             <SkeletonBlock className="mt-5 h-6 max-w-xl" />
             <div className="mt-8 grid gap-3 sm:grid-cols-3">
-              <SkeletonBlock className="h-28" />
-              <SkeletonBlock className="h-28" />
-              <SkeletonBlock className="h-28" />
+              <SkeletonBlock className="h-36 rounded-[1.35rem]" />
+              <SkeletonBlock className="h-36 rounded-[1.35rem]" />
+              <SkeletonBlock className="h-36 rounded-[1.35rem]" />
             </div>
           </div>
 
           <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
             {["workspaces", "reports", "requests", "cost", "activity"].map(
               (item) => (
-                <SkeletonBlock key={item} className="h-44 rounded-[1.65rem]" />
+                <SkeletonBlock key={item} className="h-[12.25rem] rounded-[1.65rem]" />
               )
             )}
           </div>
@@ -59,7 +59,7 @@ export default function DashboardLoading() {
             <SkeletonBlock className="h-20 rounded-[1.85rem]" />
             <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {["one", "two", "three"].map((item) => (
-                <SkeletonBlock key={item} className="h-72 rounded-[1.85rem]" />
+                <SkeletonBlock key={item} className="h-[25.5rem] rounded-[1.85rem]" />
               ))}
             </div>
           </div>

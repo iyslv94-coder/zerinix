@@ -164,20 +164,20 @@ export default async function DashboardPage() {
       <div className="relative z-10 flex min-h-screen flex-col lg:flex-row">
         <DashboardSidebar />
 
-        <section className="flex-1 px-5 py-6 sm:px-8 lg:px-10 lg:py-9">
-          <div className="overflow-hidden rounded-[2.35rem] border border-white/10 bg-white/[0.045] shadow-2xl shadow-black/35 backdrop-blur-2xl">
+        <section className="flex-1 px-4 py-5 sm:px-8 lg:px-10 lg:py-9">
+          <div className="overflow-hidden rounded-[2.35rem] border border-white/10 bg-white/[0.045] shadow-2xl shadow-black/35 ring-1 ring-white/[0.025] backdrop-blur-2xl transition duration-500 hover:border-teal-300/15 hover:bg-white/[0.052]">
             <div className="relative p-6 sm:p-8 lg:p-10">
-              <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.09),transparent_38%),radial-gradient(circle_at_85%_20%,rgba(45,212,191,0.16),transparent_34%)]" />
+              <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.1),transparent_34%),radial-gradient(circle_at_85%_20%,rgba(45,212,191,0.16),transparent_32%),radial-gradient(circle_at_12%_90%,rgba(255,255,255,0.045),transparent_28%)]" />
               <div className="relative flex flex-col gap-8 xl:flex-row xl:items-end xl:justify-between">
                 <div>
-                  <div className="inline-flex items-center gap-2 rounded-full border border-teal-300/20 bg-teal-300/10 px-3 py-1.5 text-xs font-semibold tracking-[0.24em] text-teal-100 shadow-lg shadow-teal-950/20">
+                  <div className="inline-flex items-center gap-2 rounded-full border border-teal-300/20 bg-teal-300/10 px-3 py-1.5 text-xs font-semibold tracking-[0.24em] text-teal-100 shadow-lg shadow-teal-950/20 ring-1 ring-teal-200/10">
                     <Sparkles className="h-3.5 w-3.5" />
                     USER DASHBOARD
                   </div>
-                  <h1 className="mt-5 max-w-3xl text-4xl font-semibold tracking-tight text-white md:text-6xl">
+                  <h1 className="mt-5 max-w-3xl text-4xl font-semibold tracking-[-0.035em] text-white md:text-6xl">
                     Your AI business command center.
                   </h1>
-                  <p className="mt-4 max-w-2xl text-base leading-7 text-zinc-400">
+                  <p className="mt-4 max-w-2xl text-base leading-8 text-zinc-400">
                     Reopen strategic reports, track usage, manage workspaces and
                     move from rough idea to sharper founder decisions.
                   </p>
@@ -193,8 +193,8 @@ export default async function DashboardPage() {
                         href={action.href}
                         className={
                           action.primary
-                            ? "group rounded-[1.35rem] bg-white p-4 text-black shadow-xl shadow-white/10 transition duration-300 hover:-translate-y-1 hover:bg-zinc-200"
-                            : "group rounded-[1.35rem] border border-white/10 bg-black/25 p-4 text-white transition duration-300 hover:-translate-y-1 hover:border-teal-300/25 hover:bg-white/[0.065]"
+                            ? "group min-h-36 rounded-[1.35rem] bg-white p-4 text-black shadow-xl shadow-white/10 ring-1 ring-white/20 transition duration-300 hover:-translate-y-1 hover:bg-zinc-200 hover:shadow-2xl hover:shadow-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+                            : "group min-h-36 rounded-[1.35rem] border border-white/10 bg-black/25 p-4 text-white shadow-xl shadow-black/15 ring-1 ring-white/[0.025] transition duration-300 hover:-translate-y-1 hover:border-teal-300/25 hover:bg-white/[0.065] hover:shadow-2xl hover:shadow-teal-950/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200/30"
                         }
                       >
                         <div className="flex items-center justify-between gap-3">
@@ -209,7 +209,7 @@ export default async function DashboardPage() {
                           </span>
                           <ArrowRight className="h-4 w-4 opacity-45 transition group-hover:translate-x-0.5 group-hover:opacity-100" />
                         </div>
-                        <p className="mt-4 text-sm font-semibold">{action.title}</p>
+                        <p className="mt-4 text-sm font-semibold tracking-tight">{action.title}</p>
                         <p
                           className={
                             action.primary
@@ -227,7 +227,7 @@ export default async function DashboardPage() {
 
               <div className="relative mt-8 grid gap-3 border-t border-white/10 pt-5 sm:grid-cols-3">
                 {["Workspace reports", "Live sync", "PDF export"].map((item) => (
-                  <div key={item} className="flex items-center gap-2 rounded-2xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-zinc-400">
+                  <div key={item} className="flex min-h-11 items-center gap-2 rounded-2xl border border-white/10 bg-black/25 px-3 py-2 text-sm text-zinc-400 shadow-lg shadow-black/10 ring-1 ring-white/[0.02]">
                     <BadgeCheck className="h-4 w-4 text-teal-200" />
                     {item}
                   </div>
@@ -253,20 +253,22 @@ export default async function DashboardPage() {
               return (
                 <article
                   key={stat.label}
-                  className="group rounded-[1.65rem] border border-white/10 bg-white/[0.045] p-5 shadow-2xl shadow-black/25 backdrop-blur-xl transition duration-300 hover:-translate-y-1 hover:border-teal-300/20 hover:bg-white/[0.065]"
+                  className="group relative min-h-[12.25rem] overflow-hidden rounded-[1.65rem] border border-white/10 bg-white/[0.045] p-5 shadow-2xl shadow-black/25 ring-1 ring-white/[0.025] backdrop-blur-xl transition duration-300 hover:-translate-y-1 hover:border-teal-300/20 hover:bg-white/[0.065] hover:shadow-teal-950/10"
                 >
+                  <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent opacity-60" />
+                  <div className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full bg-teal-300/5 blur-2xl transition duration-300 group-hover:bg-teal-300/10" />
                   <div className="flex items-center justify-between gap-4">
-                    <div className={`flex h-11 w-11 items-center justify-center rounded-[1.05rem] border ${accentClass}`}>
+                    <div className={`flex h-11 w-11 items-center justify-center rounded-[1.05rem] border shadow-lg shadow-black/20 ring-1 ring-white/[0.025] ${accentClass}`}>
                       <Icon className="h-5 w-5 text-teal-200" />
                     </div>
-                    <span className="rounded-full border border-white/10 bg-black/25 px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.16em] text-zinc-500 transition duration-300 group-hover:text-teal-100">
+                    <span className="rounded-full border border-white/10 bg-black/25 px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.16em] text-zinc-500 shadow-sm shadow-black/10 transition duration-300 group-hover:border-teal-300/20 group-hover:text-teal-100">
                       Live
                     </span>
                   </div>
                   <p className="mt-5 text-xs font-semibold uppercase tracking-[0.22em] text-zinc-500">
                     {stat.label}
                   </p>
-                  <p className="mt-2 text-3xl font-semibold tracking-tight text-white">
+                  <p className="mt-2 text-3xl font-semibold tracking-[-0.03em] text-white">
                     {stat.value}
                   </p>
                   <p className="mt-2 text-sm leading-5 text-zinc-500">
@@ -290,19 +292,19 @@ export default async function DashboardPage() {
           ) : null}
 
           <div className="mt-8 grid gap-5 2xl:grid-cols-[1.05fr_0.95fr]">
-            <section className="rounded-[1.85rem] border border-white/10 bg-white/[0.045] p-6 shadow-2xl shadow-black/25 backdrop-blur-xl">
+            <section className="rounded-[1.85rem] border border-white/10 bg-white/[0.045] p-5 shadow-2xl shadow-black/25 ring-1 ring-white/[0.025] backdrop-blur-xl sm:p-6">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.24em] text-teal-200/70">
                     Recent reports
                   </p>
-                  <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">
+                  <h2 className="mt-2 text-2xl font-semibold tracking-[-0.025em] text-white">
                     Continue the latest decisions.
                   </h2>
                 </div>
                 <Link
                   href="/plan"
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-teal-300/15 bg-teal-300/[0.06] px-4 py-2 text-sm font-medium text-teal-100 transition hover:border-teal-300/30 hover:bg-teal-300/10"
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-teal-300/15 bg-teal-300/[0.06] px-4 py-2 text-sm font-medium text-teal-100 shadow-lg shadow-teal-950/10 transition duration-300 hover:-translate-y-0.5 hover:border-teal-300/30 hover:bg-teal-300/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200/30"
                 >
                   <Plus className="h-4 w-4" />
                   New report
@@ -318,7 +320,7 @@ export default async function DashboardPage() {
                       <Link
                         key={report.id}
                         href={`/dashboard/${report.id}`}
-                        className="group flex flex-col gap-4 rounded-2xl border border-white/10 bg-black/25 p-4 transition duration-300 hover:-translate-y-0.5 hover:border-teal-300/25 hover:bg-white/[0.055] sm:flex-row sm:items-center"
+                        className="group flex min-h-[5.75rem] flex-col gap-4 rounded-2xl border border-white/10 bg-black/25 p-4 shadow-lg shadow-black/10 ring-1 ring-white/[0.02] transition duration-300 hover:-translate-y-0.5 hover:border-teal-300/25 hover:bg-white/[0.055] hover:shadow-teal-950/10 sm:flex-row sm:items-center"
                       >
                         <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04]">
                           <Icon className="h-5 w-5 text-teal-200" />
@@ -331,14 +333,14 @@ export default async function DashboardPage() {
                             {report.type} · {formatDashboardDate(report.createdAt)}
                           </span>
                         </span>
-                        <span className="w-fit rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs font-medium capitalize text-zinc-300">
+                        <span className="w-fit rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs font-medium capitalize text-zinc-300 shadow-sm shadow-black/10">
                           {report.status}
                         </span>
                       </Link>
                     );
                   })
                 ) : (
-                  <div className="rounded-2xl border border-white/10 bg-black/25 p-6 text-sm leading-6 text-zinc-500">
+                  <div className="rounded-2xl border border-dashed border-white/10 bg-black/25 p-7 text-sm leading-6 text-zinc-500 shadow-inner shadow-black/20">
                     No reports yet. Create an AI Plan or Market Analysis to build
                     your first saved intelligence asset.
                   </div>
@@ -347,7 +349,7 @@ export default async function DashboardPage() {
             </section>
 
             <section className="grid gap-5 lg:grid-cols-2 2xl:grid-cols-1">
-              <div className="rounded-[1.85rem] border border-white/10 bg-white/[0.045] p-6 shadow-2xl shadow-black/25 backdrop-blur-xl">
+              <div className="min-h-[15rem] rounded-[1.85rem] border border-white/10 bg-white/[0.045] p-5 shadow-2xl shadow-black/25 ring-1 ring-white/[0.025] backdrop-blur-xl transition duration-300 hover:border-teal-300/15 hover:bg-white/[0.055] sm:p-6">
                 <div className="flex items-start gap-4">
                   <span className="flex h-12 w-12 items-center justify-center rounded-2xl border border-teal-300/20 bg-teal-300/10">
                     <WalletCards className="h-5 w-5 text-teal-200" />
@@ -356,7 +358,7 @@ export default async function DashboardPage() {
                     <p className="text-xs font-semibold uppercase tracking-[0.22em] text-zinc-500">
                       Subscription
                     </p>
-                    <h2 className="mt-2 text-2xl font-semibold capitalize text-white">
+                    <h2 className="mt-2 text-2xl font-semibold capitalize tracking-[-0.02em] text-white">
                       {planLabel}
                     </h2>
                     <p className="mt-2 text-sm leading-6 text-zinc-500">
@@ -385,7 +387,7 @@ export default async function DashboardPage() {
                 </div>
               </div>
 
-              <div className="rounded-[1.85rem] border border-white/10 bg-white/[0.045] p-6 shadow-2xl shadow-black/25 backdrop-blur-xl">
+              <div className="min-h-[15rem] rounded-[1.85rem] border border-white/10 bg-white/[0.045] p-5 shadow-2xl shadow-black/25 ring-1 ring-white/[0.025] backdrop-blur-xl transition duration-300 hover:border-teal-300/15 hover:bg-white/[0.055] sm:p-6">
                 <div className="flex items-start gap-4">
                   <span className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04]">
                     <Settings className="h-5 w-5 text-teal-200" />
@@ -394,7 +396,7 @@ export default async function DashboardPage() {
                     <p className="text-xs font-semibold uppercase tracking-[0.22em] text-zinc-500">
                       Settings
                     </p>
-                    <h2 className="mt-2 text-2xl font-semibold text-white">
+                    <h2 className="mt-2 text-2xl font-semibold tracking-[-0.02em] text-white">
                       Account controls
                     </h2>
                     <p className="mt-2 text-sm leading-6 text-zinc-500">
@@ -406,7 +408,7 @@ export default async function DashboardPage() {
                 </div>
                 <Link
                   href="/dashboard/usage"
-                  className="mt-5 inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-medium text-zinc-200 transition duration-300 hover:-translate-y-0.5 hover:border-teal-300/25 hover:bg-white/[0.075]"
+                  className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-medium text-zinc-200 shadow-lg shadow-black/10 transition duration-300 hover:-translate-y-0.5 hover:border-teal-300/25 hover:bg-white/[0.075] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200/30"
                 >
                   <TrendingUp className="h-4 w-4 text-teal-200" />
                   View usage details
