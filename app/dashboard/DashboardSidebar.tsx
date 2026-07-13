@@ -57,7 +57,7 @@ export default function DashboardSidebar() {
         </div>
       </div>
 
-      <nav className="flex flex-1 items-center gap-2 overflow-x-auto scrollbar-thin lg:mt-8 lg:block lg:space-y-2">
+      <nav className="flex flex-1 items-center gap-2 overflow-x-auto scrollbar-thin lg:mt-8 lg:block lg:space-y-2" aria-label="Dashboard navigation">
         {items.map((item) => {
           const Icon = item.icon;
 
@@ -70,7 +70,7 @@ export default function DashboardSidebar() {
               <span className="flex h-8 w-8 items-center justify-center rounded-xl border border-white/10 bg-black/25 shadow-inner shadow-white/[0.02] transition duration-300 group-hover:border-teal-200/25 group-hover:bg-teal-200/10">
                 <Icon className="h-4 w-4 text-teal-200" />
               </span>
-              <span>{item.label}</span>
+              <span className="whitespace-nowrap">{item.label}</span>
               <ChevronRight className="ml-auto hidden h-4 w-4 text-zinc-700 transition group-hover:text-teal-200 lg:block" />
             </Link>
           );
@@ -83,7 +83,7 @@ export default function DashboardSidebar() {
           className="flex min-h-12 items-center gap-3 rounded-[1.15rem] border border-white/10 bg-zinc-950/80 px-4 py-3 text-sm font-medium text-zinc-300 shadow-sm shadow-black/10 transition duration-300 hover:-translate-y-0.5 hover:border-red-300/30 hover:bg-red-950/30 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-200/30 lg:w-full"
         >
           <LogOut className="h-4 w-4 text-red-200" />
-          Logout
+          <span className="whitespace-nowrap">Logout</span>
         </button>
       </form>
     </aside>

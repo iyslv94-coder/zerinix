@@ -85,6 +85,7 @@ export default async function UsageDashboardPage() {
       icon: Clock,
     },
   ];
+  const hasUsageEvents = summary.totalRequests > 0;
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-black text-white">
@@ -110,6 +111,12 @@ export default async function UsageDashboardPage() {
           {summary.error ? (
             <div className="mt-6 rounded-3xl border border-amber-300/20 bg-amber-950/20 p-5 text-sm leading-6 text-amber-100">
               Usage telemetry is not available right now. Please refresh the page or try again shortly.
+            </div>
+          ) : !hasUsageEvents ? (
+            <div className="mt-6 rounded-3xl border border-white/10 bg-white/[0.045] p-5 text-sm leading-6 text-zinc-400 shadow-2xl shadow-black/20">
+              No completed AI usage has been recorded for this account yet. Your
+              request, token and cost summaries will appear here after your first
+              successful chat, plan or market analysis.
             </div>
           ) : null}
 
@@ -144,12 +151,12 @@ export default async function UsageDashboardPage() {
 
           <div className="mt-8 rounded-[1.75rem] border border-white/10 bg-white/[0.045] p-6 shadow-2xl shadow-black/25 backdrop-blur-xl">
             <h2 className="text-lg font-semibold text-white">
-              Queue-Ready Architecture
+              Usage data source
             </h2>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-zinc-400">
-              Fresh generations are tagged with queue-ready job descriptors in
-              usage metadata, so long-running reports can later move to workers
-              without changing the planner interface.
+              These totals come from completed usage records only. Failed,
+              cancelled or blocked AI requests are excluded from quota consumption
+              and estimated cost totals.
             </p>
           </div>
 

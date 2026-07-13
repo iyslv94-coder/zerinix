@@ -168,7 +168,8 @@ export default async function SettingsPage({
                     <button
                       type="button"
                       disabled
-                      className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-medium text-zinc-500"
+                      aria-disabled="true"
+                      className="inline-flex cursor-not-allowed items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-medium text-zinc-500"
                     >
                       <Upload className="h-4 w-4" />
                       Upload
@@ -379,19 +380,25 @@ export default async function SettingsPage({
                   name="password"
                   type="password"
                   minLength={10}
+                  required
+                  autoComplete="new-password"
                   placeholder="New password"
-                  className="min-h-12 rounded-2xl border border-white/10 bg-black/35 px-4 text-sm text-white outline-none placeholder:text-zinc-600 focus:border-teal-300/40"
+                  aria-label="New password"
+                  className="min-h-12 rounded-2xl border border-white/10 bg-black/35 px-4 text-sm text-white outline-none placeholder:text-zinc-600 focus:border-teal-300/40 focus:ring-2 focus:ring-teal-200/10"
                 />
                 <input
                   name="password_confirmation"
                   type="password"
                   minLength={10}
+                  required
+                  autoComplete="new-password"
                   placeholder="Confirm new password"
-                  className="min-h-12 rounded-2xl border border-white/10 bg-black/35 px-4 text-sm text-white outline-none placeholder:text-zinc-600 focus:border-teal-300/40"
+                  aria-label="Confirm new password"
+                  className="min-h-12 rounded-2xl border border-white/10 bg-black/35 px-4 text-sm text-white outline-none placeholder:text-zinc-600 focus:border-teal-300/40 focus:ring-2 focus:ring-teal-200/10"
                 />
                 <button
                   type="submit"
-                  className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-teal-300/20 bg-teal-300/10 px-4 text-sm font-semibold text-teal-100 transition hover:bg-teal-300/15"
+                  className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-teal-300/20 bg-teal-300/10 px-4 text-sm font-semibold text-teal-100 transition hover:bg-teal-300/15 focus:outline-none focus:ring-2 focus:ring-teal-200/20"
                 >
                   Update password
                 </button>
@@ -420,12 +427,15 @@ export default async function SettingsPage({
                 <input type="hidden" name="intent" value="sign_out_all_devices" />
                 <input
                   name="confirmation"
+                  required
+                  autoComplete="off"
                   placeholder="Type SIGN OUT"
-                  className="min-h-12 rounded-2xl border border-white/10 bg-black/35 px-4 text-sm text-white outline-none placeholder:text-zinc-600 focus:border-red-300/40"
+                  aria-label="Type SIGN OUT to confirm"
+                  className="min-h-12 rounded-2xl border border-white/10 bg-black/35 px-4 text-sm text-white outline-none placeholder:text-zinc-600 focus:border-red-300/40 focus:ring-2 focus:ring-red-200/10"
                 />
                 <button
                   type="submit"
-                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-red-300/25 bg-red-300/10 px-4 text-sm font-semibold text-red-100 transition hover:bg-red-300/15"
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-red-300/25 bg-red-300/10 px-4 text-sm font-semibold text-red-100 transition hover:bg-red-300/15 focus:outline-none focus:ring-2 focus:ring-red-200/20"
                 >
                   <LogOut className="h-4 w-4" />
                   Sign out all devices
@@ -491,14 +501,16 @@ export default async function SettingsPage({
                 <Download className="h-5 w-5 text-teal-200" />
                 <h3 className="mt-3 font-semibold text-white">Export personal data</h3>
                 <p className="mt-2 text-sm leading-6 text-zinc-500">
-                  Automated export is not connected yet. This records a secure request
-                  path without exposing private records.
+                  Automated exports are not connected yet. Use this manual request
+                  path only when support is ready to process the export securely.
                 </p>
                 <button
                   type="submit"
-                  className="mt-4 inline-flex min-h-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.06] px-4 text-sm font-semibold text-zinc-200"
+                  disabled
+                  aria-disabled="true"
+                  className="mt-4 inline-flex min-h-10 cursor-not-allowed items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-semibold text-zinc-500"
                 >
-                  Request export
+                  Manual export unavailable
                 </button>
               </form>
 
@@ -508,16 +520,19 @@ export default async function SettingsPage({
                 <h3 className="mt-3 font-semibold text-white">Delete account</h3>
                 <p className="mt-2 text-sm leading-6 text-red-100/75">
                   Automatic deletion is disabled until a full data-retention workflow
-                  is connected. Type DELETE to submit a review request.
+                  is connected. Type DELETE only when you are ready to request a manual review.
                 </p>
                 <input
                   name="confirmation"
+                  required
+                  autoComplete="off"
                   placeholder="Type DELETE"
-                  className="mt-4 min-h-11 w-full rounded-2xl border border-red-300/20 bg-black/35 px-4 text-sm text-white outline-none placeholder:text-red-100/35 focus:border-red-300/40"
+                  aria-label="Type DELETE to request account deletion review"
+                  className="mt-4 min-h-11 w-full rounded-2xl border border-red-300/20 bg-black/35 px-4 text-sm text-white outline-none placeholder:text-red-100/35 focus:border-red-300/40 focus:ring-2 focus:ring-red-200/10"
                 />
                 <button
                   type="submit"
-                  className="mt-3 inline-flex min-h-10 items-center justify-center rounded-2xl border border-red-300/25 bg-red-300/10 px-4 text-sm font-semibold text-red-100"
+                  className="mt-3 inline-flex min-h-10 items-center justify-center rounded-2xl border border-red-300/25 bg-red-300/10 px-4 text-sm font-semibold text-red-100 transition hover:bg-red-300/15 focus:outline-none focus:ring-2 focus:ring-red-200/20"
                 >
                   Request deletion review
                 </button>

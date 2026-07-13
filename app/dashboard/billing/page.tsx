@@ -67,18 +67,19 @@ function UsageBar({
   remaining: number;
 }) {
   const percent = usagePercent(used, limit);
+  const quotaLabel = limit > 0 ? String(limit) : "Unlimited";
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
+    <div className="rounded-2xl border border-white/10 bg-black/25 p-4 transition focus-within:border-teal-300/25">
       <div className="flex items-center justify-between gap-3">
         <div>
           <p className="text-sm font-semibold text-white">{label}</p>
           <p className="mt-1 text-xs text-zinc-500">
-            {used} used · {remaining} remaining
+            {used} used · {limit > 0 ? `${remaining} remaining` : "No monthly cap"}
           </p>
         </div>
         <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-xs font-medium text-zinc-300">
-          {limit}
+          {quotaLabel}
         </span>
       </div>
       <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/10">
@@ -110,6 +111,9 @@ export default async function BillingPage({
   const currentPlan = billing.plans.find((plan) => plan.current);
   const stripeMissing = billing.stripe.server.missing;
   const billingConfigured = billing.stripe.server.configured;
+  const billingActionsAvailable = billingConfigured && billing.stripe.server.enabled;
+  const billingUnavailableMessage =
+    "Secure billing actions are disabled until Stripe is configured for this environment.";
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-black text-white">
@@ -303,12 +307,19 @@ export default async function BillingPage({
                 Every action is validated on the server. ZERINIX never accepts a
                 customer, price or subscription owner directly from the browser.
               </p>
+              {!billingActionsAvailable ? (
+                <div className="mt-5 rounded-2xl border border-amber-300/20 bg-amber-950/20 p-4 text-sm leading-6 text-amber-100/85">
+                  {billingUnavailableMessage}
+                </div>
+              ) : null}
               <form action={openCustomerPortal} className="mt-5">
                 <button
                   type="submit"
-                  className="inline-flex min-h-11 w-full items-center justify-center rounded-2xl bg-white px-4 text-sm font-semibold text-black transition hover:bg-zinc-200"
+                  disabled={!billingActionsAvailable}
+                  aria-disabled={!billingActionsAvailable}
+                  className="inline-flex min-h-11 w-full items-center justify-center rounded-2xl bg-white px-4 text-sm font-semibold text-black transition hover:bg-zinc-200 focus:outline-none focus:ring-2 focus:ring-teal-200/30 disabled:cursor-not-allowed disabled:border disabled:border-white/10 disabled:bg-white/10 disabled:text-zinc-500"
                 >
-                  Open customer portal
+                  {billingActionsAvailable ? "Open customer portal" : "Customer portal unavailable"}
                 </button>
               </form>
 
@@ -324,7 +335,8 @@ export default async function BillingPage({
                   <select
                     name="plan"
                     defaultValue="free"
-                    className="min-h-11 rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-zinc-200 outline-none"
+                    disabled={!billingActionsAvailable}
+                    className="min-h-11 rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-zinc-200 outline-none focus:border-teal-300/40 disabled:cursor-not-allowed disabled:text-zinc-600"
                     aria-label="Downgrade target plan"
                   >
                     <option value="free">Free</option>
@@ -332,9 +344,10 @@ export default async function BillingPage({
                   </select>
                   <button
                     type="submit"
-                    className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-amber-300/20 bg-amber-300/10 px-4 text-sm font-semibold text-amber-100 transition hover:bg-amber-300/15"
+                    disabled={!billingActionsAvailable}
+                    className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-amber-300/20 bg-amber-300/10 px-4 text-sm font-semibold text-amber-100 transition hover:bg-amber-300/15 focus:outline-none focus:ring-2 focus:ring-amber-200/20 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.04] disabled:text-zinc-500"
                   >
-                    Confirm downgrade
+                    {billingActionsAvailable ? "Confirm downgrade" : "Downgrade unavailable"}
                   </button>
                 </form>
               </details>
@@ -350,9 +363,10 @@ export default async function BillingPage({
                 <form action={requestCancellation} className="mt-4">
                   <button
                     type="submit"
-                    className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-red-300/25 bg-red-300/10 px-4 text-sm font-semibold text-red-100 transition hover:bg-red-300/15"
+                    disabled={!billingActionsAvailable}
+                    className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-red-300/25 bg-red-300/10 px-4 text-sm font-semibold text-red-100 transition hover:bg-red-300/15 focus:outline-none focus:ring-2 focus:ring-red-200/20 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.04] disabled:text-zinc-500"
                   >
-                    Request cancellation
+                    {billingActionsAvailable ? "Request cancellation" : "Cancellation unavailable"}
                   </button>
                 </form>
               </details>
@@ -371,7 +385,7 @@ export default async function BillingPage({
               </div>
               <Link
                 href="/dashboard/usage"
-                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-medium text-zinc-200 transition hover:border-teal-300/25 hover:bg-white/[0.075]"
+                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-medium text-zinc-200 transition hover:border-teal-300/25 hover:bg-white/[0.075] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200/30"
               >
                 View usage details
                 <ArrowRight className="h-4 w-4 text-teal-200" />
@@ -379,14 +393,21 @@ export default async function BillingPage({
             </div>
 
             <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              {billing.plans.map((plan) => (
+              {billing.plans.map((plan) => {
+                const planSelectable =
+                  billingActionsAvailable &&
+                  plan.supportedBySchema &&
+                  plan.priceState.configured &&
+                  !plan.current;
+
+                return (
                 <article
                   key={plan.id}
-                  className={`rounded-[1.5rem] border p-5 ${
+                  className={`rounded-[1.5rem] border p-5 transition ${
                     plan.current
                       ? "border-teal-300/30 bg-teal-300/10"
                       : "border-white/10 bg-black/25"
-                  }`}
+                  } ${planSelectable ? "hover:border-teal-300/20 hover:bg-white/[0.04]" : ""}`}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>
@@ -400,23 +421,37 @@ export default async function BillingPage({
                   <p className="mt-5 text-2xl font-semibold text-white">
                     {plan.priceState.label}
                   </p>
-                  {!plan.supportedBySchema ? (
+                  {!billingActionsAvailable ? (
+                    <p className="mt-2 text-xs leading-5 text-amber-100/80">
+                      Billing actions are disabled in this environment.
+                    </p>
+                  ) : !plan.supportedBySchema ? (
                     <p className="mt-2 text-xs leading-5 text-amber-100/80">
                       Not configured in the current billing schema.
+                    </p>
+                  ) : !plan.priceState.configured ? (
+                    <p className="mt-2 text-xs leading-5 text-amber-100/80">
+                      Stripe price is not configured for this plan.
                     </p>
                   ) : null}
                   <form action={startPlanChange} className="mt-5">
                     <input type="hidden" name="plan" value={plan.id} />
                     <button
                       type="submit"
-                      disabled={plan.current || !plan.supportedBySchema}
-                      className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white px-4 py-3 text-sm font-semibold text-black transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-zinc-500"
+                      disabled={!planSelectable}
+                      aria-disabled={!planSelectable}
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white px-4 py-3 text-sm font-semibold text-black transition hover:bg-zinc-200 focus:outline-none focus:ring-2 focus:ring-teal-200/30 disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-zinc-500"
                     >
-                      {plan.current ? "Current plan" : "Select plan"}
+                      {plan.current
+                        ? "Current plan"
+                        : planSelectable
+                          ? "Select plan"
+                          : "Unavailable"}
                     </button>
                   </form>
                 </article>
-              ))}
+                );
+              })}
             </div>
           </section>
 
@@ -439,7 +474,7 @@ export default async function BillingPage({
                       href={invoice.hostedInvoiceUrl || invoice.invoicePdfUrl || "#"}
                       target="_blank"
                       rel="noreferrer"
-                      className="flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-black/25 p-4 text-sm transition hover:border-teal-300/20 hover:bg-white/[0.04]"
+                      className="flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-black/25 p-4 text-sm transition hover:border-teal-300/20 hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200/30"
                     >
                       <span>
                         <span className="block font-semibold text-white">
