@@ -319,6 +319,8 @@ const decisionGoalLabels: Record<ChatMode, string> = {
   chat: "Strategic Advisory",
 };
 
+const mobileWizardStepLabels = ["Decision type", "Business context", "Generate"];
+
 let pdfFontPromise: Promise<string> | null = null;
 
 function arrayBufferToBase64(buffer: ArrayBuffer) {
@@ -4956,6 +4958,11 @@ export default function Planner({
   const [activeMode, setActiveMode] = useState<ChatMode>(
     restoredReportMode || initialMode || "chat"
   );
+  const [mobileWizardStep, setMobileWizardStep] = useState<1 | 2 | 3>(1);
+  const [mobileBusinessIdea, setMobileBusinessIdea] = useState("");
+  const [mobileMarket, setMobileMarket] = useState("");
+  const [mobileGoal, setMobileGoal] = useState("");
+  const [mobileConstraints, setMobileConstraints] = useState("");
   const [chatModelPreference, setChatModelPreference] =
     useState<ChatModelPreference>("fast");
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState(
@@ -5128,6 +5135,11 @@ export default function Planner({
     setWorkflowCompletedSteps(0);
     setReportProgress(0);
     setCurrentReportSectionName("");
+    setMobileWizardStep(1);
+    setMobileBusinessIdea("");
+    setMobileMarket("");
+    setMobileGoal("");
+    setMobileConstraints("");
     await ensurePersistedConversation(id, conversation.title);
   }
 
@@ -5695,8 +5707,8 @@ export default function Planner({
     setWorkflowCompletedSteps(0);
   }
 
-  async function submitPrompt() {
-    const submittedPrompt = prompt.trim();
+  async function submitPrompt(promptOverride?: string) {
+    const submittedPrompt = (promptOverride ?? prompt).trim();
 
     if (!submittedPrompt || isWorking) {
       return;
@@ -6552,6 +6564,46 @@ export default function Planner({
   const currentReportTitle = activeReportMode === "plan"
     ? currentLanguageCopy.planTitle
     : currentLanguageCopy.marketTitle;
+  const selectedMobileModeCard =
+    modeCards.find((modeCard) => modeCard.mode === activeMode) || modeCards[0];
+  const hasGeneratedOutput = Boolean(planReport || marketReport || result);
+  const mobileContextReady = Boolean(
+    (mobileBusinessIdea.trim() || mobileGoal.trim()) &&
+      (activeMode === "chat" || mobileBusinessIdea.trim())
+  );
+  const shouldShowMobileWizard =
+    (messages.length === 0 && !hasGeneratedOutput) ||
+    (mobileWizardStep === 3 && isWorking);
+  const shouldHideDesktopCreationOnMobile =
+    messages.length === 0 && !hasGeneratedOutput;
+
+  function buildMobileWizardPrompt() {
+    const lines = [
+      `Decision type: ${decisionGoalLabels[activeMode]}`,
+      mobileBusinessIdea.trim()
+        ? `Business idea: ${mobileBusinessIdea.trim()}`
+        : "",
+      mobileMarket.trim() ? `Market: ${mobileMarket.trim()}` : "",
+      mobileGoal.trim() ? `Goal: ${mobileGoal.trim()}` : "",
+      mobileConstraints.trim()
+        ? `Constraints: ${mobileConstraints.trim()}`
+        : "",
+    ].filter(Boolean);
+
+    return lines.join("\n");
+  }
+
+  async function submitMobileWizard() {
+    const mobilePrompt = buildMobileWizardPrompt();
+
+    if (!mobilePrompt.trim() || isWorking) {
+      return;
+    }
+
+    setPrompt(mobilePrompt);
+    setMobileWizardStep(3);
+    await submitPrompt(mobilePrompt);
+  }
 
   return (
     <main
@@ -6659,6 +6711,262 @@ export default function Planner({
           className="relative z-10 flex-1 overflow-y-auto scroll-smooth px-4 py-5 sm:px-5 lg:px-8"
         >
           <div className="mx-auto flex max-w-6xl flex-col gap-5 pb-48">
+            {shouldShowMobileWizard ? (
+              <section className="space-y-4 md:hidden">
+                <div className="rounded-[2rem] border border-white/10 bg-white/[0.045] p-5 shadow-2xl shadow-black/30 ring-1 ring-white/[0.025] backdrop-blur-2xl">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-teal-200/70">
+                        Strategic report builder
+                      </p>
+                      <h2 className="mt-2 text-3xl font-semibold tracking-[-0.035em] text-white">
+                        Create a decision report.
+                      </h2>
+                    </div>
+                    <span className="rounded-full border border-teal-300/20 bg-teal-300/10 px-3 py-1 text-xs font-semibold text-teal-100">
+                      Step {mobileWizardStep}/3
+                    </span>
+                  </div>
+                  <div className="mt-5 grid grid-cols-3 gap-2">
+                    {mobileWizardStepLabels.map((label, index) => {
+                      const step = (index + 1) as 1 | 2 | 3;
+                      const active = mobileWizardStep === step;
+                      const complete = mobileWizardStep > step;
+
+                      return (
+                        <div
+                          key={label}
+                          className={`rounded-2xl border px-2 py-2 text-center text-[10px] font-semibold uppercase tracking-[0.12em] ${
+                            active || complete
+                              ? "border-teal-200/30 bg-teal-200/10 text-teal-100"
+                              : "border-white/10 bg-black/25 text-zinc-600"
+                          }`}
+                        >
+                          {label}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {mobileWizardStep === 1 ? (
+                  <div className="grid gap-3">
+                    {modeCards.map((modeCard) => {
+                      const Icon = modeCard.icon;
+                      const selected = activeMode === modeCard.mode;
+                      const mobileLabel =
+                        modeCard.mode === "plan"
+                          ? "Validate Idea"
+                          : modeCard.mode === "market"
+                            ? "Market Intelligence"
+                            : "Strategic Advisory";
+
+                      return (
+                        <button
+                          key={`mobile-${modeCard.mode}`}
+                          type="button"
+                          onClick={() => {
+                            setActiveMode(modeCard.mode);
+                            setMobileWizardStep(2);
+                          }}
+                          className={`rounded-[1.65rem] border p-5 text-left shadow-xl shadow-black/20 transition duration-300 ${
+                            selected
+                              ? "border-teal-200/35 bg-teal-200/10"
+                              : "border-white/10 bg-white/[0.045]"
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-4">
+                            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-teal-200/20 bg-teal-200/10">
+                              <Icon className="h-5 w-5 text-teal-200" />
+                            </span>
+                            <span className="rounded-full border border-white/10 bg-black/25 px-2.5 py-1 text-[11px] font-medium text-zinc-400">
+                              Select
+                            </span>
+                          </div>
+                          <h3 className="mt-4 text-xl font-semibold tracking-tight text-white">
+                            {mobileLabel}
+                          </h3>
+                          <p className="mt-2 text-sm leading-6 text-zinc-500">
+                            {modeCard.opens}
+                          </p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : null}
+
+                {mobileWizardStep === 2 ? (
+                  <div className="rounded-[2rem] border border-white/10 bg-white/[0.045] p-5 shadow-2xl shadow-black/30 ring-1 ring-white/[0.025] backdrop-blur-xl">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-teal-200/70">
+                          Business context
+                        </p>
+                        <h3 className="mt-2 text-2xl font-semibold tracking-tight text-white">
+                          {selectedMobileModeCard.label}
+                        </h3>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setMobileWizardStep(1)}
+                        className="rounded-full border border-white/10 bg-black/25 px-3 py-1.5 text-xs font-semibold text-zinc-400"
+                      >
+                        Change
+                      </button>
+                    </div>
+
+                    <div className="mt-5 space-y-3">
+                      <label className="block">
+                        <span className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                          Business idea
+                        </span>
+                        <textarea
+                          value={mobileBusinessIdea}
+                          onChange={(event) => setMobileBusinessIdea(event.target.value)}
+                          className="mt-2 min-h-24 w-full resize-none rounded-2xl border border-white/10 bg-black/35 p-4 text-sm leading-6 text-white outline-none transition placeholder:text-zinc-600 focus:border-teal-300/35 focus:ring-2 focus:ring-teal-200/10"
+                          placeholder="Describe the business, product or opportunity."
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                          Market
+                        </span>
+                        <input
+                          value={mobileMarket}
+                          onChange={(event) => setMobileMarket(event.target.value)}
+                          className="mt-2 min-h-12 w-full rounded-2xl border border-white/10 bg-black/35 px-4 text-sm text-white outline-none transition placeholder:text-zinc-600 focus:border-teal-300/35 focus:ring-2 focus:ring-teal-200/10"
+                          placeholder="Industry, geography or customer segment."
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                          Goal
+                        </span>
+                        <input
+                          value={mobileGoal}
+                          onChange={(event) => setMobileGoal(event.target.value)}
+                          className="mt-2 min-h-12 w-full rounded-2xl border border-white/10 bg-black/35 px-4 text-sm text-white outline-none transition placeholder:text-zinc-600 focus:border-teal-300/35 focus:ring-2 focus:ring-teal-200/10"
+                          placeholder="What decision should ZERINIX support?"
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                          Constraints
+                        </span>
+                        <textarea
+                          value={mobileConstraints}
+                          onChange={(event) => setMobileConstraints(event.target.value)}
+                          className="mt-2 min-h-20 w-full resize-none rounded-2xl border border-white/10 bg-black/35 p-4 text-sm leading-6 text-white outline-none transition placeholder:text-zinc-600 focus:border-teal-300/35 focus:ring-2 focus:ring-teal-200/10"
+                          placeholder="Budget, timeline, risks, geography, team or known limits."
+                        />
+                      </label>
+
+                      {activeMode !== "chat" && initialWorkspaces.length > 0 ? (
+                        <label className="block rounded-2xl border border-white/10 bg-black/25 p-3">
+                          <span className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                            Save to workspace
+                          </span>
+                          <select
+                            value={selectedWorkspaceId}
+                            onChange={(event) => setSelectedWorkspaceId(event.target.value)}
+                            className="mt-2 min-h-11 w-full rounded-xl border border-white/10 bg-black/40 px-3 text-sm font-medium text-zinc-200 outline-none transition focus:border-teal-300/40"
+                          >
+                            {initialWorkspaces.map((workspace) => (
+                              <option key={workspace.id} value={workspace.id}>
+                                {workspace.name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      ) : null}
+                    </div>
+
+                    <div className="mt-5 grid gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setMobileWizardStep(3)}
+                        disabled={!mobileContextReady}
+                        className="inline-flex min-h-12 items-center justify-center rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-black shadow-xl shadow-white/10 transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Review request
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+
+                {mobileWizardStep === 3 ? (
+                  <div className="rounded-[2rem] border border-teal-200/15 bg-teal-200/[0.06] p-5 shadow-2xl shadow-black/30 ring-1 ring-teal-200/10 backdrop-blur-xl">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-teal-100/75">
+                      Generation
+                    </p>
+                    <h3 className="mt-2 text-2xl font-semibold tracking-tight text-white">
+                      {selectedMobileModeCard.label}
+                    </h3>
+                    <p className="mt-2 text-sm leading-6 text-zinc-300">
+                      {isWorking
+                        ? activeMode === "chat"
+                          ? "ZERINIX Advisor is preparing strategic guidance."
+                          : "ZERINIX is generating your strategic report."
+                        : "Review the context and start the existing ZERINIX generation workflow."}
+                    </p>
+
+                    <div className="mt-5 rounded-[1.35rem] border border-white/10 bg-black/30 p-4">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                        Request summary
+                      </p>
+                      <p className="mt-2 text-sm leading-6 text-zinc-300">
+                        {buildMobileWizardPrompt().slice(0, 420)}
+                      </p>
+                    </div>
+
+                    {isWorking ? (
+                      <div className="mt-5 rounded-[1.35rem] border border-teal-200/20 bg-black/30 p-4">
+                        <div className="flex items-center justify-between gap-4">
+                          <span className="inline-flex items-center gap-2 text-sm font-semibold text-teal-100">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            {activeMode === "chat" ? "Advising" : "Generating"}
+                          </span>
+                          <span className="text-sm font-semibold text-white">
+                            {Math.round(reportProgress)}%
+                          </span>
+                        </div>
+                        <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10">
+                          <div
+                            className="h-full rounded-full bg-teal-200 transition-[width] duration-500"
+                            style={{ width: `${Math.max(8, Math.min(100, reportProgress))}%` }}
+                          />
+                        </div>
+                        <p className="mt-3 text-xs leading-5 text-zinc-500">
+                          {currentReportSectionName || "Preparing analysis engine"}
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="mt-5 grid gap-3">
+                        <button
+                          type="button"
+                          onClick={() => void submitMobileWizard()}
+                          disabled={!mobileContextReady || isWorking}
+                          className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-teal-300 px-5 py-3 text-sm font-semibold text-black shadow-lg shadow-teal-950/30 transition hover:bg-teal-200 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {activeMode === "chat"
+                            ? "Start Advisory Session"
+                            : "Generate Strategic Report"}
+                          <Send className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setMobileWizardStep(2)}
+                          className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-semibold text-zinc-300"
+                        >
+                          Edit context
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+              </section>
+            ) : null}
+
             {conversationError ? (
               <div className="rounded-3xl border border-red-300/20 bg-red-950/30 p-4 text-sm leading-6 text-red-100 shadow-2xl shadow-black/30">
                 <p className="font-semibold text-red-50">
@@ -6671,7 +6979,9 @@ export default function Planner({
             ) : null}
 
             {messages.length === 0 ? (
-              <div className="flex min-h-[52vh] items-center justify-center text-center">
+              <div className={`min-h-[52vh] items-center justify-center text-center ${
+                shouldHideDesktopCreationOnMobile ? "hidden md:flex" : "flex"
+              }`}>
                 <div className="w-full max-w-4xl rounded-[2rem] border border-white/10 bg-white/[0.045] p-6 shadow-2xl shadow-black/40 backdrop-blur-2xl sm:p-8">
                   <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-3xl border border-teal-200/20 bg-teal-200/10 shadow-2xl shadow-teal-950/20">
                     <Sparkles className="h-6 w-6 text-teal-200" />
@@ -6731,7 +7041,11 @@ export default function Planner({
           </div>
         </div>
 
-        <div className="relative z-20 border-t border-white/10 bg-black/75 px-4 py-4 shadow-2xl shadow-black/40 backdrop-blur-2xl sm:px-5 lg:px-8">
+        <div
+          className={`relative z-20 border-t border-white/10 bg-black/75 px-4 py-4 shadow-2xl shadow-black/40 backdrop-blur-2xl sm:px-5 lg:px-8 ${
+            shouldHideDesktopCreationOnMobile ? "hidden md:block" : ""
+          }`}
+        >
           <div className="mx-auto max-w-6xl">
             {attachments.length > 0 ? (
               <div className="mb-3 flex flex-wrap gap-2">
