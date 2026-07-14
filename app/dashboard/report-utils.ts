@@ -207,7 +207,7 @@ export function normalizeReport(row: ReportRow): DashboardReport {
     id: readString(row, ["id", "report_id"], crypto.randomUUID()),
     workspaceId: readString(row, ["workspace_id", "workspaceId"], ""),
     title: readString(row, ["title", "name"], titleFallback),
-    prompt: readString(row, ["prompt", "business_idea", "idea"], ""),
+    prompt: readString(row, ["prompt", "business_idea", "idea", "input", "user_input", "original_prompt"], ""),
     createdAt,
     type: reportType,
     status: failedReport ? "failed" : rowStatus,
