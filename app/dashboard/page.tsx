@@ -28,6 +28,8 @@ import {
   getAuthenticatedUser,
   loadUserReports,
   loadUserWorkspaces,
+  type DashboardReport,
+  type DashboardWorkspace,
 } from "./report-utils";
 
 export const dynamic = "force-dynamic";
@@ -63,6 +65,136 @@ function formatCompactNumber(value: number) {
   }).format(value);
 }
 
+function getWorkspaceActivityDate(workspace: DashboardWorkspace) {
+  return workspace.updatedAt || workspace.createdAt || "";
+}
+
+function getActiveWorkspace(workspaces: DashboardWorkspace[]) {
+  return [...workspaces].sort((a, b) => {
+    const bTime = new Date(getWorkspaceActivityDate(b)).getTime() || 0;
+    const aTime = new Date(getWorkspaceActivityDate(a)).getTime() || 0;
+
+    return bTime - aTime || b.reportCount - a.reportCount;
+  })[0];
+}
+
+function cleanMobileDashboardText(value: string, maxLength = 132) {
+  const cleaned = value
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/^[-*•]\s+/, "")
+    .replace(/\*\*/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!cleaned) {
+    return "";
+  }
+
+  if (cleaned.length <= maxLength) {
+    return cleaned;
+  }
+
+  const clipped = cleaned.slice(0, maxLength + 1);
+  const lastSpace = clipped.lastIndexOf(" ");
+
+  return `${clipped.slice(0, Math.max(72, lastSpace)).trim()}…`;
+}
+
+function getReportSectionContent(report: DashboardReport | undefined, matchers: string[]) {
+  if (!report) {
+    return "";
+  }
+
+  const normalizedMatchers = matchers.map((matcher) => matcher.toLowerCase());
+  const section = report.sections.find((item) => {
+    const field = item.field?.toLowerCase() || "";
+    const title = item.title.toLowerCase();
+
+    return normalizedMatchers.some(
+      (matcher) => field.includes(matcher) || title.includes(matcher)
+    );
+  });
+
+  return section?.content || "";
+}
+
+function extractDashboardMetric(content: string, label: string) {
+  const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = content.match(
+    new RegExp(
+      `${escapedLabel}\\s*[:\\-–—]\\s*([\\s\\S]*?)(?=\\s*(?:\\||[,;]\\s*[A-Z][A-Za-z /-]{1,32}\\s*[:\\-–—]|\\n\\s*[A-Z][A-Za-z /-]{1,32}\\s*[:\\-–—]|$))`,
+      "i"
+    )
+  );
+
+  return cleanMobileDashboardText(match?.[1] || "", 118);
+}
+
+function getDecisionSignal(report: DashboardReport | undefined) {
+  if (!report) {
+    return "No decision signal yet";
+  }
+
+  const recommendation = getReportSectionContent(report, [
+    "executiverecommendation",
+    "executive recommendation",
+    "recommendation",
+  ]);
+  const summary = getReportSectionContent(report, [
+    "executivesummary",
+    "executive summary",
+    "marketoverview",
+    "market overview",
+  ]);
+  const content = `${recommendation}\n${summary}`;
+  const explicitSignal =
+    extractDashboardMetric(recommendation, "Decision") ||
+    extractDashboardMetric(recommendation, "Recommendation") ||
+    extractDashboardMetric(recommendation, "Investment Recommendation");
+  const keywordSignal = content.match(/\b(GO|NO GO|WAIT|PIVOT|VALIDATE|REVIEW|HOLD)\b/i)?.[1];
+
+  return cleanMobileDashboardText(
+    explicitSignal || keywordSignal || `${report.type} ready for review`,
+    92
+  );
+}
+
+function getRecommendedDashboardAction({
+  activeWorkspace,
+  latestCompletedReport,
+  latestReport,
+}: {
+  activeWorkspace?: DashboardWorkspace;
+  latestCompletedReport?: DashboardReport;
+  latestReport?: DashboardReport;
+}) {
+  if (latestCompletedReport) {
+    return {
+      label: "Continue Analysis",
+      href: `/chat?reportId=${encodeURIComponent(latestCompletedReport.id)}`,
+      detail: "Use the latest report as advisor context.",
+    };
+  }
+
+  if (latestReport?.status.toLowerCase() === "failed") {
+    return {
+      label: "Create New Report",
+      href: activeWorkspace
+        ? `/plan?new=1&mode=plan&workspaceId=${encodeURIComponent(activeWorkspace.id)}`
+        : "/plan?new=1&mode=plan",
+      detail: "The latest report needs a clean follow-up run.",
+    };
+  }
+
+  return {
+    label: "Create Strategic Report",
+    href: activeWorkspace
+      ? `/plan?new=1&mode=plan&workspaceId=${encodeURIComponent(activeWorkspace.id)}`
+      : "/plan?new=1&mode=plan",
+    detail: "Start a decision report to build workspace memory.",
+  };
+}
+
 export default async function DashboardPage() {
   const supabase = await createClient();
   const user = await getAuthenticatedUser(supabase);
@@ -93,6 +225,30 @@ export default async function DashboardPage() {
   const completedReports = reports.filter(
     (report) => report.status.toLowerCase() === "completed"
   ).length;
+  const activeWorkspace = getActiveWorkspace(workspaces);
+  const activeWorkspaceReports = activeWorkspace
+    ? reports.filter((report) => report.workspaceId === activeWorkspace.id)
+    : reports;
+  const activeWorkspaceContext =
+    cleanMobileDashboardText(activeWorkspaceReports[0]?.prompt || "", 132) ||
+    cleanMobileDashboardText(activeWorkspaceReports[0]?.title || "", 132) ||
+    "Create a strategic report to establish this workspace context.";
+  const latestReport = recentReports[0];
+  const latestCompletedReport = reports.find(
+    (report) => report.status.toLowerCase() === "completed"
+  );
+  const decisionSignal = getDecisionSignal(latestCompletedReport);
+  const recommendedAction = getRecommendedDashboardAction({
+    activeWorkspace,
+    latestCompletedReport,
+    latestReport,
+  });
+  const mobileMetrics = [
+    { label: "Reports", value: String(reports.length || totalReports) },
+    { label: "Workspaces", value: String(workspaces.length) },
+    { label: "Completed", value: String(completedReports) },
+    { label: "Runs", value: formatCompactNumber(usage.totalRequests) },
+  ];
   const planLabel = `${planTier.charAt(0).toUpperCase()}${planTier.slice(1)} plan`;
   const usageEfficiency =
     usage.totalRequests > 0
@@ -170,6 +326,165 @@ export default async function DashboardPage() {
         <DashboardSidebar />
 
         <section className="flex-1 px-4 pt-5 pb-28 sm:px-8 lg:px-10 lg:py-9">
+          <div className="space-y-4 lg:hidden">
+            <div className="rounded-[2rem] border border-white/10 bg-white/[0.045] p-5 shadow-2xl shadow-black/30 ring-1 ring-white/[0.025] backdrop-blur-2xl">
+              <div className="inline-flex items-center gap-2 rounded-full border border-teal-300/20 bg-teal-300/10 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-teal-100">
+                <Sparkles className="h-3.5 w-3.5" />
+                Decision Dashboard
+              </div>
+              <h1 className="mt-4 text-3xl font-semibold tracking-[-0.035em] text-white">
+                Your next strategic move.
+              </h1>
+              <p className="mt-2 text-sm leading-6 text-zinc-500">
+                Review the active workspace, latest decision signal and next recommended action.
+              </p>
+            </div>
+
+            <Link
+              href={activeWorkspace ? `/dashboard/workspaces/${activeWorkspace.id}` : "/plan?new=1&mode=plan"}
+              className="block rounded-[1.75rem] border border-white/10 bg-white/[0.045] p-5 shadow-2xl shadow-black/25 ring-1 ring-white/[0.025] backdrop-blur-xl transition duration-300 hover:border-teal-300/20 hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200/30"
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-teal-300/20 bg-teal-300/10">
+                  <Folder className="h-5 w-5 text-teal-200" />
+                </div>
+                <span className="rounded-full border border-white/10 bg-black/25 px-3 py-1 text-xs font-medium text-zinc-400">
+                  Active workspace
+                </span>
+              </div>
+              <h2 className="mt-4 text-2xl font-semibold tracking-tight text-white">
+                {activeWorkspace?.name || "Create your first workspace"}
+              </h2>
+              <p className="mt-2 text-sm leading-6 text-zinc-500">
+                {activeWorkspaceContext}
+              </p>
+              <div className="mt-4 flex items-center justify-between gap-3 border-t border-white/10 pt-4">
+                <span className="text-sm text-zinc-500">
+                  {activeWorkspace
+                    ? `${activeWorkspace.reportCount} reports · ${formatDashboardDate(getWorkspaceActivityDate(activeWorkspace))}`
+                    : "No workspace activity yet"}
+                </span>
+                <ArrowRight className="h-4 w-4 text-teal-200" />
+              </div>
+            </Link>
+
+            <div className="grid gap-4">
+              <Link
+                href={latestCompletedReport ? `/dashboard/${latestCompletedReport.id}` : "/plan?new=1&mode=plan"}
+                className="block rounded-[1.75rem] border border-white/10 bg-black/30 p-5 shadow-2xl shadow-black/25 ring-1 ring-white/[0.025] transition duration-300 hover:border-teal-300/20 hover:bg-white/[0.055] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200/30"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-2xl border border-teal-300/20 bg-teal-300/10">
+                    <MessageSquareText className="h-4 w-4 text-teal-200" />
+                  </span>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-200/70">
+                      Decision Signal
+                    </p>
+                    <p className="mt-1 text-sm text-zinc-500">
+                      {latestCompletedReport?.title || "No completed report yet"}
+                    </p>
+                  </div>
+                </div>
+                <p className="mt-4 text-xl font-semibold leading-7 text-white">
+                  {decisionSignal}
+                </p>
+              </Link>
+
+              <Link
+                href={recommendedAction.href}
+                className="block rounded-[1.75rem] border border-teal-300/20 bg-teal-300/[0.08] p-5 shadow-2xl shadow-teal-950/10 ring-1 ring-teal-200/10 transition duration-300 hover:border-teal-300/35 hover:bg-teal-300/[0.12] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200/30"
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-100/75">
+                      Recommended Next Action
+                    </p>
+                    <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">
+                      {recommendedAction.label}
+                    </h2>
+                    <p className="mt-2 text-sm leading-6 text-zinc-300">
+                      {recommendedAction.detail}
+                    </p>
+                  </div>
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-teal-200 text-black">
+                    <ArrowRight className="h-4 w-4" />
+                  </span>
+                </div>
+              </Link>
+            </div>
+
+            <section className="rounded-[1.75rem] border border-white/10 bg-white/[0.045] p-5 shadow-2xl shadow-black/25 ring-1 ring-white/[0.025] backdrop-blur-xl">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-200/70">
+                    Recent Reports
+                  </p>
+                  <h2 className="mt-1 text-xl font-semibold text-white">
+                    Latest decision assets
+                  </h2>
+                </div>
+                <Link
+                  href="/plan?new=1&mode=plan"
+                  className="inline-flex min-h-10 items-center justify-center rounded-2xl bg-white px-3 text-xs font-semibold text-black"
+                >
+                  New
+                </Link>
+              </div>
+              <div className="mt-4 space-y-3">
+                {recentReports.length ? (
+                  recentReports.slice(0, 3).map((report) => {
+                    const Icon = report.type === "Market Analysis" ? BarChart3 : FileText;
+
+                    return (
+                      <Link
+                        key={`mobile-report-${report.id}`}
+                        href={`/dashboard/${report.id}`}
+                        className="flex min-h-20 items-center gap-3 rounded-2xl border border-white/10 bg-black/25 p-3 shadow-lg shadow-black/10 transition duration-300 hover:border-teal-300/25 hover:bg-white/[0.055] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200/30"
+                      >
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04]">
+                          <Icon className="h-4 w-4 text-teal-200" />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-semibold text-white">
+                            {report.title}
+                          </span>
+                          <span className="mt-1 block text-xs text-zinc-500">
+                            {report.type} · {formatDashboardDate(report.createdAt)}
+                          </span>
+                        </span>
+                        <span className="shrink-0 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] font-medium capitalize text-zinc-300">
+                          {report.status}
+                        </span>
+                      </Link>
+                    );
+                  })
+                ) : (
+                  <p className="rounded-2xl border border-dashed border-white/10 bg-black/25 p-5 text-sm leading-6 text-zinc-500">
+                    No reports yet. Create a strategic report to start your decision history.
+                  </p>
+                )}
+              </div>
+            </section>
+
+            <section className="overflow-x-auto pb-1">
+              <div className="flex min-w-max gap-3">
+                {mobileMetrics.map((metric) => (
+                  <div
+                    key={metric.label}
+                    className="w-32 rounded-[1.35rem] border border-white/10 bg-white/[0.045] p-4 shadow-xl shadow-black/20 ring-1 ring-white/[0.025]"
+                  >
+                    <p className="text-2xl font-semibold text-white">{metric.value}</p>
+                    <p className="mt-1 text-xs font-medium uppercase tracking-[0.16em] text-zinc-500">
+                      {metric.label}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </section>
+          </div>
+
+          <div className="hidden lg:block">
           <div className="overflow-hidden rounded-[2.35rem] border border-white/10 bg-white/[0.045] shadow-2xl shadow-black/35 ring-1 ring-white/[0.025] backdrop-blur-2xl transition duration-500 hover:border-teal-300/15 hover:bg-white/[0.052]">
             <div className="relative p-6 sm:p-8 lg:p-10">
               <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.1),transparent_34%),radial-gradient(circle_at_85%_20%,rgba(45,212,191,0.16),transparent_32%),radial-gradient(circle_at_12%_90%,rgba(255,255,255,0.045),transparent_28%)]" />
@@ -445,6 +760,7 @@ export default async function DashboardPage() {
           </div>
 
           <WorkspaceManager workspaces={workspaces} />
+          </div>
         </section>
       </div>
     </main>
