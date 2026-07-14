@@ -24,6 +24,7 @@ import ReportPdfButton from "./ReportPdfButton";
 import {
   CopySectionButton,
   MobileReportSection,
+  RegenerateReportButton,
   ReportScrollProgress,
   ShareReportButton,
 } from "./ReportViewerEnhancements";
@@ -1636,6 +1637,18 @@ export default async function ReportDetailPage({
     decisionSummaryItems.find((item) => item.label === "Recommended Next Step") ||
     decisionSummaryItems[2];
   const continueAnalysisHref = `/chat?reportId=${encodeURIComponent(report.id)}`;
+  const regenerateMode = report.type === "Market Analysis" ? "market" : "plan";
+  const regenerateParams = new URLSearchParams({
+    new: "1",
+    mode: regenerateMode,
+    reportId: report.id,
+  });
+
+  if (report.workspaceId) {
+    regenerateParams.set("workspaceId", report.workspaceId);
+  }
+
+  const regenerateReportHref = `/plan?${regenerateParams.toString()}`;
   const workspaceHref = workspace?.id
     ? `/dashboard/workspaces/${workspace.id}`
     : "/dashboard#workspaces";
@@ -1652,7 +1665,7 @@ export default async function ReportDetailPage({
       <div className="relative z-10 flex min-h-screen flex-col lg:flex-row">
         <DashboardSidebar />
 
-        <section className="flex-1 px-4 pt-5 pb-28 sm:px-8 lg:px-10 lg:py-8">
+        <section className="flex-1 px-4 pt-5 pb-[calc(9rem+env(safe-area-inset-bottom))] sm:px-8 lg:px-10 lg:py-8">
           <div className="space-y-4 lg:hidden">
             <div className="rounded-[2rem] border border-white/10 bg-white/[0.045] p-5 shadow-2xl shadow-black/30 ring-1 ring-white/[0.025] backdrop-blur-2xl">
               <Link
@@ -1740,7 +1753,8 @@ export default async function ReportDetailPage({
                 <MessageSquareText className="h-4 w-4" />
                 Continue Analysis
               </Link>
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="pointer-events-auto relative z-40 grid gap-3 sm:grid-cols-2">
+                <RegenerateReportButton href={regenerateReportHref} />
                 <ShareReportButton title={report.title} />
                 <ReportPdfButton report={report} />
               </div>

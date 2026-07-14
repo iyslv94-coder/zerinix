@@ -198,6 +198,19 @@ type InitialReport = {
   }>;
 };
 
+type RegenerationContext = {
+  reportId: string;
+  reportTitle: string;
+  reportType: "Business Plan" | "Market Analysis";
+  workspaceId: string;
+  prompt: string;
+};
+
+type LastRequest = {
+  mode: ChatMode;
+  prompt: string;
+};
+
 type PlannerProps = {
   initialConversations?: Conversation[];
   conversationLoadError?: string;
@@ -205,6 +218,7 @@ type PlannerProps = {
   initialWorkspaces?: PlannerWorkspace[];
   initialWorkspaceId?: string;
   initialReport?: InitialReport | null;
+  regenerationContext?: RegenerationContext | null;
 };
 
 const workflowSteps = [
@@ -803,6 +817,51 @@ function createConversation(id: string): Conversation {
     messages: [],
     createdAt: now,
     updatedAt: now,
+  };
+}
+
+function getInitialLastRequest({
+  regenerationContext,
+  restoredReportMode,
+  initialReport,
+  initialMode,
+  initialConversations,
+}: {
+  regenerationContext: RegenerationContext | null;
+  restoredReportMode: ChatMode | null;
+  initialReport: InitialReport | null;
+  initialMode?: ChatMode;
+  initialConversations: Conversation[];
+}): LastRequest | null {
+  const regenerationPrompt =
+    regenerationContext?.prompt.trim() || initialReport?.prompt.trim() || "";
+
+  if (regenerationContext && regenerationPrompt) {
+    return {
+      mode: regenerationContext.reportType === "Market Analysis" ? "market" : "plan",
+      prompt: regenerationPrompt,
+    };
+  }
+
+  if (restoredReportMode && initialReport?.prompt.trim()) {
+    return {
+      mode: restoredReportMode,
+      prompt: initialReport.prompt.trim(),
+    };
+  }
+
+  const recentUserMessage = [...initialConversations]
+    .sort((a, b) => b.updatedAt - a.updatedAt)
+    .flatMap((conversation) => [...conversation.messages].reverse())
+    .find((message) => message.role === "user" && message.content.trim());
+
+  if (!recentUserMessage) {
+    return null;
+  }
+
+  return {
+    mode: recentUserMessage.mode || initialMode || "chat",
+    prompt: recentUserMessage.content.trim(),
   };
 }
 
@@ -4903,6 +4962,7 @@ export default function Planner({
   initialWorkspaces = [],
   initialWorkspaceId = "",
   initialReport = null,
+  regenerationContext = null,
 }: PlannerProps) {
   const restoredReportMode =
     initialReport?.status?.toLowerCase() === "completed"
@@ -4939,7 +4999,7 @@ export default function Planner({
     restoredPlanReport as PlanReport | null
   );
   const [activeReportId, setActiveReportId] = useState(
-    () => initialReport?.id || getStoredActiveReportId()
+    () => regenerationContext?.reportId || initialReport?.id || getStoredActiveReportId()
   );
   const [loading, setLoading] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
@@ -4956,19 +5016,40 @@ export default function Planner({
   );
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
   const [activeMode, setActiveMode] = useState<ChatMode>(
-    restoredReportMode || initialMode || "chat"
+    (regenerationContext
+      ? regenerationContext.reportType === "Market Analysis"
+        ? "market"
+        : "plan"
+      : restoredReportMode) ||
+      initialMode ||
+      "chat"
   );
-  const [mobileWizardStep, setMobileWizardStep] = useState<1 | 2 | 3>(1);
-  const [mobileBusinessIdea, setMobileBusinessIdea] = useState("");
+  const [mobileWizardActive, setMobileWizardActive] = useState(
+    Boolean(regenerationContext) || !restoredReportMode
+  );
+  const [mobileWizardStep, setMobileWizardStep] = useState<1 | 2 | 3>(
+    regenerationContext ? 2 : 1
+  );
+  const [mobileBusinessIdea, setMobileBusinessIdea] = useState(
+    regenerationContext?.prompt || ""
+  );
   const [mobileMarket, setMobileMarket] = useState("");
-  const [mobileGoal, setMobileGoal] = useState("");
-  const [mobileConstraints, setMobileConstraints] = useState("");
+  const [mobileGoal, setMobileGoal] = useState(
+    regenerationContext
+      ? `Regenerate the ${regenerationContext.reportType.toLowerCase()} with updated strategic analysis.`
+      : ""
+  );
+  const [mobileConstraints, setMobileConstraints] = useState(
+    regenerationContext?.reportTitle
+      ? `Existing report context: ${regenerationContext.reportTitle}`
+      : ""
+  );
   const [chatModelPreference, setChatModelPreference] =
     useState<ChatModelPreference>("fast");
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState(
     getInitialSelectedWorkspaceId(
       initialWorkspaces,
-      initialWorkspaceId,
+      regenerationContext?.workspaceId || initialWorkspaceId,
       initialReport?.workspaceId
     )
   );
@@ -4978,13 +5059,14 @@ export default function Planner({
   const [isDraggingFiles, setIsDraggingFiles] = useState(false);
   const [conversationError, setConversationError] = useState(conversationLoadError);
   const [userEmail, setUserEmail] = useState("");
-  const [lastRequest, setLastRequest] = useState<{
-    mode: ChatMode;
-    prompt: string;
-  } | null>(
-    restoredReportMode && initialReport?.prompt
-      ? { mode: restoredReportMode, prompt: initialReport.prompt }
-      : null
+  const [lastRequest, setLastRequest] = useState<LastRequest | null>(() =>
+    getInitialLastRequest({
+      regenerationContext,
+      restoredReportMode,
+      initialReport,
+      initialMode,
+      initialConversations,
+    })
   );
   const [activeReportLanguage, setActiveReportLanguage] =
     useState<ResponseLanguage>("English");
@@ -5135,6 +5217,7 @@ export default function Planner({
     setWorkflowCompletedSteps(0);
     setReportProgress(0);
     setCurrentReportSectionName("");
+    setMobileWizardActive(true);
     setMobileWizardStep(1);
     setMobileBusinessIdea("");
     setMobileMarket("");
@@ -5633,7 +5716,9 @@ export default function Planner({
   }
 
   async function regenerateResponse() {
-    if (!lastRequest || isWorking) {
+    const request = lastRequest?.prompt.trim() ? lastRequest : null;
+
+    if (!request || isWorking) {
       return;
     }
 
@@ -5652,14 +5737,14 @@ export default function Planner({
       await deletePersistedMessage(previousAssistantMessage.id);
     }
 
-    setPrompt(lastRequest.prompt);
+    setPrompt(request.prompt);
 
-    if (lastRequest.mode === "plan") {
-      void generatePlan(lastRequest.prompt, false);
-    } else if (lastRequest.mode === "market") {
-      void analyzeMarket(lastRequest.prompt, false);
+    if (request.mode === "plan") {
+      void generatePlan(request.prompt, false);
+    } else if (request.mode === "market") {
+      void analyzeMarket(request.prompt, false);
     } else {
-      void sendChatMessage(lastRequest.prompt, false, previousAssistantMessage?.id);
+      void sendChatMessage(request.prompt, false, previousAssistantMessage?.id);
     }
   }
 
@@ -6566,16 +6651,13 @@ export default function Planner({
     : currentLanguageCopy.marketTitle;
   const selectedMobileModeCard =
     modeCards.find((modeCard) => modeCard.mode === activeMode) || modeCards[0];
-  const hasGeneratedOutput = Boolean(planReport || marketReport || result);
   const mobileContextReady = Boolean(
     (mobileBusinessIdea.trim() || mobileGoal.trim()) &&
       (activeMode === "chat" || mobileBusinessIdea.trim())
   );
-  const shouldShowMobileWizard =
-    (messages.length === 0 && !hasGeneratedOutput) ||
-    (mobileWizardStep === 3 && isWorking);
-  const shouldHideDesktopCreationOnMobile =
-    messages.length === 0 && !hasGeneratedOutput;
+  const shouldShowMobileWizard = mobileWizardActive;
+  const shouldHideDesktopCreationOnMobile = mobileWizardActive;
+  const shouldShowToolbarRegenerate = true;
 
   function buildMobileWizardPrompt() {
     const lines = [
@@ -6634,7 +6716,7 @@ export default function Planner({
         onDeleteConversation={deleteConversation}
       />
 
-      <section className="relative flex min-w-0 flex-1 flex-col bg-black">
+      <section className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-black">
         <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.045)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.035)_1px,transparent_1px)] bg-[size:54px_54px] opacity-35" />
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(45,212,191,0.19),transparent_34%),radial-gradient(circle_at_bottom_left,rgba(255,255,255,0.08),transparent_30%),linear-gradient(180deg,rgba(0,0,0,0.08),#000_94%)]" />
         {isDraggingFiles ? (
@@ -6678,15 +6760,17 @@ export default function Planner({
               <Plus className="h-4 w-4 text-teal-200" />
               New analysis
             </button>
-            <button
-              type="button"
-              onClick={regenerateResponse}
-              disabled={!lastRequest || isWorking}
-              className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-medium text-zinc-200 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              <RefreshCcw className="h-4 w-4 text-teal-200" />
-              <span className="hidden sm:inline">Regenerate response</span>
-            </button>
+            {shouldShowToolbarRegenerate ? (
+              <button
+                type="button"
+                onClick={regenerateResponse}
+                disabled={isWorking}
+                className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-medium text-zinc-200 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <RefreshCcw className="h-4 w-4 text-teal-200" />
+                <span className="inline">Regenerate response</span>
+              </button>
+            ) : null}
             <Link
               href="/dashboard/settings"
               aria-label="Open account settings"
@@ -6708,7 +6792,7 @@ export default function Planner({
         <div
           ref={chatScrollerRef}
           onScroll={updateNearBottomState}
-          className="relative z-10 flex-1 overflow-y-auto scroll-smooth px-4 py-5 sm:px-5 lg:px-8"
+          className="relative z-10 min-h-0 flex-1 overflow-y-auto scroll-smooth px-4 py-5 sm:px-5 lg:px-8"
         >
           <div className="mx-auto flex max-w-6xl flex-col gap-5 pb-48">
             {shouldShowMobileWizard ? (

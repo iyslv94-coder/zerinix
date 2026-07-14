@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
-import { Check, ChevronDown, Copy, Share2 } from "lucide-react";
+import { Check, ChevronDown, Copy, RefreshCcw, Share2 } from "lucide-react";
 
 export function ReportScrollProgress() {
   const [progress, setProgress] = useState(0);
@@ -114,6 +114,26 @@ export function ShareReportButton({ title }: { title: string }) {
       {shared ? <Check className="h-4 w-4" /> : <Share2 className="h-4 w-4" />}
       {shared ? "Link copied" : "Share Report"}
     </button>
+  );
+}
+
+export function RegenerateReportButton({ href }: { href: string }) {
+  const [pressed, setPressed] = useState(false);
+
+  return (
+    <a
+      href={href}
+      onClick={() => {
+        setPressed(true);
+      }}
+      aria-busy={pressed}
+      aria-label="Regenerate report"
+      className="pointer-events-auto relative z-40 inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-teal-300/20 bg-teal-300/[0.08] px-5 py-3 text-sm font-semibold text-teal-100 shadow-xl shadow-teal-950/10 ring-1 ring-teal-200/10 transition duration-300 hover:border-teal-300/35 hover:bg-teal-300/[0.12] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200/30 active:scale-[0.98] disabled:cursor-wait disabled:opacity-75"
+      onBlur={() => setPressed(false)}
+    >
+      <RefreshCcw className={`h-4 w-4 ${pressed ? "animate-spin" : ""}`} />
+      {pressed ? "Opening..." : "Regenerate"}
+    </a>
   );
 }
 
