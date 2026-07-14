@@ -20,26 +20,29 @@ const mobileNavigationItems = [
   },
   {
     label: "Reports",
-    href: "/dashboard#reports",
+    href: "/dashboard/reports",
     icon: FileText,
     match: (pathname: string) =>
-      pathname.startsWith("/dashboard/") &&
-      !pathname.startsWith("/dashboard/workspaces") &&
-      !pathname.startsWith("/dashboard/settings") &&
-      !pathname.startsWith("/dashboard/billing") &&
-      !pathname.startsWith("/dashboard/usage"),
+      pathname.startsWith("/dashboard/reports") ||
+      (pathname.startsWith("/dashboard/") &&
+        !pathname.startsWith("/dashboard/workspaces") &&
+        !pathname.startsWith("/dashboard/settings") &&
+        !pathname.startsWith("/dashboard/billing") &&
+        !pathname.startsWith("/dashboard/usage") &&
+        !pathname.startsWith("/dashboard/advisor")),
   },
   {
     label: "Workspace",
-    href: "/dashboard#workspaces",
+    href: "/dashboard/workspaces",
     icon: Folder,
     match: (pathname: string) => pathname.startsWith("/dashboard/workspaces"),
   },
   {
     label: "Advisor",
-    href: "/chat",
+    href: "/dashboard/advisor",
     icon: Bot,
-    match: (pathname: string) => pathname.startsWith("/chat"),
+    match: (pathname: string) =>
+      pathname.startsWith("/chat") || pathname.startsWith("/dashboard/advisor"),
   },
   {
     label: "Account",
@@ -63,6 +66,14 @@ function getMobileTitle(pathname: string) {
 
   if (pathname.startsWith("/dashboard/workspaces")) {
     return "Workspace";
+  }
+
+  if (pathname.startsWith("/dashboard/reports")) {
+    return "Reports";
+  }
+
+  if (pathname.startsWith("/dashboard/advisor")) {
+    return "AI Advisor";
   }
 
   if (pathname.startsWith("/dashboard/settings")) {
