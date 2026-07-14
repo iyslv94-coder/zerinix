@@ -238,41 +238,41 @@ const chatModelOptions: Array<{
 
 const modeSuggestions: Record<ChatMode, string[]> = {
   chat: [
-    "Help me think through whether this idea is worth pursuing.",
-    "Summarize the tradeoffs between bootstrapping and raising funding.",
-    "Review this positioning and suggest a sharper version.",
+    "Should we enter the German clinic software market this year?",
+    "Pressure-test whether we should raise capital or stay bootstrapped.",
+    "Assess the strongest positioning for a premium B2B SaaS launch.",
   ],
   plan: [
-    "Create a business plan for an AI CRM for clinics.",
-    "Build a 90-day launch plan for a B2B SaaS product.",
-    "Create an investor-ready plan for a premium private hospital chain.",
+    "Validate an AI CRM for private clinics in Germany before fundraising.",
+    "Assess whether a premium private hospital chain can reach investor readiness.",
+    "Evaluate a B2B SaaS launch plan for enterprise finance teams.",
   ],
   market: [
-    "Analyze the market for premium online education in Germany.",
-    "Research the competitive landscape for EV charging in Turkey.",
-    "Analyze demand for a luxury electric yacht company.",
+    "Evaluate the EV charging opportunity in Turkey for a new entrant.",
+    "Size the premium online education market in Germany for expansion.",
+    "Assess demand, competition and risks for luxury electric yachts.",
   ],
 };
 
 const modeEmptyState: Record<ChatMode, { title: string; description: string; placeholder: string }> =
   {
     chat: {
-      title: "Ask your ZERINIX AI Advisor.",
+      title: "Pressure-test a strategic decision.",
       description:
-        "Use a continuous advisor session with memory, markdown answers, file context, and fast model routing.",
-      placeholder: "Ask a strategic question, paste notes, or upload context for ZERINIX to analyze...",
+        "Use a continuous advisory session with memory, markdown answers, file context, and fast model routing.",
+      placeholder: "Ask a strategic question, paste notes, or upload context for ZERINIX to assess...",
     },
     plan: {
-      title: "Create an investor-ready business plan.",
+      title: "Create a strategic decision report.",
       description:
-        "Describe the company, customer, market, constraints and goals. ZERINIX will turn it into a structured Business Plan report.",
+        "Analyze opportunities, markets and business decisions with ZERINIX.",
       placeholder:
-        "Example: AI CRM for private clinics in Germany, €99/month, sold to clinic owners, first market Berlin...",
+        "Describe the decision, market or business question you want ZERINIX to analyze.",
     },
     market: {
-      title: "Analyze a market with strategic depth.",
+      title: "Build market intelligence.",
       description:
-        "Enter a market, product category, geography or strategic question. ZERINIX will generate a structured Market Analysis report.",
+        "Enter a market, product category, geography or strategic question. ZERINIX will generate a structured market intelligence report.",
       placeholder:
         "Example: Premium gym franchise market in Turkey, urban professionals, competitors, pricing and entry risk...",
     },
@@ -283,30 +283,40 @@ const modeCards: Array<{
   label: string;
   description: string;
   output: string;
+  opens: string;
   icon: LucideIcon;
 }> = [
   {
     mode: "plan",
-    label: "AI Plan",
-    description: "Structured investor-grade business plan.",
+    label: "Business Idea Validation",
+    description: "Validate a new business idea, market fit and risks.",
     output: "Board-ready report",
+    opens: "Creates a structured business validation report",
     icon: BriefcaseBusiness,
   },
   {
     mode: "market",
-    label: "Market Analysis",
-    description: "Market sizing, competition, risks and entry logic.",
+    label: "Market Intelligence",
+    description: "Analyze market size, competition and opportunity.",
     output: "Diligence memo",
+    opens: "Creates a market intelligence report",
     icon: BarChart3,
   },
   {
     mode: "chat",
-    label: "AI Advisor",
-    description: "Strategic advisor with memory.",
-    output: "Live guidance",
+    label: "Strategic Advisory",
+    description: "Pressure-test decisions with ZERINIX advisor.",
+    output: "Strategic decision guidance",
+    opens: "Advisor session",
     icon: Bot,
   },
 ];
+
+const decisionGoalLabels: Record<ChatMode, string> = {
+  plan: "Business Idea Validation",
+  market: "Market Intelligence",
+  chat: "Strategic Advisory",
+};
 
 let pdfFontPromise: Promise<string> | null = null;
 
@@ -6596,11 +6606,7 @@ export default function Planner({
                 ZERINIX AI
               </p>
               <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] font-medium text-zinc-300">
-                {activeMode === "plan"
-                  ? "AI Plan mode"
-                  : activeMode === "market"
-                    ? "Market Analysis mode"
-                    : "AI Advisor mode"}
+                {decisionGoalLabels[activeMode]}
               </span>
             </div>
             <h1 className="mt-1 truncate text-xl font-semibold text-white md:text-2xl">
@@ -6751,16 +6757,12 @@ export default function Planner({
             <div className="rounded-[2rem] border border-white/10 bg-white/[0.06] p-3 shadow-2xl shadow-black/50 ring-1 ring-white/[0.03] backdrop-blur-2xl">
               <div className="mb-2 flex flex-wrap items-center gap-2 px-2 pt-1">
                 <span className="rounded-full border border-teal-200/20 bg-teal-200/10 px-3 py-1 text-xs font-medium text-teal-100">
-                  {activeMode === "plan"
-                    ? "AI Plan"
-                    : activeMode === "market"
-                      ? "Market Analysis"
-                      : "AI Advisor"}
+                  {decisionGoalLabels[activeMode]}
                 </span>
                 <span className="text-xs text-zinc-600">
                   {activeMode === "chat"
-                    ? `AI Advisor · ${chatModelOptions.find((option) => option.value === chatModelPreference)?.label || "Fast"} mode`
-                    : "Structured report builder"}
+                    ? `Advisory session · ${chatModelOptions.find((option) => option.value === chatModelPreference)?.label || "Fast"} mode`
+                    : "Decision intelligence workspace"}
                 </span>
                 {activeMode !== "chat" && initialWorkspaces.length > 0 ? (
                   <label className="ml-auto flex items-center gap-2 text-xs text-zinc-500">
@@ -6816,7 +6818,9 @@ export default function Planner({
                         {modeCard.description}
                       </p>
                       <p className="mt-2 text-[11px] font-medium text-teal-100/80">
-                        {modeCard.output}
+                        {modeCard.mode === "chat"
+                          ? modeCard.output
+                          : `${modeCard.output} · ${modeCard.opens}`}
                       </p>
                     </button>
                   );
@@ -6871,7 +6875,7 @@ export default function Planner({
                         : "border border-white/10 bg-white/[0.04] text-zinc-300 hover:bg-white/10"
                     }`}
                   >
-                    AI Plan
+                    Business Idea Validation
                   </button>
                   <button
                     type="button"
@@ -6882,7 +6886,7 @@ export default function Planner({
                         : "border border-white/10 bg-white/[0.04] text-zinc-300 hover:bg-white/10"
                     }`}
                   >
-                    Market Analysis
+                    Market Intelligence
                   </button>
                   <button
                     type="button"
@@ -6893,7 +6897,7 @@ export default function Planner({
                         : "border border-white/10 bg-white/[0.04] text-zinc-300 hover:bg-white/10"
                     }`}
                   >
-                    AI Advisor
+                    Strategic Advisory
                   </button>
                   {activeMode === "chat" ? (
                     <div className="flex flex-wrap items-center gap-1 rounded-2xl border border-white/10 bg-black/25 p-1">
@@ -6937,7 +6941,7 @@ export default function Planner({
                       : "Generating..."
                     : activeMode === "chat"
                       ? "Ask Advisor"
-                      : "Generate Report"}
+                      : "Generate Strategic Report"}
                   <Send className="h-4 w-4" />
                 </button>
               </div>

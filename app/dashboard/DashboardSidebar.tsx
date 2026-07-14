@@ -24,14 +24,14 @@ export default function DashboardSidebar() {
     {
       label: "INTELLIGENCE",
       items: [
-        { label: "Create Strategic Analysis", href: "/plan?new=1&mode=plan", icon: Plus },
+        { label: "Create Strategic Report", href: "/plan?new=1&mode=plan", icon: Plus },
         { label: "Reports", href: "/dashboard#reports", icon: FileText },
         { label: "Workspaces", href: "/dashboard#workspaces", icon: Folder },
       ],
     },
     {
       label: "ADVISOR",
-      items: [{ label: "AI Advisor", href: "/chat", icon: Bot }],
+      items: [{ label: "Strategic Advisory", href: "/chat", icon: Bot }],
     },
     {
       label: "OPERATIONS",

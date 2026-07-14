@@ -142,8 +142,8 @@ export default async function DashboardPage() {
   ];
   const quickActions = [
     {
-      title: "Create Strategic Analysis",
-      description: "Start an AI Plan or Market Analysis report.",
+      title: "Create Strategic Report",
+      description: "Choose a decision goal and generate a professional analysis.",
       href: "/plan?new=1&mode=plan",
       icon: Plus,
       primary: true,
@@ -155,8 +155,8 @@ export default async function DashboardPage() {
       icon: Folder,
     },
     {
-      title: "AI Advisor",
-      description: "Ask follow-up questions after reviewing reports.",
+      title: "Strategic Advisory",
+      description: "Pressure-test decisions after reviewing reports.",
       href: "/chat",
       icon: MessageSquareText,
     },
@@ -327,7 +327,7 @@ export default async function DashboardPage() {
                   className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-teal-300/15 bg-teal-300/[0.06] px-4 py-2 text-sm font-medium text-teal-100 shadow-lg shadow-teal-950/10 transition duration-300 hover:-translate-y-0.5 hover:border-teal-300/30 hover:bg-teal-300/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200/30"
                 >
                   <Plus className="h-4 w-4" />
-                  New report
+                  Create strategic report
                 </Link>
               </div>
 
@@ -361,7 +361,7 @@ export default async function DashboardPage() {
                   })
                 ) : (
                   <div className="rounded-2xl border border-dashed border-white/10 bg-black/25 p-7 text-sm leading-6 text-zinc-500 shadow-inner shadow-black/20">
-                    No reports yet. Create an AI Plan or Market Analysis to build
+                    No reports yet. Create a strategic report to build
                     your first saved intelligence asset.
                   </div>
                 )}
