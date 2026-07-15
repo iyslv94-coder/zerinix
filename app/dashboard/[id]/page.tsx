@@ -2103,7 +2103,7 @@ export default async function ReportDetailPage({
                   </nav>
                 </aside>
 
-                <div className="space-y-6">
+                <div className="space-y-8 xl:max-w-5xl">
                   {visibleSections.map((section, index) => {
                     const Icon = getSectionIcon(section.title);
                     const isFinancialDashboard = section.title
@@ -2112,13 +2112,14 @@ export default async function ReportDetailPage({
                     const detailsContent = isFinancialDashboard ? "" : section.content;
 
                     return (
-                      <article
+                      <details
                         id={`report-section-${index + 1}`}
                         key={getReportSectionKey(section)}
-                        className={`${getReportArticleClass(section.title)} scroll-mt-8`}
+                        open
+                        className={`${getReportArticleClass(section.title)} group scroll-mt-8`}
                       >
                         <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-teal-200/30 to-transparent" />
-                        <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+                        <summary className="flex cursor-pointer list-none flex-col gap-4 rounded-[1.35rem] transition duration-300 hover:bg-white/[0.025] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200/30 sm:flex-row sm:items-start [&::-webkit-details-marker]:hidden">
                           <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/5 shadow-inner shadow-white/5">
                             <Icon className="h-5 w-5 text-teal-200" />
                           </div>
@@ -2132,9 +2133,17 @@ export default async function ReportDetailPage({
                                   {section.title}
                                 </h2>
                               </div>
-                              <CopySectionButton content={section.content} />
+                              <span className="inline-flex min-h-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.045] px-3.5 py-2 text-xs font-semibold text-zinc-300 ring-1 ring-white/[0.02] transition duration-300 group-hover:border-teal-200/30 group-hover:text-teal-100">
+                                <span className="group-open:hidden">Expand</span>
+                                <span className="hidden group-open:inline">Collapse</span>
+                              </span>
                             </div>
-                            <div className="mt-5 border-t border-white/10 pt-5">
+                          </div>
+                        </summary>
+                        <div className="mt-5 border-t border-white/10 pt-6">
+                          <div className="mb-5 flex justify-end">
+                            <CopySectionButton content={section.content} />
+                          </div>
                               <ExecutiveSummaryVisual
                                 title={section.title}
                                 content={section.content}
@@ -2156,19 +2165,18 @@ export default async function ReportDetailPage({
                                   <ReportText content={detailsContent} />
                                 </AnalysisNotes>
                               ) : null}
-                            </div>
-                          </div>
                         </div>
-                      </article>
+                      </details>
                     );
                   })}
 
                   {sourceSections.length > 0 ? (
-                    <article
+                    <details
                       id="report-sources"
-                    className="scroll-mt-8 rounded-[2rem] border border-teal-200/15 bg-teal-200/[0.045] p-5 shadow-xl shadow-black/30 ring-1 ring-teal-200/5 sm:p-6"
+                      open
+                      className="group scroll-mt-8 rounded-[2rem] border border-teal-200/15 bg-teal-200/[0.045] p-5 shadow-xl shadow-black/30 ring-1 ring-teal-200/5 sm:p-6"
                     >
-                      <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+                      <summary className="flex cursor-pointer list-none flex-col gap-4 rounded-[1.35rem] transition duration-300 hover:bg-white/[0.025] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200/30 sm:flex-row sm:items-start [&::-webkit-details-marker]:hidden">
                         <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-teal-200/20 bg-teal-200/10">
                           <BookOpen className="h-5 w-5 text-teal-100" />
                         </div>
@@ -2182,12 +2190,20 @@ export default async function ReportDetailPage({
                                 Sources
                               </h2>
                             </div>
-                            <CopySectionButton
-                              content={sourceSections.map((section) => section.content).join("\n\n")}
-                              label="Copy sources"
-                            />
+                            <span className="inline-flex min-h-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.045] px-3.5 py-2 text-xs font-semibold text-zinc-300 ring-1 ring-white/[0.02] transition duration-300 group-hover:border-teal-200/30 group-hover:text-teal-100">
+                              <span className="group-open:hidden">Expand</span>
+                              <span className="hidden group-open:inline">Collapse</span>
+                            </span>
                           </div>
-                          <div className="mt-5 space-y-5 border-t border-white/10 pt-5">
+                        </div>
+                      </summary>
+                      <div className="mt-5 space-y-5 border-t border-white/10 pt-5">
+                            <div className="flex justify-end">
+                              <CopySectionButton
+                                content={sourceSections.map((section) => section.content).join("\n\n")}
+                                label="Copy sources"
+                              />
+                            </div>
                             {sourceSections.map((section) => (
                               <div
                                 key={getReportSectionKey(section)}
@@ -2196,10 +2212,8 @@ export default async function ReportDetailPage({
                                 <CitationList content={section.content} />
                               </div>
                             ))}
-                          </div>
-                        </div>
                       </div>
-                    </article>
+                    </details>
                   ) : null}
                 </div>
               </div>

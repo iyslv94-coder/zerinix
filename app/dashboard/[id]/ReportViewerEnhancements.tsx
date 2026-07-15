@@ -8,6 +8,9 @@ export function ReportScrollProgress() {
 
   useEffect(() => {
     let frameId = 0;
+    const previousScrollBehavior = document.documentElement.style.scrollBehavior;
+
+    document.documentElement.style.scrollBehavior = "smooth";
 
     const updateProgress = () => {
       window.cancelAnimationFrame(frameId);
@@ -28,6 +31,7 @@ export function ReportScrollProgress() {
     window.addEventListener("resize", updateProgress);
 
     return () => {
+      document.documentElement.style.scrollBehavior = previousScrollBehavior;
       window.cancelAnimationFrame(frameId);
       window.removeEventListener("scroll", updateProgress);
       window.removeEventListener("resize", updateProgress);
