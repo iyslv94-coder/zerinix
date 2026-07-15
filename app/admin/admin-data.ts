@@ -774,7 +774,7 @@ function buildMockAdminDashboardData(dateRange: AdminDateRange): AdminDashboardD
       grossMargin: null,
       netProfit: null,
       financialSourceStatus: "NOT CONNECTED",
-      financialSourceDetail: "Stripe is not connected. Revenue, Gross Profit, Gross Margin, and Net Profit will switch to live Stripe data automatically when Stripe is connected.",
+      financialSourceDetail: "Stripe billing is not configured yet. These financial cards are ready and will populate automatically after billing and invoice sync are configured.",
       averageCostPerUser: null,
       averageCostPerReport: null,
       dailyAiCost: null,
@@ -829,7 +829,7 @@ function buildMockAdminDashboardData(dateRange: AdminDateRange): AdminDashboardD
     alerts: [
       {
         id: "local:service-role-missing",
-        label: "Admin data source not connected",
+        label: "Admin data source not configured",
         detail: "SUPABASE_SERVICE_ROLE_KEY is required for live admin metrics.",
         severity: "warning",
         createdAt: new Date().toISOString(),
@@ -2259,7 +2259,7 @@ async function loadOpenAiCostCenter(input: {
   const key = getOpenAiCostCenterKey();
 
   if (!key) {
-    return disconnectedOpenAiCostCenter("OpenAI organization usage is not connected. Configure OPENAI_ADMIN_API_KEY or the active OpenAI API key.");
+    return disconnectedOpenAiCostCenter("OpenAI organization usage is not configured yet. Configure OPENAI_ADMIN_API_KEY or the active OpenAI API key.");
   }
 
   const now = new Date();
@@ -2412,7 +2412,7 @@ async function loadRevenueSummary(range: AdminDateRange) {
     return {
       value: null,
       status: "NOT CONNECTED" as AdminMetricStatus,
-      detail: `Stripe is not connected. Missing or disabled: ${missing || "Stripe billing"}.`,
+      detail: `Stripe billing is not configured yet. Revenue will populate automatically after billing is enabled and invoice sync is configured. Missing or disabled: ${missing || "Stripe billing"}.`,
     };
   }
 
@@ -2567,7 +2567,7 @@ function calculateFinancials(input: {
   const financialSourceConnected = input.revenueStatus === "LIVE" || input.revenueStatus === "NO DATA";
   const financialSourceDetail = financialSourceConnected
     ? input.revenueDetail
-    : `${input.revenueDetail} Revenue, Gross Profit, Gross Margin, and Net Profit will switch to live Stripe data automatically when Stripe is connected.`;
+    : `${input.revenueDetail} Revenue, Gross Profit, Gross Margin, and Net Profit share this Stripe-backed source.`;
 
   return {
     revenue: input.revenue,
@@ -3214,7 +3214,7 @@ export async function loadSystemStatus() {
         ? stripeCheck.ok
           ? "Stripe balance endpoint reachable."
           : `Stripe health probe failed with status ${stripeCheck.status || "network"}.`
-        : `Stripe is not connected. Missing or disabled: ${
+        : `Stripe is not configured for production billing yet. Missing or disabled: ${
             stripe.enabled ? stripe.missing.join(", ") : "ENABLE_STRIPE_BILLING"
           }.`,
       lastChecked,
@@ -3228,7 +3228,7 @@ export async function loadSystemStatus() {
         ? resendCheck.ok
           ? "Resend domains endpoint reachable."
           : `Resend health probe failed with status ${resendCheck.status || "network"}.`
-        : `Resend is not connected. Missing or disabled: ${
+        : `Resend email delivery is not configured for production yet. Missing or disabled: ${
             resend.enabled ? resend.missing.join(", ") : "ENABLE_RESEND_EMAILS"
           }.`,
       lastChecked,

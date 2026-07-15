@@ -81,7 +81,7 @@ function formatCompactNumber(value: number) {
 
 function formatCurrency(value: number | null) {
   if (value === null) {
-    return "Not connected";
+    return "Not Connected";
   }
 
   return new Intl.NumberFormat("en-US", {
@@ -92,20 +92,26 @@ function formatCurrency(value: number | null) {
 }
 
 function formatPercent(value: number | null) {
-  return value === null ? "Not connected" : `${value.toFixed(1)}%`;
+  return value === null ? "Not Connected" : `${value.toFixed(1)}%`;
 }
 
-function statusClass(status: AdminMetricStatus) {
+type OverviewCardStatus = Extract<AdminMetricStatus, "LIVE" | "NOT CONNECTED" | "NO DATA">;
+
+function overviewCardStatus(status: AdminMetricStatus): OverviewCardStatus {
+  if (status === "LIVE" || status === "ESTIMATED") {
+    return "LIVE";
+  }
+
+  if (status === "NOT CONNECTED") {
+    return "NOT CONNECTED";
+  }
+
+  return "NO DATA";
+}
+
+function statusClass(status: OverviewCardStatus) {
   if (status === "LIVE") {
     return "border-emerald-300/20 bg-emerald-300/10 text-emerald-100";
-  }
-
-  if (status === "ESTIMATED") {
-    return "border-purple-300/20 bg-purple-300/10 text-purple-100";
-  }
-
-  if (status === "ERROR") {
-    return "border-red-300/20 bg-red-950/30 text-red-100";
   }
 
   if (status === "NO DATA") {
@@ -116,9 +122,11 @@ function statusClass(status: AdminMetricStatus) {
 }
 
 function StatusBadge({ status }: { status: AdminMetricStatus }) {
+  const normalizedStatus = overviewCardStatus(status);
+
   return (
-    <span className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] ${statusClass(status)}`}>
-      {status}
+    <span className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] ${statusClass(normalizedStatus)}`}>
+      {normalizedStatus}
     </span>
   );
 }
@@ -407,7 +415,7 @@ function DonutChartCard({
           ))
         ) : (
           <p className={`flex min-h-[7rem] items-center justify-center rounded-[1rem] p-4 text-center text-sm text-zinc-500 ${dashboardTheme.innerSurface}`}>
-            {status === "NOT CONNECTED" ? "Not connected" : "No data available"}
+            {overviewCardStatus(status) === "NOT CONNECTED" ? "Connection not configured yet." : "No data available"}
           </p>
         )}
       </div>
