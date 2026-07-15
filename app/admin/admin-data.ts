@@ -7,7 +7,7 @@ import { createServiceRoleClient } from "@/app/lib/supabase/admin";
 import { getSupabaseServiceRoleKey, getSupabaseUrl } from "@/app/lib/supabase/env";
 import { getStripeConfiguration } from "@/app/lib/billing/stripe";
 import { getResendConfiguration } from "@/app/lib/integrations/resend";
-import { getModelPricing } from "@/app/lib/ai/pricing";
+import { estimateModelCostUsd, getModelPricing } from "@/app/lib/ai/pricing";
 
 export type AdminUserContext = {
   user: User;
@@ -2205,9 +2205,23 @@ function calculateOpenAiAnalytics(input: {
       ? row.metadata as Record<string, unknown>
       : {};
 
-    return sum + readNumber(metadata.cached_tokens);
+    return sum + (
+      readNumber(metadata.cached_tokens) ||
+      readNumber(metadata.cachedTokens) ||
+      readNumber(metadata.input_cached_tokens)
+    );
   }, 0);
-  const totalTokens = input.usage.reduce((sum, row) => sum + readNumber(row.total_tokens), 0);
+  const totalTokens = input.usage.reduce((sum, row) => {
+    const metadata = readUsageMetadata(row);
+    const rowInputTokens = readNumber(row.prompt_tokens);
+    const rowOutputTokens = readNumber(row.completion_tokens);
+    const rowCachedTokens =
+      readNumber(metadata.cached_tokens) ||
+      readNumber(metadata.cachedTokens) ||
+      readNumber(metadata.input_cached_tokens);
+
+    return sum + (readNumber(row.total_tokens) || rowInputTokens + rowOutputTokens + rowCachedTokens);
+  }, 0);
   const cost = input.usage.reduce((sum, row) => sum + readNumber(row.estimated_cost_usd), 0);
   const modelMap = new Map<
     string,
@@ -2226,6 +2240,21 @@ function calculateOpenAiAnalytics(input: {
   input.usage.forEach((row) => {
     const model = readString(row.model, "unknown_model");
     const metadata = readUsageMetadata(row);
+    const rowInputTokens = readNumber(row.prompt_tokens);
+    const rowOutputTokens = readNumber(row.completion_tokens);
+    const rowCachedTokens =
+      readNumber(metadata.cached_tokens) ||
+      readNumber(metadata.cachedTokens) ||
+      readNumber(metadata.input_cached_tokens);
+    const rowTotalTokens = readNumber(row.total_tokens) || rowInputTokens + rowOutputTokens + rowCachedTokens;
+    const storedCostUsd = readNumber(row.estimated_cost_usd);
+    const estimatedCostUsd = storedCostUsd > 0
+      ? storedCostUsd
+      : estimateModelCostUsd(model, {
+          promptTokens: rowInputTokens,
+          completionTokens: rowOutputTokens,
+          totalTokens: rowTotalTokens,
+        });
     const summary = modelMap.get(model) || {
       model,
       requests: 0,
@@ -2238,11 +2267,16 @@ function calculateOpenAiAnalytics(input: {
     };
 
     summary.requests += 1;
-    summary.inputTokens += readNumber(row.prompt_tokens);
-    summary.outputTokens += readNumber(row.completion_tokens);
-    summary.cachedTokens += readNumber(metadata.cached_tokens);
-    summary.tokens += readNumber(row.total_tokens);
-    summary.costUsd += readNumber(row.estimated_cost_usd);
+    summary.inputTokens += rowInputTokens;
+    summary.outputTokens += rowOutputTokens;
+    summary.cachedTokens += rowCachedTokens;
+    summary.tokens += rowTotalTokens;
+    summary.costUsd += estimatedCostUsd ?? 0;
+    if (storedCostUsd > 0) {
+      summary.status = "LIVE";
+    } else if (estimatedCostUsd !== null) {
+      summary.status = summary.status === "LIVE" ? "LIVE" : "ESTIMATED";
+    }
     modelMap.set(model, summary);
   });
 
