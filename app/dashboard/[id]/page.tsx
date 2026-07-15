@@ -1345,14 +1345,39 @@ type CitationData = {
   url?: string;
 };
 
+function normalizeCitationKey(value: string) {
+  return sanitizeAiResponseText(value)
+    .toLowerCase()
+    .replace(/\bhttps?:\/\/\S+/gi, "")
+    .replace(/[^a-z0-9ığüşöçİĞÜŞÖÇ]+/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function getCitationDomain(url?: string, organization = "") {
+  if (url) {
+    try {
+      return new URL(url).hostname.replace(/^www\./i, "").toLowerCase();
+    } catch {
+      return "";
+    }
+  }
+
+  return sanitizeAiResponseText(organization)
+    .toLowerCase()
+    .replace(/\b(inc|llc|ltd|corp|company|publisher|organization)\b\.?/g, "")
+    .replace(/[^a-z0-9ığüşöçİĞÜŞÖÇ]+/gi, ".")
+    .replace(/^\.+|\.+$/g, "");
+}
+
 function normalizeCitationConfidence(value: string): CitationData["confidence"] | undefined {
   const normalized = value.trim().toLowerCase();
 
-  if (normalized === "high") {
+  if (normalized === "high" || normalized === "strong") {
     return "High";
   }
 
-  if (normalized === "medium") {
+  if (normalized === "medium" || normalized === "moderate") {
     return "Medium";
   }
 
@@ -1372,7 +1397,7 @@ function parseCitations(content: string): CitationData[] {
     content.match(/\bconfidence\s*[:\-–—]\s*(high|medium|low)\b/i)?.[1] || ""
   );
 
-  return content
+  const citations = content
     .split("\n")
     .map((rawLine) => {
       const url =
@@ -1415,13 +1440,47 @@ function parseCitations(content: string): CitationData[] {
       };
     })
     .filter((citation): citation is CitationData => Boolean(citation));
+  const unique = new Map<string, CitationData>();
+
+  citations.forEach((citation) => {
+    const normalizedUrl = citation.url?.trim().toLowerCase().replace(/\/+$/, "");
+    const domain = getCitationDomain(citation.url, citation.organization);
+    const titleKey = normalizeCitationKey(citation.sourceTitle);
+    const key = domain && titleKey
+      ? `domain-title:${domain}|${titleKey}`
+      : normalizedUrl
+        ? `url:${normalizedUrl}`
+        : [
+            "source",
+            normalizeCitationKey(citation.organization),
+            titleKey,
+          ].join("|");
+    const existing = unique.get(key);
+
+    unique.set(key, {
+      ...existing,
+      ...citation,
+      ...(existing?.url && !citation.url ? { url: existing.url } : {}),
+      ...(existing?.confidence && !citation.confidence ? { confidence: existing.confidence } : {}),
+    });
+  });
+
+  return Array.from(unique.values());
 }
 
 function CitationCard({ citation }: { citation: CitationData }) {
+  const domain = getCitationDomain(citation.url, citation.organization);
+
   return (
     <div className="rounded-2xl border border-white/10 bg-black/25 px-4 py-4 shadow-lg shadow-black/15 ring-1 ring-white/[0.02] transition duration-300 hover:border-teal-200/20 hover:bg-white/[0.035]">
       <p className="text-sm font-semibold leading-6 text-white">{citation.sourceTitle}</p>
       <div className="mt-3 grid gap-2 text-xs text-zinc-400 sm:grid-cols-2">
+        {domain ? (
+          <p>
+            <span className="text-zinc-500">Domain</span>
+            <span className="ml-2 text-zinc-200">{domain}</span>
+          </p>
+        ) : null}
         <p>
           <span className="text-zinc-500">Publisher</span>
           <span className="ml-2 text-zinc-200">{citation.organization}</span>
@@ -1464,7 +1523,7 @@ function CitationList({ content }: { content: string }) {
     <div className="grid gap-3 md:grid-cols-2">
       {citations.map((citation, index) => (
         <CitationCard
-          key={`${citation.organization}-${citation.sourceTitle}-${citation.publicationYear || ""}-${citation.url || ""}-${index}`}
+          key={`${getCitationDomain(citation.url, citation.organization)}-${citation.sourceTitle}-${citation.publicationYear || ""}-${citation.url || ""}-${index}`}
           citation={citation}
         />
       ))}

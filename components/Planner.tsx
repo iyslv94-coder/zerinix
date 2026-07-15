@@ -1282,6 +1282,22 @@ function normalizeSourceType(value: string): CitationData["sourceType"] {
     : "Verified source";
 }
 
+function getCitationDomain(url?: string, organization = "") {
+  if (url) {
+    try {
+      return new URL(url).hostname.replace(/^www\./i, "").toLowerCase();
+    } catch {
+      return "";
+    }
+  }
+
+  return normalizePdfText(organization)
+    .toLowerCase()
+    .replace(/\b(inc|llc|ltd|corp|company|publisher|organization)\b\.?/g, "")
+    .replace(/[^a-z0-9ığüşöçİĞÜŞÖÇ]+/gi, ".")
+    .replace(/^\.+|\.+$/g, "");
+}
+
 function parseCitations(content: string): CitationData[] {
   if (/\bsource\s+unavailable\b/i.test(content)) {
     return [];
@@ -1388,16 +1404,21 @@ function parseCitations(content: string): CitationData[] {
 
   entries.forEach((citation) => {
     const normalizedUrl = citation.url?.trim().toLowerCase().replace(/\/+$/, "");
-    const key = normalizedUrl
-      ? `url:${normalizedUrl}`
-      : [
-          "source",
-          normalizePdfText(citation.organization).toLowerCase().replace(/\W+/g, " ").trim(),
-          normalizePdfText(citation.sourceTitle).toLowerCase().replace(/\W+/g, " ").trim(),
-        ].join("|");
+    const domain = getCitationDomain(citation.url, citation.organization);
+    const titleKey = normalizePdfText(citation.sourceTitle).toLowerCase().replace(/\W+/g, " ").trim();
+    const key = domain && titleKey
+      ? `domain-title:${domain}|${titleKey}`
+      : normalizedUrl
+        ? `url:${normalizedUrl}`
+        : [
+            "source",
+            normalizePdfText(citation.organization).toLowerCase().replace(/\W+/g, " ").trim(),
+            titleKey,
+          ].join("|");
     const existing = unique.get(key);
 
     unique.set(key, {
+      ...existing,
       ...citation,
       ...(existing?.url && !citation.url ? { url: existing.url } : {}),
       ...(existing?.confidence && !citation.confidence ? { confidence: existing.confidence } : {}),
@@ -1413,10 +1434,18 @@ function Citation({ citation }: { citation?: CitationData }) {
     return null;
   }
 
+  const domain = getCitationDomain(citation.url, citation.organization);
+
   return (
     <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
       <p className="text-sm font-semibold leading-6 text-white">{citation.sourceTitle}</p>
       <div className="mt-3 grid gap-2 text-xs text-zinc-400 sm:grid-cols-2">
+        {domain ? (
+          <p>
+            <span className="text-zinc-500">Domain</span>
+            <span className="ml-2 text-zinc-200">{domain}</span>
+          </p>
+        ) : null}
         <p>
           <span className="text-zinc-500">Publisher</span>
           <span className="ml-2 text-zinc-200">{citation.organization}</span>
@@ -1465,7 +1494,7 @@ function CitationList({ content }: { content: string }) {
     <div className="space-y-3">
       {citations.map((citation, index) => (
         <Citation
-          key={`${citation.organization}-${citation.sourceTitle}-${citation.publicationYear || ""}-${citation.url || ""}-${index}`}
+          key={`${getCitationDomain(citation.url, citation.organization)}-${citation.sourceTitle}-${citation.publicationYear || ""}-${citation.url || ""}-${index}`}
           citation={citation}
         />
       ))}
@@ -2257,9 +2286,11 @@ function formatPdfCitationContent(content: string) {
       const confidence = citation.confidence ? `\n  Confidence: ${citation.confidence}` : "";
       const url = citation.url ? `\n  URL: ${citation.url}` : "";
       const sourceType = citation.sourceType ? `\n  Type: ${citation.sourceType}` : "";
+      const domain = getCitationDomain(citation.url, citation.organization);
 
       return [
         `• ${citation.sourceTitle}`,
+        ...(domain ? [`  Domain: ${domain}`] : []),
         `  Publisher: ${citation.organization}`,
         year,
         confidence,

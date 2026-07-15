@@ -81,6 +81,22 @@ function normalizeSourceType(value: string): CitationData["sourceType"] {
     : "Verified source";
 }
 
+function getCitationDomain(url?: string, organization = "") {
+  if (url) {
+    try {
+      return new URL(url).hostname.replace(/^www\./i, "").toLowerCase();
+    } catch {
+      return "";
+    }
+  }
+
+  return normalizePdfText(organization)
+    .toLowerCase()
+    .replace(/\b(inc|llc|ltd|corp|company|publisher|organization)\b\.?/g, "")
+    .replace(/[^a-z0-9ığüşöçİĞÜŞÖÇ]+/gi, ".")
+    .replace(/^\.+|\.+$/g, "");
+}
+
 function looksLikePromptOrInstruction(value: string) {
   return /\b(based on the entire report|would you invest|should i invest|what do you think|section to generate|report quality rules|write only|business idea\s*\/\s*goal|system prompt|internal instruction|validation prompt)\b/i.test(
     value
@@ -259,16 +275,21 @@ function parseCitations(content: string): CitationData[] {
 
   entries.forEach((citation) => {
     const normalizedUrl = citation.url?.trim().toLowerCase().replace(/\/+$/, "");
-    const key = normalizedUrl
-      ? `url:${normalizedUrl}`
-      : [
-          "source",
-          normalizeCitationKey(citation.organization),
-          normalizeCitationKey(citation.sourceTitle),
-        ].join("|");
+    const domain = getCitationDomain(citation.url, citation.organization);
+    const titleKey = normalizeCitationKey(citation.sourceTitle);
+    const key = domain && titleKey
+      ? `domain-title:${domain}|${titleKey}`
+      : normalizedUrl
+        ? `url:${normalizedUrl}`
+        : [
+            "source",
+            normalizeCitationKey(citation.organization),
+            titleKey,
+          ].join("|");
     const existing = unique.get(key);
 
     unique.set(key, {
+      ...existing,
       ...citation,
       ...(existing?.url && !citation.url ? { url: existing.url } : {}),
       ...(existing?.confidence && !citation.confidence ? { confidence: existing.confidence } : {}),
@@ -299,9 +320,11 @@ function formatPdfCitationContent(content: string) {
       const confidence = citation.confidence ? `\n  Confidence: ${citation.confidence}` : "";
       const url = citation.url ? `\n  URL: ${citation.url}` : "";
       const sourceType = citation.sourceType ? `\n  Type: ${citation.sourceType}` : "";
+      const domain = getCitationDomain(citation.url, citation.organization);
 
       return [
         `• ${citation.sourceTitle}`,
+        ...(domain ? [`  Domain: ${domain}`] : []),
         `  Publisher: ${citation.organization}`,
         year,
         confidence,
