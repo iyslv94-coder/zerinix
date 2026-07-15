@@ -130,20 +130,20 @@ export function AdminGlobalSearch() {
   }
 
   return (
-    <div className="relative w-full max-w-2xl">
+    <div className="relative w-full">
       <label className="relative block">
         <span className="sr-only">Search admin records</span>
-        <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-teal-200/55" />
+        <Search className="pointer-events-none absolute left-4 top-1/2 h-[1.125rem] w-[1.125rem] -translate-y-1/2 text-teal-200/60" />
         <input
           value={query}
           onChange={(event) => handleQueryChange(event.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Search users, reports, conversations..."
-          className="h-11 w-full rounded-[1.05rem] border border-white/10 bg-black/25 pl-11 pr-4 text-[13px] text-white shadow-inner shadow-white/[0.03] outline-none transition duration-300 placeholder:text-zinc-500 focus:border-teal-300/40 focus:bg-white/[0.055] focus:ring-2 focus:ring-teal-200/20"
+          className="h-[3.25rem] w-full rounded-[1.2rem] border border-white/10 bg-black/30 pl-12 pr-4 text-[14px] text-white shadow-inner shadow-white/[0.035] outline-none transition duration-300 placeholder:text-zinc-500 focus:border-teal-300/40 focus:bg-white/[0.06] focus:ring-2 focus:ring-teal-200/20"
         />
       </label>
 
-      <div className="mt-2 flex flex-wrap gap-1.5">
+      <div className="mt-2.5 flex flex-wrap gap-1.5">
         {searchFilters.map((filter) => {
           const active = activeFilters.includes(filter.id);
 

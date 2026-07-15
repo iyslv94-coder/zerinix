@@ -18,7 +18,7 @@ export type AdminSystemHealthProps = {
 
 function statusClass(status: SystemStatus["status"]) {
   if (status === "Operational") {
-    return "border-teal-300/20 bg-teal-300/10 text-teal-100";
+    return "border-emerald-300/20 bg-emerald-300/10 text-emerald-100";
   }
 
   if (status === "Degraded" || status === "Unknown") {
@@ -34,7 +34,7 @@ function statusClass(status: SystemStatus["status"]) {
 
 function dotClass(status: SystemStatus["status"]) {
   if (status === "Operational") {
-    return "bg-teal-300 shadow-[0_0_18px_rgba(45,212,191,0.5)]";
+    return "bg-emerald-300 shadow-[0_0_18px_rgba(52,211,153,0.45)]";
   }
 
   if (status === "Degraded" || status === "Unknown") {
@@ -60,12 +60,16 @@ function formatTime(value: string | null) {
   }).format(new Date(value));
 }
 
-function formatResponseTime(value: number | null) {
-  if (value === null) {
-    return "N/A";
+function statusLabel(status: SystemStatus["status"]) {
+  if (status === "Operational") {
+    return "Healthy";
   }
 
-  return `${Math.max(0, Math.round(value))} ms`;
+  if (status === "Not configured") {
+    return "Not Connected";
+  }
+
+  return status;
 }
 
 export function AdminSystemHealth({ initialStatuses }: AdminSystemHealthProps) {
@@ -110,18 +114,18 @@ export function AdminSystemHealth({ initialStatuses }: AdminSystemHealthProps) {
   }, [refreshHealth]);
 
   return (
-    <section className="mt-5 rounded-[1.35rem] border border-white/10 bg-white/[0.045] p-5 shadow-2xl shadow-black/25 backdrop-blur-xl">
+    <section className="mt-5 h-full min-h-[21rem] rounded-[1.5rem] border border-white/10 bg-white/[0.045] p-5 shadow-2xl shadow-black/25 backdrop-blur-xl lg:col-span-2 min-[1440px]:col-span-4">
       <div className="flex items-center justify-between gap-3">
         <div>
           <h2 className="text-[17px] font-semibold tracking-tight text-white">System Status</h2>
-          <p className="mt-1 text-xs text-zinc-500">Auto-refreshes every 60 seconds.</p>
+          <p className="mt-1.5 text-xs leading-5 text-zinc-500">Service health overview.</p>
         </div>
         <button
           type="button"
           onClick={() => {
             void refreshHealth();
           }}
-          className="inline-flex h-9 items-center justify-center gap-2 rounded-[0.85rem] border border-white/10 bg-black/25 px-3 text-[11px] text-zinc-300 transition duration-300 hover:-translate-y-0.5 hover:border-teal-300/25 hover:bg-white/[0.065] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200/30 disabled:cursor-not-allowed disabled:opacity-60"
+          className="inline-flex h-9 items-center justify-center gap-2 rounded-[0.85rem] border border-white/10 bg-black/25 px-3 text-[11px] text-zinc-300 transition duration-300 hover:-translate-y-0.5 hover:border-emerald-300/25 hover:bg-white/[0.065] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-200/30 disabled:cursor-not-allowed disabled:opacity-60"
           disabled={refreshing}
         >
           <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
@@ -129,34 +133,23 @@ export function AdminSystemHealth({ initialStatuses }: AdminSystemHealthProps) {
         </button>
       </div>
 
-      <div className="mt-4 space-y-2.5">
+      <div className="mt-5 overflow-hidden rounded-[1.15rem] border border-white/10 bg-black/25">
         {statuses.map((item) => (
-          <div key={item.label} className="rounded-[1rem] border border-white/10 bg-black/25 p-3 transition duration-300 hover:-translate-y-0.5 hover:border-teal-300/25 hover:bg-white/[0.055]">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
+          <div
+            key={item.label}
+            title={item.detail}
+            className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3.5 transition duration-200 last:border-b-0 hover:bg-white/[0.035]"
+          >
+            <div className="flex min-w-0 items-center gap-3">
                 <span className="relative flex h-2.5 w-2.5">
                   <span className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-40 ${dotClass(item.status)}`} />
                   <span className={`relative inline-flex h-2.5 w-2.5 rounded-full ${dotClass(item.status)}`} />
                 </span>
-                  <p className="truncate text-sm font-medium text-white">{item.label}</p>
-                </div>
-                <p className="mt-1 truncate text-xs text-zinc-500">{item.detail}</p>
-              </div>
-              <span className={`rounded-full border px-2.5 py-1 text-[11px] ${statusClass(item.status)}`}>
-                {item.status}
-              </span>
+              <p className="truncate text-sm font-medium text-white">{item.label}</p>
             </div>
-            <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-              <div className="rounded-xl border border-white/10 bg-white/[0.045] p-2.5">
-                <p className="text-zinc-600">Response</p>
-                <p className="mt-1 font-medium text-zinc-300">{formatResponseTime(item.responseTimeMs)}</p>
-              </div>
-              <div className="rounded-xl border border-white/10 bg-white/[0.045] p-2.5">
-                <p className="text-zinc-600">Success</p>
-                <p className="mt-1 font-medium text-zinc-300">{formatTime(item.lastSuccessfulCheck)}</p>
-              </div>
-            </div>
+            <span className={`shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-medium ${statusClass(item.status)}`}>
+              {statusLabel(item.status)}
+            </span>
           </div>
         ))}
       </div>

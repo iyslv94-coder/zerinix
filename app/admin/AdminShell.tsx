@@ -1,8 +1,5 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import {
-  Bell,
-} from "lucide-react";
 import { signOut } from "@/app/auth/actions";
 import { dashboardTheme } from "@/app/lib/ui/dashboard-theme";
 import { requireAdminPage } from "./admin-data";
@@ -62,75 +59,73 @@ export async function AdminShell({
         </aside>
 
         <section className="flex-1 px-4 py-4 sm:px-6 xl:px-7 xl:py-5 2xl:px-8">
-          <header className={`sticky top-3 z-30 mb-5 flex min-h-[4.25rem] flex-col gap-3 rounded-[1.65rem] p-2.5 ${dashboardTheme.surfaceStrong} lg:flex-row lg:items-center lg:justify-between`}>
+          <header className={`sticky top-3 z-30 mb-6 rounded-[1.65rem] p-4 shadow-2xl shadow-black/25 ${dashboardTheme.surfaceStrong} xl:p-5`}>
             {headerActions ? (
-              <div className="flex min-w-0 flex-1 flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-                <div>
-                  <h1 className="text-[1.65rem] font-semibold leading-none tracking-[-0.035em] text-white md:text-[2rem]">
-                    {title}
-                  </h1>
-                  <p className="mt-1.5 text-[13px] text-zinc-500">{subtitle}</p>
+              <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(18rem,0.9fr)_minmax(24rem,1.3fr)_minmax(18rem,auto)] xl:items-center">
+                <div className="min-w-0 space-y-4">
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-purple-200/70">
+                      {eyebrow}
+                    </p>
+                    <h1 className="mt-1.5 text-[1.75rem] font-semibold leading-none tracking-[-0.04em] text-white md:text-[2.15rem]">
+                      {title}
+                    </h1>
+                    <p className="mt-2 max-w-md text-[13px] leading-5 text-zinc-500">{subtitle}</p>
+                  </div>
+
+                  <details className="group relative w-full max-w-sm">
+                    <summary className={`flex cursor-pointer list-none items-center gap-3 rounded-[1.15rem] px-3 py-2.5 shadow-inner shadow-white/[0.025] ${dashboardTheme.innerSurface} ${dashboardTheme.hoverSurface}`}>
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-[10px] font-black tracking-[0.12em] text-black">
+                        {initials}
+                      </span>
+                      <span className="min-w-0 text-left">
+                        <span className="block truncate text-[13px] font-semibold text-white">
+                          {email}
+                        </span>
+                        <span className="text-[11px] text-zinc-500">{role}</span>
+                      </span>
+                    </summary>
+                    <div className={`absolute left-0 top-14 z-40 w-72 rounded-[1.45rem] p-4 ${dashboardTheme.surfaceStrong}`}>
+                      <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">
+                        Signed in as
+                      </p>
+                      <p className="mt-2 truncate text-sm font-semibold text-white">{email}</p>
+                      <p className="mt-1 text-xs text-teal-100">{role}</p>
+                      <div className="mt-4 grid gap-2">
+                        <Link
+                          href="/dashboard/settings"
+                          className="rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-zinc-300 transition hover:border-teal-300/30 hover:text-white"
+                        >
+                          Account settings
+                        </Link>
+                        <Link
+                          href="/admin/security"
+                          className="rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-zinc-300 transition hover:border-teal-300/30 hover:text-white"
+                        >
+                          Security settings
+                        </Link>
+                        <form action={signOut}>
+                          <button
+                            type="submit"
+                            className="w-full rounded-2xl border border-white/10 bg-white px-3 py-2 text-left text-sm font-semibold text-black transition hover:bg-zinc-200"
+                          >
+                            Sign out
+                          </button>
+                        </form>
+                      </div>
+                    </div>
+                  </details>
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="min-w-0">
+                  <AdminGlobalSearch />
+                </div>
+                <div className="flex flex-wrap items-center justify-start gap-2 xl:justify-end">
                   {headerActions}
                 </div>
               </div>
             ) : (
               <AdminGlobalSearch />
             )}
-
-            <div className="flex items-center gap-2">
-              <Link
-                href="/admin/logs"
-                className={`relative flex h-10 w-10 items-center justify-center rounded-[0.95rem] text-zinc-300 shadow-inner shadow-white/[0.025] ${dashboardTheme.innerSurface} ${dashboardTheme.hoverSurface} hover:text-white`}
-                aria-label="Admin notifications"
-              >
-                <span className="absolute right-2.5 top-2.5 h-1.5 w-1.5 rounded-full bg-teal-300 shadow-[0_0_12px_rgba(45,212,191,0.55)]" />
-                <Bell className="h-4 w-4" />
-              </Link>
-              <details className="group relative">
-                <summary className={`flex h-10 cursor-pointer list-none items-center gap-2.5 rounded-[0.95rem] px-2 shadow-inner shadow-white/[0.025] ${dashboardTheme.innerSurface} ${dashboardTheme.hoverSurface}`}>
-                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-[10px] font-black tracking-[0.12em] text-black">
-                    {initials}
-                  </span>
-                  <span className="hidden text-left sm:block">
-                    <span className="block max-w-44 truncate text-[13px] font-semibold text-white">
-                      {email}
-                    </span>
-                    <span className="text-[11px] text-zinc-500">{role}</span>
-                  </span>
-                </summary>
-                <div className={`absolute right-0 top-14 z-40 w-72 rounded-[1.45rem] p-4 ${dashboardTheme.surfaceStrong}`}>
-                  <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">
-                    Signed in as
-                  </p>
-                  <p className="mt-2 truncate text-sm font-semibold text-white">{email}</p>
-                  <p className="mt-1 text-xs text-teal-100">{role}</p>
-                  <div className="mt-4 grid gap-2">
-                    <Link
-                      href="/dashboard/settings"
-                      className="rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-zinc-300 transition hover:border-teal-300/30 hover:text-white"
-                    >
-                      Account settings
-                    </Link>
-                    <Link
-                      href="/admin/security"
-                      className="rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-zinc-300 transition hover:border-teal-300/30 hover:text-white"
-                    >
-                      Security settings
-                    </Link>
-                    <form action={signOut}>
-                      <button
-                        type="submit"
-                        className="w-full rounded-2xl border border-white/10 bg-white px-3 py-2 text-left text-sm font-semibold text-black transition hover:bg-zinc-200"
-                      >
-                        Sign out
-                      </button>
-                    </form>
-                  </div>
-                </div>
-              </details>
-            </div>
           </header>
 
           {hidePageHeader ? null : (

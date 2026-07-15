@@ -37,8 +37,89 @@ export type AdminDashboardData = {
   activeUsers: number;
   reportsGenerated: number;
   aiConversations: number;
+  workspaceCount: number;
+  subscriptions: number;
   monthlyRecurringRevenue: number | null;
   aiApiCost: number;
+  sourceStatus: {
+    revenue: AdminMetricStatus;
+    aiUsage: AdminMetricStatus;
+    users: AdminMetricStatus;
+    reports: AdminMetricStatus;
+    workspaces: AdminMetricStatus;
+    subscriptions: AdminMetricStatus;
+  };
+  sourceDetails: {
+    revenue: string;
+    aiUsage: string;
+    users: string;
+    reports: string;
+    workspaces: string;
+    subscriptions: string;
+  };
+  financials: {
+    revenue: number | null;
+    aiCost: number;
+    grossProfit: number | null;
+    grossMargin: number | null;
+    netProfit: number | null;
+    averageCostPerUser: number | null;
+    averageCostPerReport: number | null;
+    dailyAiCost: number | null;
+    weeklyAiCost: number | null;
+    monthlyAiCost: number | null;
+    allTimeAiCost: number | null;
+  };
+  openAiAnalytics: {
+    inputTokens: number;
+    outputTokens: number;
+    cachedTokens: number;
+    totalTokens: number;
+    cost: number;
+    costPerUser: number | null;
+    costPerReport: number | null;
+    costRanges: {
+      last24h: number | null;
+      last7d: number | null;
+      last30d: number | null;
+      allTime: number | null;
+    };
+    dailyCostHistory: AdminChartSeries[];
+    featureCosts: Array<{
+      feature: "AI Chat" | "Reports" | "AI CEO" | "Other AI features";
+      costUsd: number | null;
+      status: AdminMetricStatus;
+    }>;
+    costAlerts: Array<{
+      id: string;
+      label: string;
+      thresholdUsd: number | null;
+      currentUsd: number | null;
+      status: "configured" | "not_configured";
+    }>;
+    modelUsage: Array<{
+      model: string;
+      requests: number;
+      tokens: number;
+      costUsd: number;
+      status: AdminMetricStatus;
+    }>;
+    unknownModels: Array<{ model: string; requests: number; tokens: number }>;
+  };
+  userAnalytics: {
+    freeUsers: number;
+    proUsers: number;
+    businessUsers: number;
+    growthRate: number | null;
+    churnRate: number | null;
+    averageUsage: number | null;
+  };
+  topReports: {
+    mostExpensive: Array<{ title: string; value: number; detail: string }>;
+    mostUsed: Array<{ title: string; value: number; detail: string }>;
+    mostGenerated: Array<{ title: string; value: number; detail: string }>;
+  };
+  alerts: AdminActivityItem[];
   userGrowth: Array<{ label: string; value: number }>;
   reportTypeDistribution: Array<{ label: string; value: number }>;
   planDistribution: Array<{ label: string; value: number }>;
@@ -68,6 +149,13 @@ export type AdminDashboardData = {
 };
 
 export type AdminDateRangeKey = "24h" | "7d" | "30d" | "custom";
+
+export type AdminMetricStatus =
+  | "LIVE"
+  | "ESTIMATED"
+  | "NOT CONNECTED"
+  | "NO DATA"
+  | "ERROR";
 
 export type AdminDateRange = {
   key: AdminDateRangeKey;
@@ -149,6 +237,42 @@ let cachedHealth:
   | { expiresAt: number; data: AdminSystemStatus[] }
   | null = null;
 
+const HEALTH_CHECK_TIMEOUT_MS = 2500;
+const OPENAI_COST_CENTER_START = new Date(Date.UTC(2020, 0, 1));
+const OPENAI_ORGANIZATION_USAGE_URL = "https://api.openai.com/v1/organization/usage/completions";
+const OPENAI_ORGANIZATION_COSTS_URL = "https://api.openai.com/v1/organization/costs";
+
+type OpenAiModelUsageSummary = {
+  model: string;
+  requests: number;
+  inputTokens: number;
+  outputTokens: number;
+  cachedTokens: number;
+  tokens: number;
+  costUsd: number;
+  status: AdminMetricStatus;
+};
+
+type OpenAiCostCenterData = {
+  status: AdminMetricStatus;
+  detail: string;
+  inputTokens: number;
+  outputTokens: number;
+  cachedTokens: number;
+  totalTokens: number;
+  costUsd: number;
+  modelUsage: OpenAiModelUsageSummary[];
+  dailyCostHistory: AdminChartSeries[];
+  costRanges: {
+    last24h: number | null;
+    last7d: number | null;
+    last30d: number | null;
+    allTime: number | null;
+  };
+  featureCosts: AdminDashboardData["openAiAnalytics"]["featureCosts"];
+  costAlerts: AdminDashboardData["openAiAnalytics"]["costAlerts"];
+};
+
 function isLocalAdminMockMode() {
   return process.env.NODE_ENV !== "production" && !getSupabaseServiceRoleKey();
 }
@@ -169,6 +293,38 @@ function readNumber(value: unknown) {
   }
 
   return 0;
+}
+
+function roundUsd(value: number) {
+  return Number(value.toFixed(6));
+}
+
+function unixSeconds(value: Date) {
+  return Math.floor(value.getTime() / 1000);
+}
+
+function readNestedNumber(value: unknown, path: string[]) {
+  let current = value;
+
+  for (const key of path) {
+    if (!current || typeof current !== "object") {
+      return 0;
+    }
+
+    current = (current as Record<string, unknown>)[key];
+  }
+
+  return readNumber(current);
+}
+
+function getOpenAiCostCenterKey() {
+  const key =
+    process.env.OPENAI_ADMIN_API_KEY ||
+    (process.env.NODE_ENV === "production"
+      ? process.env.OPENAI_API_KEY_PROD
+      : process.env.OPENAI_API_KEY_DEV);
+
+  return readString(key);
 }
 
 function normalizePlan(value: unknown) {
@@ -330,21 +486,37 @@ function normalizeStatusFromFailureRate(failed: number, total: number): AdminSys
   return "Operational";
 }
 
-function buildMockSeries(range: AdminDateRange, seed: number): AdminChartSeries[] {
-  return buildTimeSeries(
-    Array.from({ length: range.bucket === "hour" ? 10 : 7 }, (_, index) => {
-      const bucketMs = range.bucket === "hour" ? 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
-      const createdAt = new Date(new Date(range.fromIso).getTime() + index * bucketMs).toISOString();
+async function fetchHealth(
+  url: string,
+  init: RequestInit,
+  timeoutMs = HEALTH_CHECK_TIMEOUT_MS
+) {
+  const controller = new AbortController();
+  const startedAt = Date.now();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
 
-      return {
-        created_at: createdAt,
-        value: Math.max(0, Math.round(seed + Math.sin(index + seed) * seed * 0.24 + index * 1.7)),
-      };
-    }),
-    range,
-    "created_at",
-    "value"
-  );
+  try {
+    const response = await fetch(url, {
+      ...init,
+      signal: controller.signal,
+      cache: "no-store",
+    });
+
+    return {
+      ok: response.ok,
+      status: response.status,
+      responseTimeMs: Date.now() - startedAt,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      status: 0,
+      responseTimeMs: Date.now() - startedAt,
+      error: error instanceof Error ? error.message : "Provider request failed.",
+    };
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function buildMockAdminUsers(): AdminUserRow[] {
@@ -441,116 +613,134 @@ function buildMockSystemStatus(): AdminSystemStatus[] {
   ];
 }
 
-function buildMockAdminActivity(range: AdminDateRange): AdminActivityItem[] {
-  const now = new Date(range.toIso);
-
-  return [
-    {
-      id: "mock:user:1",
-      label: "User registered",
-      detail: "founder@zerinix.local",
-      severity: "success",
-      createdAt: new Date(now.getTime() - 70 * 60 * 1000).toISOString(),
-      href: "/admin/users/00000000-0000-4000-8000-000000000001",
-    },
-    {
-      id: "mock:report:1",
-      label: "Report created",
-      detail: "Local investor report validation",
-      severity: "info",
-      createdAt: new Date(now.getTime() - 2 * 60 * 60 * 1000).toISOString(),
-      href: "/admin/reports",
-    },
-    {
-      id: "mock:conversation:1",
-      label: "AI conversation created",
-      detail: "Local admin workspace test",
-      severity: "info",
-      createdAt: new Date(now.getTime() - 3 * 60 * 60 * 1000).toISOString(),
-      href: "/admin/ai-usage",
-    },
-    {
-      id: "mock:failure:1",
-      label: "AI request failed",
-      detail: "Local mock failed job example",
-      severity: "error",
-      createdAt: new Date(now.getTime() - 5 * 60 * 60 * 1000).toISOString(),
-      href: "/admin/logs",
-    },
-  ];
-}
-
 function buildMockAdminDashboardData(dateRange: AdminDateRange): AdminDashboardData {
-  const recentUsers = buildMockAdminUsers();
-  const recentActivity = buildMockAdminActivity(dateRange);
+  const recentUsers: AdminUserRow[] = [];
+  const recentActivity: AdminActivityItem[] = [];
   const charts = {
-    userGrowth: buildMockSeries(dateRange, 4),
-    activeUsers: buildMockSeries(dateRange, 3),
-    reportsGenerated: buildMockSeries(dateRange, 6),
-    aiRequests: buildMockSeries(dateRange, 18),
-    tokenUsage: buildMockSeries(dateRange, 6800),
-    estimatedAiCost: buildMockSeries(dateRange, 3),
+    userGrowth: [],
+    activeUsers: [],
+    reportsGenerated: [],
+    aiRequests: [],
+    tokenUsage: [],
+    estimatedAiCost: [],
     revenue: [],
   };
   const usageSummary = {
-    totalRequests: 124,
-    totalTokens: 294_250,
-    cacheHits: 18,
-    failedRequests: 2,
+    totalRequests: 0,
+    totalTokens: 0,
+    cacheHits: 0,
+    failedRequests: 0,
   };
-  const recentErrors = [
-    {
-      id: "mock:error:1",
-      endpoint: "/api/plan",
-      status: "failed",
-      createdAt: new Date(new Date(dateRange.toIso).getTime() - 5 * 60 * 60 * 1000).toISOString(),
-    },
-  ];
+  const recentErrors: Array<{ id: string; endpoint: string; status: string; createdAt: string }> = [];
 
   return {
     dateRange,
-    totalUsers: recentUsers.length,
-    activeUsers: recentUsers.filter((user) => user.lastSignInAt).length,
-    reportsGenerated: 23,
-    aiConversations: 47,
+    totalUsers: 0,
+    activeUsers: 0,
+    reportsGenerated: 0,
+    aiConversations: 0,
+    workspaceCount: 0,
+    subscriptions: 0,
     monthlyRecurringRevenue: null,
-    aiApiCost: 28.77,
-    userGrowth: [
-      { label: "Local", value: recentUsers.length },
-      { label: "Mock", value: 5 },
+    aiApiCost: 0,
+    sourceStatus: {
+      revenue: "NOT CONNECTED",
+      aiUsage: "NOT CONNECTED",
+      users: "NOT CONNECTED",
+      reports: "NOT CONNECTED",
+      workspaces: "NOT CONNECTED",
+      subscriptions: "NOT CONNECTED",
+    },
+    sourceDetails: {
+      revenue: "Stripe billing sync is unavailable without SUPABASE_SERVICE_ROLE_KEY.",
+      aiUsage: "AI usage records are unavailable without SUPABASE_SERVICE_ROLE_KEY.",
+      users: "Supabase Auth users are unavailable without SUPABASE_SERVICE_ROLE_KEY.",
+      reports: "Report records are unavailable without SUPABASE_SERVICE_ROLE_KEY.",
+      workspaces: "Workspace records are unavailable without SUPABASE_SERVICE_ROLE_KEY.",
+      subscriptions: "Billing profile records are unavailable without SUPABASE_SERVICE_ROLE_KEY.",
+    },
+    financials: {
+      revenue: null,
+      aiCost: 0,
+      grossProfit: null,
+      grossMargin: null,
+      netProfit: null,
+      averageCostPerUser: null,
+      averageCostPerReport: null,
+      dailyAiCost: null,
+      weeklyAiCost: null,
+      monthlyAiCost: null,
+      allTimeAiCost: null,
+    },
+    openAiAnalytics: {
+      inputTokens: 0,
+      outputTokens: 0,
+      cachedTokens: 0,
+      totalTokens: 0,
+      cost: 0,
+      costPerUser: null,
+      costPerReport: null,
+      costRanges: {
+        last24h: null,
+        last7d: null,
+        last30d: null,
+        allTime: null,
+      },
+      dailyCostHistory: [],
+      featureCosts: [
+        { feature: "AI Chat", costUsd: null, status: "NOT CONNECTED" },
+        { feature: "Reports", costUsd: null, status: "NOT CONNECTED" },
+        { feature: "AI CEO", costUsd: null, status: "NOT CONNECTED" },
+        { feature: "Other AI features", costUsd: null, status: "NOT CONNECTED" },
+      ],
+      costAlerts: buildOpenAiCostAlerts(
+        { last24h: null, last7d: null, last30d: null, allTime: null },
+        0,
+        []
+      ),
+      modelUsage: [],
+      unknownModels: [],
+    },
+    userAnalytics: {
+      freeUsers: 0,
+      proUsers: 0,
+      businessUsers: 0,
+      growthRate: null,
+      churnRate: null,
+      averageUsage: null,
+    },
+    topReports: {
+      mostExpensive: [],
+      mostUsed: [],
+      mostGenerated: [],
+    },
+    alerts: [
+      {
+        id: "local:service-role-missing",
+        label: "Admin data source not connected",
+        detail: "SUPABASE_SERVICE_ROLE_KEY is required for live admin metrics.",
+        severity: "warning",
+        createdAt: new Date().toISOString(),
+      },
     ],
-    reportTypeDistribution: [
-      { label: "Business Plan", value: 14 },
-      { label: "Market Analysis", value: 9 },
-    ],
-    planDistribution: [
-      { label: "free", value: 1 },
-      { label: "pro", value: 1 },
-      { label: "business", value: 1 },
-    ],
+    userGrowth: [],
+    reportTypeDistribution: [],
+    planDistribution: [],
     recentUsers,
     recentActivity,
     charts,
     revenueOverview: buildRevenueOverview(),
     costControl: {
-      totalTokensToday: 42_800,
-      totalTokensThisMonth: usageSummary.totalTokens,
-      estimatedCostToday: 4.18,
-      estimatedCostThisMonth: 28.77,
-      averageCostPerConversation: 0.61,
-      averageCostPerReport: 1.25,
-      failedAiRequests: usageSummary.failedRequests,
-      costTrendPercent: 8.4,
-      highestUsageUsers: recentUsers.map((user) => ({
-        userId: user.id,
-        tokens: user.totalTokens,
-        costUsd: user.estimatedAiCostUsd,
-      })),
-      highestCostRoutes: [
-        { route: "/api/plan", requests: 38, costUsd: 15.2 },
-        { route: "/api/market-analysis", requests: 19, costUsd: 8.6 },
-        { route: "/api/chat", requests: 67, costUsd: 4.97 },
-      ],
+      totalTokensToday: 0,
+      totalTokensThisMonth: 0,
+      estimatedCostToday: null,
+      estimatedCostThisMonth: null,
+      averageCostPerConversation: null,
+      averageCostPerReport: null,
+      failedAiRequests: 0,
+      costTrendPercent: null,
+      highestUsageUsers: [],
+      highestCostRoutes: [],
       dateRanges: ["24 hours", "7 days", "30 days", "Custom range"],
     },
     usageSummary,
@@ -565,9 +755,9 @@ function buildMockAdminDashboardData(dateRange: AdminDateRange): AdminDashboardD
     }),
     notifications: {
       generatedAt: new Date().toISOString(),
-      newUsers: recentActivity.filter((item) => item.id.includes("user")).slice(0, 5),
-      reports: recentActivity.filter((item) => item.id.includes("report")).slice(0, 5),
-      failedJobs: recentActivity.filter((item) => item.id.includes("failure")).slice(0, 5),
+      newUsers: [],
+      reports: [],
+      failedJobs: [],
     },
   };
 }
@@ -959,7 +1149,7 @@ export async function loadAdminUserDetail(userId: string) {
   };
 }
 
-async function countTable(table: string, range?: AdminDateRange) {
+async function countTableDetailed(table: string, range?: AdminDateRange) {
   const serviceClient = createServiceRoleClient();
   let query = serviceClient
     .from(table)
@@ -972,19 +1162,34 @@ async function countTable(table: string, range?: AdminDateRange) {
   const { count, error } = await query;
 
   if (error) {
-    return 0;
+    console.error("[admin:data] table count failed", {
+      table,
+      message: error.message,
+      code: error.code,
+    });
+
+    return {
+      count: 0,
+      status: "NO DATA" as AdminMetricStatus,
+      detail: `${table} could not be queried.`,
+    };
   }
 
-  return count || 0;
+  return {
+    count: count || 0,
+    status: "LIVE" as AdminMetricStatus,
+    detail: `Read from ${table}.`,
+  };
 }
 
 async function loadRecentUsage(range: AdminDateRange) {
   const serviceClient = createServiceRoleClient();
   const { data, count } = await serviceClient
     .from("ai_usage_events")
-    .select("id,endpoint,model,status,total_tokens,estimated_cost_usd,cache_hit,created_at", {
-      count: "exact",
-    })
+    .select(
+      "id,user_id,endpoint,report_field,model,status,prompt_tokens,completion_tokens,total_tokens,estimated_cost_usd,cache_hit,metadata,created_at",
+      { count: "exact" }
+    )
     .gte("created_at", range.fromIso)
     .lte("created_at", range.toIso)
     .order("created_at", { ascending: false })
@@ -1021,17 +1226,50 @@ async function loadReportDistribution() {
   return [...map.entries()].map(([label, value]) => ({ label, value }));
 }
 
-async function loadPlanDistribution() {
+async function loadBillingSummary() {
   const serviceClient = createServiceRoleClient();
-  const { data } = await serviceClient.from("user_billing_profiles").select("plan_tier");
+  const { data, error } = await serviceClient
+    .from("user_billing_profiles")
+    .select("plan_tier,stripe_subscription_status");
   const map = new Map<string, number>();
+  let activePaidSubscriptions = 0;
+
+  if (error) {
+    console.error("[admin:data] billing summary query failed", {
+      message: error.message,
+      code: error.code,
+    });
+
+    return {
+      planDistribution: [] as Array<{ label: string; value: number }>,
+      activePaidSubscriptions: 0,
+      status: "ERROR" as AdminMetricStatus,
+      detail: "Billing profiles could not be queried.",
+    };
+  }
 
   (data || []).forEach((row) => {
     const label = normalizePlan(row.plan_tier);
+    const subscriptionStatus = readString(row.stripe_subscription_status).toLowerCase();
+
     map.set(label, (map.get(label) || 0) + 1);
+
+    if (
+      label !== "free" &&
+      ["active", "trialing"].includes(subscriptionStatus)
+    ) {
+      activePaidSubscriptions += 1;
+    }
   });
 
-  return [...map.entries()].map(([label, value]) => ({ label, value }));
+  return {
+    planDistribution: [...map.entries()].map(([label, value]) => ({ label, value })),
+    activePaidSubscriptions,
+    status: (data || []).length ? ("LIVE" as const) : ("NO DATA" as const),
+    detail: (data || []).length
+      ? "Read from user_billing_profiles."
+      : "No billing profile records exist yet.",
+  };
 }
 
 async function loadUserGrowth() {
@@ -1109,6 +1347,429 @@ function buildTimeSeries<T extends object>(
   return buckets.map(({ label, value }) => ({ label, value }));
 }
 
+async function fetchOpenAiOrganizationData(
+  endpoint: string,
+  key: string,
+  params: Record<string, string | number>
+) {
+  const allBuckets: Array<Record<string, unknown>> = [];
+  let page: string | null = null;
+
+  for (let index = 0; index < 20; index += 1) {
+    const url = new URL(endpoint);
+
+    Object.entries(params).forEach(([paramKey, value]) => {
+      url.searchParams.set(paramKey, String(value));
+    });
+
+    if (page) {
+      url.searchParams.set("page", page);
+    }
+
+    const response = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${key}`,
+        Accept: "application/json",
+      },
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      const body = await response.text().catch(() => "");
+      throw new Error(`OpenAI organization API returned ${response.status}: ${body.slice(0, 240)}`);
+    }
+
+    const payload = (await response.json()) as Record<string, unknown>;
+    const buckets = Array.isArray(payload.data) ? payload.data : [];
+
+    allBuckets.push(...(buckets as Array<Record<string, unknown>>));
+
+    const nextPage = readString(payload.next_page);
+    const hasMore = Boolean(payload.has_more);
+
+    if (!hasMore || !nextPage) {
+      break;
+    }
+
+    page = nextPage;
+  }
+
+  return allBuckets;
+}
+
+function extractOpenAiCostFromResult(result: Record<string, unknown>) {
+  return (
+    readNestedNumber(result, ["amount", "value"]) ||
+    readNestedNumber(result, ["amount", "usd"]) ||
+    readNumber(result.amount) ||
+    readNumber(result.cost) ||
+    readNumber(result.cost_usd)
+  );
+}
+
+function sumOpenAiCostBuckets(buckets: Array<Record<string, unknown>>) {
+  return buckets.reduce((sum, bucket) => {
+    const results = Array.isArray(bucket.results) ? bucket.results : [];
+    const bucketCost = results.reduce((resultSum, result) => {
+      if (!result || typeof result !== "object") {
+        return resultSum;
+      }
+
+      return resultSum + extractOpenAiCostFromResult(result as Record<string, unknown>);
+    }, 0);
+
+    return sum + bucketCost;
+  }, 0);
+}
+
+function buildOpenAiDailyCostHistory(buckets: Array<Record<string, unknown>>) {
+  return buckets.map((bucket) => {
+    const startTime = readNumber(bucket.start_time);
+    const label = startTime
+      ? formatDayLabel(new Date(startTime * 1000).toISOString())
+      : "Day";
+
+    return {
+      label,
+      value: roundUsd(sumOpenAiCostBuckets([bucket])),
+    };
+  });
+}
+
+function buildOpenAiModelCostMap(buckets: Array<Record<string, unknown>>) {
+  const map = new Map<string, number>();
+
+  buckets.forEach((bucket) => {
+    const results = Array.isArray(bucket.results) ? bucket.results : [];
+
+    results.forEach((result) => {
+      if (!result || typeof result !== "object") {
+        return;
+      }
+
+      const row = result as Record<string, unknown>;
+      const model = readString(row.model);
+
+      if (!model) {
+        return;
+      }
+
+      map.set(model, (map.get(model) || 0) + extractOpenAiCostFromResult(row));
+    });
+  });
+
+  return map;
+}
+
+function parseOpenAiUsageBuckets(
+  buckets: Array<Record<string, unknown>>,
+  officialCostUsd: number,
+  officialModelCosts: Map<string, number>
+) {
+  const modelMap = new Map<string, OpenAiModelUsageSummary>();
+  let inputTokens = 0;
+  let outputTokens = 0;
+  let cachedTokens = 0;
+  let totalTokens = 0;
+
+  buckets.forEach((bucket) => {
+    const results = Array.isArray(bucket.results) ? bucket.results : [];
+
+    results.forEach((result) => {
+      if (!result || typeof result !== "object") {
+        return;
+      }
+
+      const row = result as Record<string, unknown>;
+      const model = readString(row.model, "unknown");
+      const rowInputTokens = readNumber(row.input_tokens);
+      const rowOutputTokens = readNumber(row.output_tokens);
+      const rowCachedTokens = readNumber(row.input_cached_tokens);
+      const rowTokens = rowInputTokens + rowOutputTokens;
+      const summary = modelMap.get(model) || {
+        model,
+        requests: 0,
+        inputTokens: 0,
+        outputTokens: 0,
+        cachedTokens: 0,
+        tokens: 0,
+        costUsd: 0,
+        status: "LIVE" as const,
+      };
+
+      summary.requests += readNumber(row.num_model_requests) || 1;
+      summary.inputTokens += rowInputTokens;
+      summary.outputTokens += rowOutputTokens;
+      summary.cachedTokens += rowCachedTokens;
+      summary.tokens += rowTokens;
+
+      inputTokens += rowInputTokens;
+      outputTokens += rowOutputTokens;
+      cachedTokens += rowCachedTokens;
+      totalTokens += rowTokens;
+      modelMap.set(model, summary);
+    });
+  });
+
+  const hasOfficialModelCosts = officialModelCosts.size > 0;
+  const modelUsage = [...modelMap.values()].map((model) => {
+    const groupedCost = officialModelCosts.get(model.model);
+
+    return {
+      ...model,
+      costUsd:
+        typeof groupedCost === "number"
+          ? roundUsd(groupedCost)
+          : totalTokens > 0
+            ? roundUsd((officialCostUsd * model.tokens) / totalTokens)
+            : 0,
+      status: hasOfficialModelCosts ? "LIVE" as const : "ESTIMATED" as const,
+    };
+  });
+
+  return {
+    inputTokens,
+    outputTokens,
+    cachedTokens,
+    totalTokens,
+    modelUsage: modelUsage.sort((a, b) => b.costUsd - a.costUsd),
+  };
+}
+
+function mapAiFeature(value: unknown): OpenAiCostCenterData["featureCosts"][number]["feature"] {
+  const text = readString(value).toLowerCase();
+
+  if (text.includes("chat")) {
+    return "AI Chat";
+  }
+
+  if (text.includes("plan") || text.includes("market") || text.includes("report")) {
+    return "Reports";
+  }
+
+  if (text.includes("ceo")) {
+    return "AI CEO";
+  }
+
+  return "Other AI features";
+}
+
+function buildOpenAiFeatureCosts(
+  usage: Array<Record<string, unknown>>,
+  officialCostUsd: number,
+  status: AdminMetricStatus
+): OpenAiCostCenterData["featureCosts"] {
+  const features: OpenAiCostCenterData["featureCosts"] = [
+    { feature: "AI Chat", costUsd: null, status: "NO DATA" },
+    { feature: "Reports", costUsd: null, status: "NO DATA" },
+    { feature: "AI CEO", costUsd: null, status: "NO DATA" },
+    { feature: "Other AI features", costUsd: null, status: "NO DATA" },
+  ];
+
+  if (status !== "LIVE" || officialCostUsd <= 0 || !usage.length) {
+    return features;
+  }
+
+  const localCostTotal = usage.reduce((sum, row) => sum + readNumber(row.estimated_cost_usd), 0);
+  const featureTotals = new Map<string, number>();
+
+  usage.forEach((row) => {
+    const feature = mapAiFeature(readString(row.endpoint) || readString(row.report_field));
+    const weight = localCostTotal > 0 ? readNumber(row.estimated_cost_usd) : 1;
+
+    featureTotals.set(feature, (featureTotals.get(feature) || 0) + weight);
+  });
+
+  const denominator = [...featureTotals.values()].reduce((sum, value) => sum + value, 0);
+
+  return features.map((item) => {
+    const value = featureTotals.get(item.feature) || 0;
+
+    return {
+      ...item,
+      costUsd: denominator > 0 ? roundUsd((officialCostUsd * value) / denominator) : null,
+      status: value > 0 ? "ESTIMATED" : "NO DATA",
+    };
+  });
+}
+
+function readCostLimitEnv(name: string) {
+  const value = readNumber(process.env[name]);
+
+  return value > 0 ? value : null;
+}
+
+function buildOpenAiCostAlerts(
+  ranges: OpenAiCostCenterData["costRanges"],
+  totalUsers: number,
+  usage: Array<Record<string, unknown>>
+): OpenAiCostCenterData["costAlerts"] {
+  const dailyThreshold = readCostLimitEnv("OPENAI_DAILY_COST_LIMIT_USD");
+  const weeklyThreshold = readCostLimitEnv("OPENAI_WEEKLY_COST_LIMIT_USD");
+  const monthlyThreshold = readCostLimitEnv("OPENAI_MONTHLY_COST_LIMIT_USD");
+  const perUserThreshold = readCostLimitEnv("OPENAI_COST_LIMIT_PER_USER_USD");
+  const userCostMap = new Map<string, number>();
+
+  usage.forEach((row) => {
+    const userId = readString(row.user_id, "unknown");
+    userCostMap.set(userId, (userCostMap.get(userId) || 0) + readNumber(row.estimated_cost_usd));
+  });
+
+  const maxUserCost = [...userCostMap.values()].sort((a, b) => b - a)[0] ?? null;
+
+  return [
+    {
+      id: "openai-cost-daily",
+      label: "Daily limit",
+      thresholdUsd: dailyThreshold,
+      currentUsd: ranges.last24h,
+      status: dailyThreshold ? "configured" as const : "not_configured" as const,
+    },
+    {
+      id: "openai-cost-weekly",
+      label: "Weekly limit",
+      thresholdUsd: weeklyThreshold,
+      currentUsd: ranges.last7d,
+      status: weeklyThreshold ? "configured" as const : "not_configured" as const,
+    },
+    {
+      id: "openai-cost-monthly",
+      label: "Monthly limit",
+      thresholdUsd: monthlyThreshold,
+      currentUsd: ranges.last30d,
+      status: monthlyThreshold ? "configured" as const : "not_configured" as const,
+    },
+    {
+      id: "openai-cost-user",
+      label: "Per-user cost threshold",
+      thresholdUsd: perUserThreshold,
+      currentUsd: totalUsers > 0 ? maxUserCost : null,
+      status: perUserThreshold ? "configured" as const : "not_configured" as const,
+    },
+  ];
+}
+
+function disconnectedOpenAiCostCenter(detail: string): OpenAiCostCenterData {
+  const emptyRanges = {
+    last24h: null,
+    last7d: null,
+    last30d: null,
+    allTime: null,
+  };
+
+  return {
+    status: "NOT CONNECTED",
+    detail,
+    inputTokens: 0,
+    outputTokens: 0,
+    cachedTokens: 0,
+    totalTokens: 0,
+    costUsd: 0,
+    modelUsage: [],
+    dailyCostHistory: [],
+    costRanges: emptyRanges,
+    featureCosts: [
+      { feature: "AI Chat", costUsd: null, status: "NOT CONNECTED" },
+      { feature: "Reports", costUsd: null, status: "NOT CONNECTED" },
+      { feature: "AI CEO", costUsd: null, status: "NOT CONNECTED" },
+      { feature: "Other AI features", costUsd: null, status: "NOT CONNECTED" },
+    ],
+    costAlerts: buildOpenAiCostAlerts(emptyRanges, 0, []),
+  };
+}
+
+async function loadOpenAiCostCenter(input: {
+  range: AdminDateRange;
+  usage: Array<Record<string, unknown>>;
+  totalUsers: number;
+}): Promise<OpenAiCostCenterData> {
+  const key = getOpenAiCostCenterKey();
+
+  if (!key) {
+    return disconnectedOpenAiCostCenter("OpenAI organization usage is not connected. Configure OPENAI_ADMIN_API_KEY or the active OpenAI API key.");
+  }
+
+  const now = new Date();
+  const selectedStart = new Date(input.range.fromIso);
+
+  try {
+    const [selectedUsage, selectedCosts, costs24h, costs7d, costs30d, costsAllTime] =
+      await Promise.all([
+        fetchOpenAiOrganizationData(OPENAI_ORGANIZATION_USAGE_URL, key, {
+          start_time: unixSeconds(selectedStart),
+          end_time: unixSeconds(new Date(input.range.toIso)),
+          bucket_width: input.range.bucket === "hour" ? "1h" : "1d",
+          group_by: "model",
+          limit: 180,
+        }),
+        fetchOpenAiOrganizationData(OPENAI_ORGANIZATION_COSTS_URL, key, {
+          start_time: unixSeconds(selectedStart),
+          end_time: unixSeconds(new Date(input.range.toIso)),
+          bucket_width: "1d",
+          group_by: "model",
+          limit: 180,
+        }),
+        fetchOpenAiOrganizationData(OPENAI_ORGANIZATION_COSTS_URL, key, {
+          start_time: unixSeconds(startOfUtcHour(-23)),
+          end_time: unixSeconds(now),
+          bucket_width: "1d",
+          limit: 7,
+        }),
+        fetchOpenAiOrganizationData(OPENAI_ORGANIZATION_COSTS_URL, key, {
+          start_time: unixSeconds(startOfUtcDay(-6)),
+          end_time: unixSeconds(now),
+          bucket_width: "1d",
+          limit: 14,
+        }),
+        fetchOpenAiOrganizationData(OPENAI_ORGANIZATION_COSTS_URL, key, {
+          start_time: unixSeconds(startOfUtcDay(-29)),
+          end_time: unixSeconds(now),
+          bucket_width: "1d",
+          limit: 45,
+        }),
+        fetchOpenAiOrganizationData(OPENAI_ORGANIZATION_COSTS_URL, key, {
+          start_time: unixSeconds(OPENAI_COST_CENTER_START),
+          end_time: unixSeconds(now),
+          bucket_width: "1d",
+          limit: 1800,
+        }),
+      ]);
+    const selectedCost = roundUsd(sumOpenAiCostBuckets(selectedCosts));
+    const parsedUsage = parseOpenAiUsageBuckets(
+      selectedUsage,
+      selectedCost,
+      buildOpenAiModelCostMap(selectedCosts)
+    );
+    const costRanges = {
+      last24h: roundUsd(sumOpenAiCostBuckets(costs24h)),
+      last7d: roundUsd(sumOpenAiCostBuckets(costs7d)),
+      last30d: roundUsd(sumOpenAiCostBuckets(costs30d)),
+      allTime: roundUsd(sumOpenAiCostBuckets(costsAllTime)),
+    };
+
+    return {
+      status: "LIVE",
+      detail: "Read from OpenAI organization Usage and Costs APIs.",
+      inputTokens: parsedUsage.inputTokens,
+      outputTokens: parsedUsage.outputTokens,
+      cachedTokens: parsedUsage.cachedTokens,
+      totalTokens: parsedUsage.totalTokens,
+      costUsd: selectedCost,
+      modelUsage: parsedUsage.modelUsage,
+      dailyCostHistory: buildOpenAiDailyCostHistory(selectedCosts),
+      costRanges,
+      featureCosts: buildOpenAiFeatureCosts(input.usage, selectedCost, "LIVE"),
+      costAlerts: buildOpenAiCostAlerts(costRanges, input.totalUsers, input.usage),
+    };
+  } catch (error) {
+    console.error("[admin:openai-cost-center] official usage/cost fetch failed", {
+      message: error instanceof Error ? error.message : String(error),
+    });
+
+    return disconnectedOpenAiCostCenter("OpenAI organization Usage or Costs API is unavailable for the configured key.");
+  }
+}
+
 async function loadAdminChartData(authUsers: User[], range: AdminDateRange) {
   const serviceClient = createServiceRoleClient();
   const [reports, usage, revenue] = await Promise.all([
@@ -1128,7 +1789,7 @@ async function loadAdminChartData(authUsers: User[], range: AdminDateRange) {
       .limit(5000),
     serviceClient
       .from("stripe_invoices")
-      .select("created_at,amount_paid")
+      .select("created_at,total_cents,status")
       .gte("created_at", range.fromIso)
       .lte("created_at", range.toIso)
       .order("created_at", { ascending: true })
@@ -1136,6 +1797,12 @@ async function loadAdminChartData(authUsers: User[], range: AdminDateRange) {
   ]);
   const usersInRange = authUsers.filter((user) => isWithinRange(user.created_at || "", range));
   const activeUsersInRange = authUsers.filter((user) => isWithinRange(user.last_sign_in_at || "", range));
+  const paidRevenueRows = (revenue.data || [])
+    .filter((row) => ["paid", "succeeded", "complete"].includes(readString(row.status).toLowerCase()))
+    .map((row) => ({
+      created_at: readString(row.created_at),
+      revenue_usd: readNumber(row.total_cents) / 100,
+    }));
 
   return {
     userGrowth: buildTimeSeries(usersInRange, range, "created_at"),
@@ -1144,7 +1811,57 @@ async function loadAdminChartData(authUsers: User[], range: AdminDateRange) {
     aiRequests: buildTimeSeries(usage.data || [], range, "created_at"),
     tokenUsage: buildTimeSeries(usage.data || [], range, "created_at", "total_tokens"),
     estimatedAiCost: buildTimeSeries(usage.data || [], range, "created_at", "estimated_cost_usd"),
-    revenue: buildTimeSeries(revenue.data || [], range, "created_at", "amount_paid"),
+    revenue: buildTimeSeries(paidRevenueRows, range, "created_at", "revenue_usd"),
+  };
+}
+
+async function loadRevenueSummary(range: AdminDateRange) {
+  const stripe = getStripeConfiguration();
+  if (!stripe.configured || !stripe.enabled) {
+    const missing = stripe.enabled
+      ? stripe.missing.join(", ")
+      : "ENABLE_STRIPE_BILLING";
+
+    return {
+      value: null,
+      status: "NOT CONNECTED" as AdminMetricStatus,
+      detail: `Stripe is not connected. Missing or disabled: ${missing || "Stripe billing"}.`,
+    };
+  }
+
+  const serviceClient = createServiceRoleClient();
+  const { data, error } = await serviceClient
+    .from("stripe_invoices")
+    .select("created_at,total_cents,status,currency")
+    .gte("created_at", range.fromIso)
+    .lte("created_at", range.toIso)
+    .order("created_at", { ascending: true })
+    .limit(5000);
+
+  if (error) {
+    console.error("[admin:data] revenue query failed", {
+      message: error.message,
+      code: error.code,
+    });
+
+    return {
+      value: null,
+      status: "ERROR" as AdminMetricStatus,
+      detail: "stripe_invoices could not be queried.",
+    };
+  }
+
+  const paidRows = (data || []).filter((row) =>
+    ["paid", "succeeded", "complete"].includes(readString(row.status).toLowerCase())
+  );
+  const value = paidRows.reduce((sum, row) => sum + readNumber(row.total_cents) / 100, 0);
+
+  return {
+    value: value > 0 ? value : null,
+    status: paidRows.length ? ("LIVE" as const) : ("NO DATA" as const),
+    detail: paidRows.length
+      ? "Read from paid Stripe invoice sync records."
+      : "Stripe is configured, but no paid invoices exist in the selected range.",
   };
 }
 
@@ -1172,6 +1889,7 @@ function calculateCostControl(input: {
   usage: Array<Record<string, unknown>>;
   reportsGenerated: number;
   aiConversations: number;
+  official?: OpenAiCostCenterData;
 }): AdminCostControlData {
   const today = startOfUtcDay();
   const month = startOfUtcMonth();
@@ -1213,12 +1931,16 @@ function calculateCostControl(input: {
   });
 
   return {
-    totalTokensToday: sumTokens(todayUsage),
-    totalTokensThisMonth: sumTokens(monthUsage),
-    estimatedCostToday: todayUsage.length ? todayCost : null,
-    estimatedCostThisMonth: monthUsage.length ? monthCost : null,
-    averageCostPerConversation: input.aiConversations > 0 ? monthCost / input.aiConversations : null,
-    averageCostPerReport: input.reportsGenerated > 0 ? monthCost / input.reportsGenerated : null,
+    totalTokensToday: input.official?.status === "LIVE" ? input.official.totalTokens : sumTokens(todayUsage),
+    totalTokensThisMonth: input.official?.status === "LIVE" ? input.official.totalTokens : sumTokens(monthUsage),
+    estimatedCostToday: input.official?.costRanges.last24h ?? (todayUsage.length ? todayCost : null),
+    estimatedCostThisMonth: input.official?.costRanges.last30d ?? (monthUsage.length ? monthCost : null),
+    averageCostPerConversation: input.aiConversations > 0
+      ? (input.official?.costRanges.last30d ?? monthCost) / input.aiConversations
+      : null,
+    averageCostPerReport: input.reportsGenerated > 0
+      ? (input.official?.costRanges.last30d ?? monthCost) / input.reportsGenerated
+      : null,
     failedAiRequests: input.usage.filter((row) => readString(row.status).toLowerCase() === "failed").length,
     costTrendPercent:
       previousCost > 0 ? ((currentCost - previousCost) / previousCost) * 100 : null,
@@ -1226,6 +1948,274 @@ function calculateCostControl(input: {
     highestCostRoutes: [...routeMap.values()].sort((a, b) => b.costUsd - a.costUsd).slice(0, 5),
     dateRanges: ["24 hours", "7 days", "30 days", "Custom range"],
   };
+}
+
+function calculateFinancials(input: {
+  revenue: number | null;
+  aiCost: number;
+  aiCostConnected?: boolean;
+  totalUsers: number;
+  reportsGenerated: number;
+  usage: Array<Record<string, unknown>>;
+  openAiCostRanges?: OpenAiCostCenterData["costRanges"];
+}) {
+  const today = startOfUtcDay();
+  const week = startOfUtcDay(-6);
+  const month = startOfUtcMonth();
+  const costSince = (date: Date) =>
+    input.usage
+      .filter((row) => new Date(readString(row.created_at)) >= date)
+      .reduce((sum, row) => sum + readNumber(row.estimated_cost_usd), 0);
+  const grossProfit =
+    input.revenue === null || !input.aiCostConnected
+      ? null
+      : Number((input.revenue - input.aiCost).toFixed(2));
+  const grossMargin =
+    input.revenue && input.revenue > 0 && grossProfit !== null
+      ? Number(((grossProfit / input.revenue) * 100).toFixed(1))
+      : null;
+
+  return {
+    revenue: input.revenue,
+    aiCost: input.aiCost,
+    grossProfit,
+    grossMargin,
+    netProfit: null,
+    averageCostPerUser:
+      input.totalUsers > 0 ? Number((input.aiCost / input.totalUsers).toFixed(4)) : null,
+    averageCostPerReport:
+      input.reportsGenerated > 0 ? Number((input.aiCost / input.reportsGenerated).toFixed(4)) : null,
+    dailyAiCost: input.openAiCostRanges?.last24h ?? costSince(today),
+    weeklyAiCost: input.openAiCostRanges?.last7d ?? costSince(week),
+    monthlyAiCost: input.openAiCostRanges?.last30d ?? costSince(month),
+    allTimeAiCost: input.openAiCostRanges?.allTime ?? null,
+  };
+}
+
+function calculateOpenAiAnalytics(input: {
+  usage: Array<Record<string, unknown>>;
+  totalUsers: number;
+  reportsGenerated: number;
+  official?: OpenAiCostCenterData;
+}) {
+  if (input.official?.status === "LIVE") {
+    const cost = input.official.costUsd;
+
+    return {
+      inputTokens: input.official.inputTokens,
+      outputTokens: input.official.outputTokens,
+      cachedTokens: input.official.cachedTokens,
+      totalTokens: input.official.totalTokens,
+      cost,
+      costPerUser: input.totalUsers > 0 ? Number((cost / input.totalUsers).toFixed(4)) : null,
+      costPerReport:
+        input.reportsGenerated > 0 ? Number((cost / input.reportsGenerated).toFixed(4)) : null,
+      costRanges: input.official.costRanges,
+      dailyCostHistory: input.official.dailyCostHistory,
+      featureCosts: input.official.featureCosts,
+      costAlerts: input.official.costAlerts,
+      modelUsage: input.official.modelUsage.map((model) => ({
+        model: model.model,
+        requests: model.requests,
+        tokens: model.tokens,
+        costUsd: model.costUsd,
+        status: model.status,
+      })),
+      unknownModels: [],
+    };
+  }
+
+  if (input.official) {
+    return {
+      inputTokens: 0,
+      outputTokens: 0,
+      cachedTokens: 0,
+      totalTokens: 0,
+      cost: 0,
+      costPerUser: null,
+      costPerReport: null,
+      costRanges: input.official.costRanges,
+      dailyCostHistory: input.official.dailyCostHistory,
+      featureCosts: input.official.featureCosts,
+      costAlerts: input.official.costAlerts,
+      modelUsage: [],
+      unknownModels: [],
+    };
+  }
+
+  const inputTokens = input.usage.reduce((sum, row) => sum + readNumber(row.prompt_tokens), 0);
+  const outputTokens = input.usage.reduce((sum, row) => sum + readNumber(row.completion_tokens), 0);
+  const cachedTokens = input.usage.reduce((sum, row) => {
+    const metadata = row.metadata && typeof row.metadata === "object"
+      ? row.metadata as Record<string, unknown>
+      : {};
+
+    return sum + readNumber(metadata.cached_tokens);
+  }, 0);
+  const totalTokens = input.usage.reduce((sum, row) => sum + readNumber(row.total_tokens), 0);
+  const cost = input.usage.reduce((sum, row) => sum + readNumber(row.estimated_cost_usd), 0);
+  const modelMap = new Map<
+    string,
+    { model: string; requests: number; tokens: number; costUsd: number; status: AdminMetricStatus }
+  >();
+
+  input.usage.forEach((row) => {
+    const model = readString(row.model, "unknown");
+    const summary = modelMap.get(model) || {
+      model,
+      requests: 0,
+      tokens: 0,
+      costUsd: 0,
+      status: getModelPricing(model) ? ("LIVE" as const) : ("NO DATA" as const),
+    };
+
+    summary.requests += 1;
+    summary.tokens += readNumber(row.total_tokens);
+    summary.costUsd += readNumber(row.estimated_cost_usd);
+    modelMap.set(model, summary);
+  });
+
+  const modelUsage = [...modelMap.values()].sort((a, b) => b.costUsd - a.costUsd);
+
+  return {
+    inputTokens,
+    outputTokens,
+    cachedTokens,
+    totalTokens,
+    cost,
+    costPerUser: input.totalUsers > 0 ? Number((cost / input.totalUsers).toFixed(4)) : null,
+    costPerReport:
+      input.reportsGenerated > 0 ? Number((cost / input.reportsGenerated).toFixed(4)) : null,
+    costRanges: {
+      last24h: null,
+      last7d: null,
+      last30d: null,
+      allTime: null,
+    },
+    dailyCostHistory: [],
+    featureCosts: buildOpenAiFeatureCosts(input.usage, cost, "ESTIMATED"),
+    costAlerts: buildOpenAiCostAlerts(
+      { last24h: null, last7d: null, last30d: null, allTime: null },
+      input.totalUsers,
+      input.usage
+    ),
+    modelUsage,
+    unknownModels: modelUsage
+      .filter((item) => !getModelPricing(item.model))
+      .map((item) => ({ model: item.model, requests: item.requests, tokens: item.tokens })),
+  };
+}
+
+function calculateUserAnalytics(input: {
+  planDistribution: Array<{ label: string; value: number }>;
+  userGrowth: AdminChartSeries[];
+  totalUsers: number;
+  totalRequests: number;
+}) {
+  const getPlanCount = (plan: string) =>
+    input.planDistribution.find((item) => item.label.toLowerCase() === plan)?.value || 0;
+  const currentGrowth = input.userGrowth.at(-1)?.value ?? 0;
+  const previousGrowth = input.userGrowth.at(-2)?.value ?? 0;
+  const growthRate =
+    previousGrowth > 0 ? Number((((currentGrowth - previousGrowth) / previousGrowth) * 100).toFixed(1)) : null;
+
+  return {
+    freeUsers: getPlanCount("free"),
+    proUsers: getPlanCount("pro"),
+    businessUsers: getPlanCount("business"),
+    growthRate,
+    churnRate: null,
+    averageUsage:
+      input.totalUsers > 0 ? Number((input.totalRequests / input.totalUsers).toFixed(2)) : null,
+  };
+}
+
+function buildTopReports(input: {
+  reportTypeDistribution: Array<{ label: string; value: number }>;
+}) {
+  return {
+    mostExpensive: [],
+    mostUsed: [],
+    mostGenerated: input.reportTypeDistribution
+      .slice()
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 5)
+      .map((item) => ({
+        title: item.label,
+        value: item.value,
+        detail: "Generated report type",
+      })),
+  };
+}
+
+function buildAdminAlerts(input: {
+  aiCost: number;
+  failedRequests: number;
+  unknownModels: Array<{ model: string; requests: number; tokens: number }>;
+  tokenUsage: number;
+  systemStatus: AdminSystemStatus[];
+}) {
+  const alerts: AdminActivityItem[] = [];
+  const now = new Date().toISOString();
+
+  if (input.aiCost > 100) {
+    alerts.push({
+      id: "alert:high-ai-cost",
+      label: "High AI cost",
+      detail: `Stored AI cost reached $${input.aiCost.toFixed(2)} in the selected range.`,
+      severity: "warning",
+      createdAt: now,
+      href: "/admin/ai-usage",
+    });
+  }
+
+  if (input.failedRequests > 0) {
+    alerts.push({
+      id: "alert:failed-ai-requests",
+      label: "Failed AI jobs",
+      detail: `${input.failedRequests} failed AI requests were recorded in the selected range.`,
+      severity: "error",
+      createdAt: now,
+      href: "/admin/logs",
+    });
+  }
+
+  if (input.unknownModels.length) {
+    alerts.push({
+      id: "alert:unknown-models",
+      label: "Unknown model usage",
+      detail: `${input.unknownModels.length} model names do not have pricing metadata.`,
+      severity: "warning",
+      createdAt: now,
+      href: "/admin/ai-usage",
+    });
+  }
+
+  if (input.tokenUsage > 1_000_000) {
+    alerts.push({
+      id: "alert:high-token-usage",
+      label: "High token usage",
+      detail: `${input.tokenUsage.toLocaleString("en-US")} tokens were recorded in the selected range.`,
+      severity: "warning",
+      createdAt: now,
+      href: "/admin/ai-usage",
+    });
+  }
+
+  input.systemStatus
+    .filter((item) => item.status === "Degraded" || item.status === "Down")
+    .forEach((item) => {
+      alerts.push({
+        id: `alert:system:${item.label}`,
+        label: `${item.label} ${item.status.toLowerCase()}`,
+        detail: item.detail,
+        severity: item.status === "Down" ? "error" : "warning",
+        createdAt: item.lastChecked || now,
+        href: "/admin/security",
+      });
+    });
+
+  return alerts.slice(0, 8);
 }
 
 async function loadRecentActivity(authUsers: User[], range: AdminDateRange) {
@@ -1359,12 +2349,63 @@ export async function loadSystemStatus() {
   const recentAiFailures = (recentUsage || []).filter(
     (row) => readString(row.status).toLowerCase() === "failed"
   ).length;
-  const openAiConfigured = Boolean(process.env.OPENAI_API_KEY_PROD || process.env.OPENAI_API_KEY_DEV);
-  const openAiStatus = openAiConfigured
-    ? normalizeStatusFromFailureRate(recentAiFailures, (recentUsage || []).length)
-    : "Not configured";
   const stripe = getStripeConfiguration();
   const resend = getResendConfiguration();
+  const openAiKey =
+    process.env.NODE_ENV === "production"
+      ? process.env.OPENAI_API_KEY_PROD
+      : process.env.OPENAI_API_KEY_DEV;
+  const openAiCheck = openAiKey
+    ? await fetchHealth("https://api.openai.com/v1/models", {
+        headers: {
+          Authorization: `Bearer ${openAiKey}`,
+        },
+      })
+    : null;
+  const stripeCheck =
+    stripe.configured && stripe.enabled
+      ? await fetchHealth("https://api.stripe.com/v1/balance", {
+          headers: {
+            Authorization: `Bearer ${process.env.STRIPE_SECRET_KEY}`,
+          },
+        })
+      : null;
+  const resendCheck =
+    resend.configured && resend.enabled
+      ? await fetchHealth("https://api.resend.com/domains", {
+          headers: {
+            Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+          },
+        })
+      : null;
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL || "";
+  const normalizedAppUrl = appUrl
+    ? appUrl.startsWith("http")
+      ? appUrl
+      : `https://${appUrl}`
+    : "";
+  const vercelCheck = normalizedAppUrl
+    ? await fetchHealth(normalizedAppUrl, {
+        headers: {
+          Accept: "text/html",
+        },
+      })
+    : null;
+  const openAiStatus: AdminSystemStatus["status"] = openAiCheck
+    ? openAiCheck.ok
+      ? normalizeStatusFromFailureRate(recentAiFailures, (recentUsage || []).length)
+      : "Degraded"
+    : "Not configured";
+  const stripeStatus: AdminSystemStatus["status"] = stripeCheck
+    ? stripeCheck.ok
+      ? "Operational"
+      : "Degraded"
+    : "Not configured";
+  const resendStatus: AdminSystemStatus["status"] = resendCheck
+    ? resendCheck.ok
+      ? "Operational"
+      : "Degraded"
+    : "Not configured";
 
   const data: AdminSystemStatus[] = [
     {
@@ -1386,44 +2427,72 @@ export async function loadSystemStatus() {
     {
       label: "OpenAI",
       status: openAiStatus,
-      detail: openAiConfigured
-        ? "Inferred from configuration and recent stored AI usage"
-        : "OpenAI credentials are not configured",
+      detail: openAiCheck
+        ? openAiCheck.ok
+          ? "OpenAI models endpoint reachable; recent failures are inferred from stored usage."
+          : `OpenAI health probe failed with status ${openAiCheck.status || "network"}.`
+        : `OpenAI credentials are not configured for ${process.env.NODE_ENV}.`,
       lastChecked,
       lastSuccessfulCheck: openAiStatus === "Operational" ? lastChecked : null,
-      responseTimeMs: openAiConfigured ? usageResponseTimeMs : null,
+      responseTimeMs: openAiCheck ? openAiCheck.responseTimeMs : usageResponseTimeMs,
     },
     {
       label: "Vercel application",
-      status: process.env.VERCEL ? ("Operational" as const) : ("Unknown" as const),
-      detail: process.env.VERCEL ? "Running in Vercel environment" : "Deployment metadata unavailable",
+      status: vercelCheck
+        ? vercelCheck.ok
+          ? ("Operational" as const)
+          : ("Degraded" as const)
+        : ("Unknown" as const),
+      detail: vercelCheck
+        ? vercelCheck.ok
+          ? "Configured application URL is reachable."
+          : `Application URL probe failed with status ${vercelCheck.status || "network"}.`
+        : "No application URL is configured for a server-side health probe",
       lastChecked,
-      lastSuccessfulCheck: process.env.VERCEL ? lastChecked : null,
-      responseTimeMs: null,
+      lastSuccessfulCheck: vercelCheck?.ok ? lastChecked : null,
+      responseTimeMs: vercelCheck?.responseTimeMs ?? null,
     },
     {
       label: "Cloudflare/domain",
-      status: "Unknown" as const,
-      detail: "No safe server-side domain probe is configured",
+      status: vercelCheck
+        ? vercelCheck.ok
+          ? ("Operational" as const)
+          : ("Degraded" as const)
+        : ("Unknown" as const),
+      detail: vercelCheck
+        ? "Inferred from the configured public application URL reachability."
+        : "No public application URL is configured for a domain probe",
       lastChecked,
-      lastSuccessfulCheck: null,
-      responseTimeMs: null,
+      lastSuccessfulCheck: vercelCheck?.ok ? lastChecked : null,
+      responseTimeMs: vercelCheck?.responseTimeMs ?? null,
     },
     {
       label: "Stripe",
-      status: stripe.configured && stripe.enabled ? ("Operational" as const) : ("Not configured" as const),
-      detail: stripe.configured && stripe.enabled ? "Stripe configuration is present" : "Stripe production credentials are absent or disabled",
+      status: stripeStatus,
+      detail: stripeCheck
+        ? stripeCheck.ok
+          ? "Stripe balance endpoint reachable."
+          : `Stripe health probe failed with status ${stripeCheck.status || "network"}.`
+        : `Stripe is not connected. Missing or disabled: ${
+            stripe.enabled ? stripe.missing.join(", ") : "ENABLE_STRIPE_BILLING"
+          }.`,
       lastChecked,
-      lastSuccessfulCheck: stripe.configured && stripe.enabled ? lastChecked : null,
-      responseTimeMs: null,
+      lastSuccessfulCheck: stripeStatus === "Operational" ? lastChecked : null,
+      responseTimeMs: stripeCheck?.responseTimeMs ?? null,
     },
     {
       label: "Resend",
-      status: resend.configured && resend.enabled ? ("Operational" as const) : ("Not configured" as const),
-      detail: resend.configured && resend.enabled ? "Resend configuration is present" : "Resend production credentials are absent or disabled",
+      status: resendStatus,
+      detail: resendCheck
+        ? resendCheck.ok
+          ? "Resend domains endpoint reachable."
+          : `Resend health probe failed with status ${resendCheck.status || "network"}.`
+        : `Resend is not connected. Missing or disabled: ${
+            resend.enabled ? resend.missing.join(", ") : "ENABLE_RESEND_EMAILS"
+          }.`,
       lastChecked,
-      lastSuccessfulCheck: resend.configured && resend.enabled ? lastChecked : null,
-      responseTimeMs: null,
+      lastSuccessfulCheck: resendStatus === "Operational" ? lastChecked : null,
+      responseTimeMs: resendCheck?.responseTimeMs ?? null,
     },
   ];
 
@@ -1503,17 +2572,21 @@ export async function loadAdminDashboardData(input?: {
     return buildMockAdminDashboardData(dateRange);
   }
 
-  const [authData, reportsGenerated, aiConversations, usageResult, recentUsers, systemStatus, statuses] =
+  const [authData, reportCount, conversationCount, workspaceSummary, usageResult, recentUsers, systemStatus, statuses] =
     await Promise.all([
       listAuthUsersForAdminScan(),
-      countTable("reports", dateRange),
-      countTable("ai_conversations", dateRange),
+      countTableDetailed("reports", dateRange),
+      countTableDetailed("ai_conversations", dateRange),
+      countTableDetailed("report_workspaces", dateRange),
       loadRecentUsage(dateRange),
       loadAdminUsers({ page: 1, pageSize: 5 }),
       loadSystemStatus(),
       loadAllAccountStatuses(),
     ]);
-  const totalUsers = authData.users.filter((user) => isWithinRange(user.created_at || "", dateRange)).length;
+  const reportsGenerated = reportCount.count;
+  const aiConversations = conversationCount.count;
+  const workspaceCount = workspaceSummary.count;
+  const totalUsers = authData.total || authData.users.length;
   const activeUsers = authData.users.filter(
     (user) =>
       user.last_sign_in_at &&
@@ -1521,15 +2594,25 @@ export async function loadAdminDashboardData(input?: {
       statuses.get(user.id) !== "suspended"
   ).length;
   const usage = usageResult.rows;
-  const aiApiCost = usage.reduce(
-    (sum, row) => sum + readNumber(row.estimated_cost_usd),
-    0
-  );
+  const openAiCostCenter = await loadOpenAiCostCenter({
+    range: dateRange,
+    usage,
+    totalUsers,
+  });
+  const aiApiCost = openAiCostCenter.status === "LIVE" ? openAiCostCenter.costUsd : 0;
   const failedRequests = usage.filter((row) => readString(row.status) === "failed");
-  const [charts, recentActivity] = await Promise.all([
+  const [charts, recentActivity, revenueSummary] = await Promise.all([
     loadAdminChartData(authData.users, dateRange),
     loadRecentActivity(authData.users, dateRange),
+    loadRevenueSummary(dateRange),
   ]);
+  const adminCharts = {
+    ...charts,
+    estimatedAiCost:
+      openAiCostCenter.status === "LIVE"
+        ? openAiCostCenter.dailyCostHistory
+        : [],
+  };
   const usageSummary = {
     totalRequests: usageResult.totalRequests,
     totalTokens: usage.reduce((sum, row) => sum + readNumber(row.total_tokens), 0),
@@ -1549,25 +2632,93 @@ export async function loadAdminDashboardData(input?: {
     failedJobs: recentActivity.filter((item) => item.id.startsWith("failure:")).slice(0, 5),
   };
 
+  const [userGrowth, reportTypeDistribution, billingSummary] = await Promise.all([
+    loadUserGrowth(),
+    loadReportDistribution(),
+    loadBillingSummary(),
+  ]);
+  const revenueValue = revenueSummary.value;
+  const planDistribution = billingSummary.planDistribution;
+  const subscriptions = billingSummary.activePaidSubscriptions;
+  const financials = calculateFinancials({
+    revenue: revenueValue,
+    aiCost: aiApiCost,
+    aiCostConnected: openAiCostCenter.status === "LIVE",
+    totalUsers,
+    reportsGenerated,
+    usage,
+    openAiCostRanges: openAiCostCenter.costRanges,
+  });
+  const openAiAnalytics = calculateOpenAiAnalytics({
+    usage,
+    totalUsers,
+    reportsGenerated,
+    official: openAiCostCenter,
+  });
+  const userAnalytics = calculateUserAnalytics({
+    planDistribution,
+    userGrowth,
+    totalUsers,
+    totalRequests: usageSummary.totalRequests,
+  });
+  const topReports = buildTopReports({ reportTypeDistribution });
+  const alerts = buildAdminAlerts({
+    aiCost: aiApiCost,
+    failedRequests: usageSummary.failedRequests,
+    unknownModels: openAiAnalytics.unknownModels,
+    tokenUsage: openAiAnalytics.totalTokens,
+    systemStatus,
+  });
+
   return {
     dateRange,
     totalUsers,
     activeUsers,
     reportsGenerated,
     aiConversations,
-    monthlyRecurringRevenue: null,
+    workspaceCount,
+    subscriptions,
+    monthlyRecurringRevenue: revenueValue,
     aiApiCost,
-    userGrowth: await loadUserGrowth(),
-    reportTypeDistribution: await loadReportDistribution(),
-    planDistribution: await loadPlanDistribution(),
+	    sourceStatus: {
+	      revenue: revenueSummary.status,
+	      aiUsage: openAiCostCenter.status,
+	      users: "LIVE",
+	      reports:
+	        reportCount.status === "LIVE" && conversationCount.status === "LIVE"
+	          ? "LIVE"
+	          : "NO DATA",
+	      workspaces: workspaceSummary.status,
+	      subscriptions: billingSummary.status,
+	    },
+	    sourceDetails: {
+	      revenue: revenueSummary.detail,
+	      aiUsage: openAiCostCenter.detail,
+	      users: "Read from Supabase Auth admin users.",
+	      reports:
+	        reportCount.status === "LIVE" && conversationCount.status === "LIVE"
+	          ? "Read from reports, ai_conversations and report_workspaces tables."
+	          : `${reportCount.detail} ${conversationCount.detail} ${workspaceSummary.detail}`,
+	      workspaces: workspaceSummary.detail,
+	      subscriptions: billingSummary.detail,
+	    },
+    financials,
+    openAiAnalytics,
+    userAnalytics,
+    topReports,
+    alerts,
+    userGrowth,
+    reportTypeDistribution,
+    planDistribution,
     recentUsers: recentUsers.users,
     recentActivity,
-    charts,
+    charts: adminCharts,
     revenueOverview: buildRevenueOverview(),
     costControl: calculateCostControl({
       usage,
       reportsGenerated,
       aiConversations,
+      official: openAiCostCenter,
     }),
     usageSummary,
     recentErrors,
@@ -1577,7 +2728,7 @@ export async function loadAdminDashboardData(input?: {
       recentActivity,
       recentErrors,
       usageSummary,
-      charts,
+      charts: adminCharts,
     }),
     notifications,
   };
@@ -1676,7 +2827,7 @@ export async function searchAdminRecords(
     filters.includes("payments")
       ? serviceClient
           .from("stripe_invoices")
-          .select("id,stripe_invoice_id,status,amount_paid,currency,created_at")
+          .select("id,stripe_invoice_id,status,total_cents,currency,created_at")
           .or(`stripe_invoice_id.ilike.%${normalized}%,status.ilike.%${normalized}%`)
           .order("created_at", { ascending: false })
           .limit(5)
@@ -1716,7 +2867,7 @@ export async function searchAdminRecords(
       results: (payments.data || []).map((row) => ({
         id: readString(row.id),
         title: readString(row.stripe_invoice_id, "Invoice"),
-        detail: `${readString(row.status, "unknown")} · ${readNumber(row.amount_paid)} ${readString(row.currency, "usd").toUpperCase()}`,
+        detail: `${readString(row.status, "unknown")} · ${(readNumber(row.total_cents) / 100).toFixed(2)} ${readString(row.currency, "usd").toUpperCase()}`,
         href: "/admin/payments",
       })),
     },
