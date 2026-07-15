@@ -2955,7 +2955,6 @@ export async function loadAdminDashboardData(input?: {
     : "No users have last_sign_in_at activity inside the selected date range.";
   const reportsSourceStatus = combineMetricStatuses(
     reportCount.status,
-    conversationCount.status,
     reportStatusSummary.status
   );
 
@@ -2987,8 +2986,8 @@ export async function loadAdminDashboardData(input?: {
 	        ? `Read from Supabase Auth admin users. Total users are all-time; new users use created_at in the selected date range. ${activeUserDetail}`
 	        : "Supabase Auth query succeeded, but no users were returned.",
 	      reports: reportsSourceStatus === "LIVE"
-	        ? `Read from reports and ai_conversations tables for the selected date range. ${reportStatusSummary.detail}`
-	        : `${reportCount.detail} ${conversationCount.detail} ${reportStatusSummary.detail}`,
+	        ? `Read from reports.created_at for the selected date range. ${reportStatusSummary.detail}`
+	        : `${reportCount.detail} ${reportStatusSummary.detail}`,
 	      workspaces: workspaceSummary.detail,
 	      subscriptions: billingSummary.detail,
 	    },
