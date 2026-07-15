@@ -19,6 +19,22 @@ import {
 } from "../admin-data";
 import { dashboardTheme } from "@/app/lib/ui/dashboard-theme";
 
+type ExecutiveAlertSeverity = "INFO" | "WARNING" | "CRITICAL";
+
+type ExecutiveInsight = {
+  label: string;
+  value: string;
+  detail: string;
+  status: AdminMetricStatus | "INFO";
+};
+
+type ExecutiveAlert = {
+  id: string;
+  severity: ExecutiveAlertSeverity;
+  title: string;
+  detail: string;
+};
+
 function formatNumber(value: number) {
   return new Intl.NumberFormat("en-US").format(value);
 }
@@ -41,6 +57,23 @@ function formatDate(value: string) {
     day: "numeric",
     year: "numeric",
   }).format(new Date(value));
+}
+
+function formatPercentChange(value: number) {
+  const sign = value > 0 ? "+" : "";
+
+  return `${sign}${value.toFixed(1)}%`;
+}
+
+function seriesPercentChange(series: Array<{ value: number }>) {
+  const current = series.at(-1)?.value;
+  const previous = series.at(-2)?.value;
+
+  if (current === undefined || previous === undefined || previous <= 0) {
+    return null;
+  }
+
+  return ((current - previous) / previous) * 100;
 }
 
 function StatusPill({ status }: { status: AdminMetricStatus | "INFO" }) {
@@ -83,6 +116,43 @@ function MetricCard({
   );
 }
 
+function InsightCard({ insight }: { insight: ExecutiveInsight }) {
+  return (
+    <div className={`rounded-[1rem] p-4 ${dashboardTheme.innerSurface}`}>
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">{insight.label}</p>
+        <StatusPill status={insight.status} />
+      </div>
+      <p className="mt-3 text-xl font-semibold tracking-tight text-white">{insight.value}</p>
+      <p className="mt-1 text-sm leading-6 text-zinc-500">{insight.detail}</p>
+    </div>
+  );
+}
+
+function InsightSection({
+  title,
+  description,
+  insights,
+}: {
+  title: string;
+  description: string;
+  insights: ExecutiveInsight[];
+}) {
+  return (
+    <section className={`rounded-[1.5rem] p-5 ${dashboardTheme.surface}`}>
+      <div>
+        <h2 className="text-lg font-semibold tracking-tight text-white">{title}</h2>
+        <p className="mt-1 text-sm text-zinc-500">{description}</p>
+      </div>
+      <div className="mt-5 grid gap-3 md:grid-cols-2">
+        {insights.map((insight) => (
+          <InsightCard key={insight.label} insight={insight} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function EmptyState({ children }: { children: string }) {
   return (
     <div className={`rounded-[1rem] p-4 text-sm leading-6 text-zinc-500 ${dashboardTheme.innerSurface}`}>
@@ -111,6 +181,9 @@ export default async function AdminAiCeoPage({
   const mostExpensiveUser = usage.topUsers.find((user) => user.aiCostUsd > 0);
   const mostExpensiveReport = usage.topReports.find((report) => report.aiCostUsd > 0);
   const disconnectedServices = dashboard.systemStatus.filter((service) => service.status === "Not Connected");
+  const mostActiveUser = usage.topUsers.slice().sort((a, b) => b.totalRequests - a.totalRequests)[0];
+  const costTrend = seriesPercentChange(dashboard.charts.estimatedAiCost);
+  const reportActivityTrend = seriesPercentChange(dashboard.charts.reportsGenerated);
   const costWarnings = dashboard.openAiAnalytics.costAlerts.filter(
     (item) =>
       item.status === "configured" &&
@@ -118,36 +191,197 @@ export default async function AdminAiCeoPage({
       item.currentUsd !== null &&
       item.currentUsd > item.thresholdUsd
   );
-  const attentionItems = [
+  const costInsights: ExecutiveInsight[] = [
+    {
+      label: "Average report cost",
+      value: usage.averageCostPerReport > 0 ? formatCurrency(usage.averageCostPerReport) : "NO DATA",
+      detail: usage.averageCostPerReport > 0
+        ? "Calculated from attributed AI usage events."
+        : "No attributed report cost records were found.",
+      status: usage.averageCostPerReport > 0 ? dashboard.sourceStatus.aiUsage : "NO DATA",
+    },
+    {
+      label: "Highest cost report",
+      value: mostExpensiveReport ? formatCurrency(mostExpensiveReport.aiCostUsd) : "NO DATA",
+      detail: mostExpensiveReport ? mostExpensiveReport.label : "No attributed report cost is available.",
+      status: mostExpensiveReport ? "LIVE" : "NO DATA",
+    },
+    {
+      label: "Cost trend",
+      value: costTrend !== null ? formatPercentChange(costTrend) : "NO DATA",
+      detail: costTrend !== null
+        ? "Compared with the previous chart interval."
+        : "Cost comparison requires at least two non-zero intervals.",
+      status: costTrend !== null ? "LIVE" : "NO DATA",
+    },
+  ];
+  const usageInsights: ExecutiveInsight[] = [
+    {
+      label: "Reports generated",
+      value: formatNumber(dashboard.reportsGenerated),
+      detail: "Reports created in the selected range.",
+      status: dashboard.sourceStatus.reports,
+    },
+    {
+      label: "AI requests",
+      value: formatNumber(dashboard.usageSummary.totalRequests),
+      detail: "Stored AI usage events in the selected range.",
+      status: dashboard.sourceStatus.aiUsage,
+    },
+    {
+      label: "Average tokens per report",
+      value: usage.averageTokensPerReport > 0 ? formatNumber(Math.round(usage.averageTokensPerReport)) : "NO DATA",
+      detail: usage.averageTokensPerReport > 0
+        ? "Calculated from attributed usage events."
+        : "No attributed token records were found.",
+      status: usage.averageTokensPerReport > 0 ? dashboard.sourceStatus.aiUsage : "NO DATA",
+    },
+    {
+      label: "Most active user",
+      value: mostActiveUser && mostActiveUser.totalRequests > 0 ? mostActiveUser.label : "NO DATA",
+      detail: mostActiveUser && mostActiveUser.totalRequests > 0
+        ? `${formatNumber(mostActiveUser.totalRequests)} AI requests in the selected range.`
+        : "No user-level AI request activity is available.",
+      status: mostActiveUser && mostActiveUser.totalRequests > 0 ? "LIVE" : "NO DATA",
+    },
+  ];
+  const reliabilityInsights: ExecutiveInsight[] = [
+    {
+      label: "Failed AI requests",
+      value: formatNumber(dashboard.usageSummary.failedRequests),
+      detail: dashboard.usageSummary.failedRequests > 0
+        ? "Failures were recorded in stored AI usage events."
+        : "No failed AI requests were recorded in the selected range.",
+      status: dashboard.sourceStatus.aiUsage,
+    },
+    {
+      label: "Missing integrations",
+      value: formatNumber(disconnectedServices.length),
+      detail: disconnectedServices.length
+        ? disconnectedServices.map((service) => service.label).join(", ")
+        : "All monitored services have a connected or checked status.",
+      status: disconnectedServices.length ? "NOT CONNECTED" : "LIVE",
+    },
+    {
+      label: "Services not connected",
+      value: disconnectedServices.length ? disconnectedServices.map((service) => service.label).join(", ") : "None",
+      detail: disconnectedServices.length
+        ? "These services are explicitly marked Not Connected by system health."
+        : "No monitored service is currently marked Not Connected.",
+      status: disconnectedServices.length ? "NOT CONNECTED" : "LIVE",
+    },
+  ];
+  const growthInsights: ExecutiveInsight[] = [
+    {
+      label: "Registered users",
+      value: formatNumber(dashboard.totalUsers),
+      detail: "Total users from Supabase Auth.",
+      status: dashboard.sourceStatus.users,
+    },
+    {
+      label: "New reports",
+      value: formatNumber(dashboard.reportsGenerated),
+      detail: "Report records created in the selected range.",
+      status: dashboard.sourceStatus.reports,
+    },
+    {
+      label: "Activity trend",
+      value: reportActivityTrend !== null ? formatPercentChange(reportActivityTrend) : "NO DATA",
+      detail: reportActivityTrend !== null
+        ? "Report activity compared with the previous chart interval."
+        : "Activity comparison requires at least two non-zero intervals.",
+      status: reportActivityTrend !== null ? "LIVE" : "NO DATA",
+    },
+  ];
+  const executiveAlerts: ExecutiveAlert[] = [
     ...costWarnings.map((item) => ({
       id: item.id,
-      label: `${item.label} exceeded`,
+      severity: "WARNING" as const,
+      title: `${item.label} exceeded`,
       detail: `${formatCurrency(item.currentUsd || 0)} used against a ${formatCurrency(item.thresholdUsd || 0)} threshold.`,
-      tone: "warning" as const,
     })),
+    ...(costTrend !== null && costTrend >= 25
+      ? [
+          {
+            id: "cost-trend-increase",
+            severity: "WARNING" as const,
+            title: "AI cost increased significantly",
+            detail: `AI cost increased ${formatPercentChange(costTrend)} versus the previous chart interval.`,
+          },
+        ]
+      : []),
     ...(dashboard.usageSummary.failedRequests > 0
       ? [
           {
             id: "failed-ai-requests",
-            label: "Failed AI requests",
+            severity: "CRITICAL" as const,
+            title: "Failed AI requests",
             detail: `${formatNumber(dashboard.usageSummary.failedRequests)} failed AI requests were recorded in ${dashboard.dateRange.label}.`,
-            tone: "error" as const,
+          },
+        ]
+      : dashboard.usageSummary.totalRequests > 0
+        ? [
+            {
+              id: "no-failed-ai-requests",
+              severity: "INFO" as const,
+              title: "No failed AI requests",
+              detail: `No failed AI requests were recorded across ${formatNumber(dashboard.usageSummary.totalRequests)} stored requests.`,
+            },
+          ]
+        : []),
+    ...disconnectedServices.map((service) => ({
+      id: `service:${service.label}`,
+      severity: "WARNING" as const,
+      title: `${service.label} not connected`,
+      detail: service.detail,
+    })),
+    ...(dashboard.sourceStatus.aiUsage === "LIVE" && dashboard.usageSummary.totalRequests > 0 && dashboard.usageSummary.failedRequests === 0
+      ? [
+          {
+            id: "openai-usage-normal",
+            severity: "INFO" as const,
+            title: "OpenAI usage normal",
+            detail: `AI usage is present and no failed AI requests were recorded in ${dashboard.dateRange.label}.`,
           },
         ]
       : []),
-    ...disconnectedServices.map((service) => ({
-      id: `service:${service.label}`,
-      label: `${service.label} not connected`,
-      detail: service.detail,
-      tone: "warning" as const,
-    })),
+    ...(dashboard.reportsGenerated >= 10
+      ? [
+          {
+            id: "high-report-activity",
+            severity: "INFO" as const,
+            title: "High report activity detected",
+            detail: `${formatNumber(dashboard.reportsGenerated)} reports were generated in ${dashboard.dateRange.label}.`,
+          },
+        ]
+      : []),
+    ...(dashboard.reportsGenerated === 0
+      ? [
+          {
+            id: "no-reports-generated",
+            severity: "INFO" as const,
+            title: "No reports generated",
+            detail: `No reports were generated in ${dashboard.dateRange.label}.`,
+          },
+        ]
+      : []),
+    ...(dashboard.reportsGenerated === 0 && dashboard.usageSummary.totalRequests === 0
+      ? [
+          {
+            id: "low-platform-activity",
+            severity: "WARNING" as const,
+            title: "Low platform activity",
+            detail: `No reports or AI requests were recorded in ${dashboard.dateRange.label}.`,
+          },
+        ]
+      : []),
     ...(dashboard.usageSummary.totalRequests === 0
       ? [
           {
             id: "no-usage-data",
-            label: "No AI usage data",
+            severity: "INFO" as const,
+            title: "No AI usage data",
             detail: `No AI usage records were found for ${dashboard.dateRange.label}.`,
-            tone: "info" as const,
           },
         ]
       : []),
@@ -157,7 +391,7 @@ export default async function AdminAiCeoPage({
     <AdminShell
       eyebrow="Admin / AI CEO"
       title="AI CEO"
-      subtitle="Read-only executive context generated from existing admin data. No AI calls are made in Phase 1."
+      subtitle="Read-only executive intelligence generated from existing admin data. No AI calls are made."
       headerActions={
         <AdminDateRangeControls
           activeRange={dashboard.dateRange.key}
@@ -281,6 +515,29 @@ export default async function AdminAiCeoPage({
           </div>
         </section>
 
+        <section className="grid gap-4 xl:grid-cols-2">
+          <InsightSection
+            title="Cost"
+            description="Cost signals calculated only when stored usage or attribution exists."
+            insights={costInsights}
+          />
+          <InsightSection
+            title="Usage"
+            description="Platform activity from reports and AI usage records."
+            insights={usageInsights}
+          />
+          <InsightSection
+            title="Reliability"
+            description="Failure and integration status from stored telemetry and health checks."
+            insights={reliabilityInsights}
+          />
+          <InsightSection
+            title="Growth"
+            description="User and report activity from existing admin aggregates."
+            insights={growthInsights}
+          />
+        </section>
+
         <section className={`rounded-[1.5rem] p-5 ${dashboardTheme.surface}`}>
           <div className="flex items-center gap-3">
             <span className="flex h-10 w-10 items-center justify-center rounded-2xl border border-amber-300/20 bg-amber-300/10">
@@ -292,15 +549,15 @@ export default async function AdminAiCeoPage({
             </div>
           </div>
           <div className="mt-5 grid gap-3 lg:grid-cols-2">
-            {attentionItems.length ? (
-              attentionItems.map((item) => {
+            {executiveAlerts.length ? (
+              executiveAlerts.map((item) => {
                 const icon =
-                  item.tone === "error" ? AlertTriangle : item.tone === "warning" ? ShieldAlert : Activity;
+                  item.severity === "CRITICAL" ? AlertTriangle : item.severity === "WARNING" ? ShieldAlert : Activity;
                 const Icon = icon;
                 const tone =
-                  item.tone === "error"
+                  item.severity === "CRITICAL"
                     ? "border-red-300/20 bg-red-950/20 text-red-100"
-                    : item.tone === "warning"
+                    : item.severity === "WARNING"
                       ? "border-amber-300/20 bg-amber-950/20 text-amber-100"
                       : "border-blue-300/20 bg-blue-950/20 text-blue-100";
 
@@ -309,7 +566,8 @@ export default async function AdminAiCeoPage({
                     <div className="flex gap-3">
                       <Icon className="mt-0.5 h-4 w-4 shrink-0" />
                       <div>
-                        <p className="text-sm font-semibold text-white">{item.label}</p>
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">{item.severity}</p>
+                        <p className="mt-1 text-sm font-semibold text-white">{item.title}</p>
                         <p className="mt-1 text-sm leading-6 text-zinc-400">{item.detail}</p>
                       </div>
                     </div>
