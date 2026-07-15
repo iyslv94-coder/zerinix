@@ -12,7 +12,7 @@ const sharedDecisionSupportDirectives = [
   "Competitor analysis must name only credible competitors or substitutes available from the input/model context. For each important competitor, include pricing, target customer, funding, employee size, strengths, weaknesses, positioning, and how the analyzed company can outperform when available; omit unknown fields instead of inventing them.",
   "Risk analysis must use a professional risk matrix: probability, impact, severity, mitigation, and early warning signal for each material risk.",
   "Roadmap/action sections must be written as an AI Action Plan with Immediate Actions, Next 30 Days, Next 90 Days, Next 6 Months, and Next 12 Months. Every action needs expected business impact.",
-  "End the final available report section with a concise CEO Brief: top 5 priorities, top 3 mistakes to avoid, biggest opportunity, biggest hidden risk, and one-sentence executive conclusion.",
+  "End the final available report section with a board-level CEO Brief: maximum 10 concise bullets, each directly supported by findings already in the report; no new research or unsupported claims.",
 ];
 
 const businessPlanDirectives = [

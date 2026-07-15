@@ -154,7 +154,7 @@ const fieldPrompts = {
   },
   sources: {
     prompt:
-      "List only 4-6 reliable verified sources used or most relevant for validating this market, then close the report with CEO Brief. Prefer real organizations over generic references, especially OECD, World Bank, IMF, Eurostat, TÜİK, TCMB, Statista, McKinsey, BCG, Deloitte, PwC, EY, KPMG, CB Insights, PitchBook, or Crunchbase when genuinely relevant. For each verified source include publisher, confidence, publication year, source type, and URL only when available. If no verified source metadata exists, omit the citation item and write a concise planning-input note instead. Do not invent URLs, report names, publications, or fake citations. End with CEO Brief containing top 5 priorities, top 3 mistakes to avoid, biggest opportunity, biggest hidden risk, and one-sentence executive conclusion. Do not use generic phrases such as 'industry reports' as verified evidence. Do not repeat analysis outside CEO Brief. Do not write a heading.",
+      "List only 4-6 reliable verified sources used or most relevant for validating this market, then close the report with CEO Brief. Prefer real organizations over generic references, especially OECD, World Bank, IMF, Eurostat, TÜİK, TCMB, Statista, McKinsey, BCG, Deloitte, PwC, EY, KPMG, CB Insights, PitchBook, or Crunchbase when genuinely relevant. For each verified source include publisher, confidence, publication year, source type, and URL only when available. If no verified source metadata exists, omit the citation item and write a concise planning-input note instead. Do not invent URLs, report names, publications, or fake citations. End with CEO Brief as a board-level briefing: maximum 10 concise bullets, each directly supported by report findings. Do not use generic phrases such as 'industry reports' as verified evidence. Do not repeat analysis outside CEO Brief. Do not write a heading.",
     maxTokens: 1400,
   },
 } as const;
@@ -548,19 +548,16 @@ function buildMarketExecutiveKpis(context: AiFinancialModelContext) {
 
 function buildMarketCeoBrief(context: AiFinancialModelContext) {
   return [
-    "Top 5 priorities:",
-    `- ${context.investmentScore.nextCriticalAction}`,
-    `- Validate the beachhead customer for ${context.inputs.targetCustomer}.`,
-    `- Prove willingness to pay before assuming ${context.metrics.som.displayValue} obtainable demand.`,
-    `- Keep payback at or below ${context.metrics.cacPayback.displayValue}.`,
-    "- Build one repeatable channel before expanding the entry plan.",
-    "Top 3 mistakes to avoid:",
-    "- Confusing broad market growth with reachable demand.",
-    "- Underestimating incumbent/substitute response.",
-    "- Scaling acquisition before pricing and conversion are proven.",
-    `Biggest opportunity: Use a narrow entry wedge to capture the first credible share of ${context.metrics.som.displayValue}.`,
-    `Biggest hidden risk: ${context.investmentScore.topRisks[0] || "The market may look attractive before buyer urgency is proven."}`,
-    `One-sentence executive conclusion: ${context.investmentScore.recommendation} should depend on whether the founder proves the riskiest market-entry assumption before scaling capital.`,
+    `- Decision posture: ${context.investmentScore.recommendation}; current confidence is ${context.investmentScore.confidence}/100.`,
+    `- Immediate board priority: ${context.investmentScore.nextCriticalAction}`,
+    `- Validate the beachhead customer for ${context.inputs.targetCustomer} before expanding the entry plan.`,
+    `- Prove willingness to pay before treating ${context.metrics.som.displayValue} as obtainable demand.`,
+    `- Financial discipline depends on keeping CAC payback at or below ${context.metrics.cacPayback.displayValue}.`,
+    "- Build one repeatable channel before adding geographies, segments, or acquisition motions.",
+    "- Avoid confusing broad market growth with reachable demand.",
+    "- Avoid scaling acquisition before pricing and conversion evidence is proven.",
+    `- Biggest opportunity: use a narrow entry wedge to capture the first credible share of ${context.metrics.som.displayValue}.`,
+    `- Biggest hidden risk: ${context.investmentScore.topRisks[0] || "buyer urgency may be weaker than the market narrative suggests."}`,
   ];
 }
 

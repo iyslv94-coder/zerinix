@@ -168,7 +168,7 @@ const planPrompts = {
   },
   sourcesAssumptions: {
     prompt:
-      "List citation metadata and evidence classification, then close the report with CEO Brief. Deduplicate sources. For each source include title, publisher, publication year, URL if available, confidence, and source type. Do not invent URLs, report names, or publishers. If no verified source is available, omit the source instead of writing placeholder text. Separately list User-provided facts, AI assumptions, and Market-derived estimates used by the report. End with CEO Brief containing top 5 priorities, top 3 mistakes to avoid, biggest opportunity, biggest hidden risk, and one-sentence executive conclusion. Do not write vague source claims such as 'industry reports' unless a specific source is named. Max 260 words.",
+      "List citation metadata and evidence classification, then close the report with CEO Brief. Deduplicate sources. For each source include title, publisher, publication year, URL if available, confidence, and source type. Do not invent URLs, report names, or publishers. If no verified source is available, omit the source instead of writing placeholder text. Separately list User-provided facts, AI assumptions, and Market-derived estimates used by the report. End with CEO Brief as a board-level briefing: maximum 10 concise bullets, each directly supported by report findings. Do not write vague source claims such as 'industry reports' unless a specific source is named. Max 260 words.",
     maxTokens: 1050,
   },
 } as const;
@@ -928,27 +928,17 @@ function buildExecutiveKpis(context: AiFinancialModelContext) {
 }
 
 function buildCeoBrief(context: AiFinancialModelContext) {
-  const priorities = [
-    context.investmentScore.nextCriticalAction,
-    `Validate ${context.inputs.targetCustomer} willingness to pay.`,
-    `Protect ${context.metrics.grossMargin.displayValue} gross-margin assumptions.`,
-    `Keep CAC payback at or below ${context.metrics.cacPayback.displayValue}.`,
-    `Use ${context.metrics.runway.displayValue} runway as the capital allocation constraint.`,
-  ];
-  const mistakes = [
-    "Scaling paid acquisition before repeatable conversion evidence.",
-    "Treating directional market sizing as verified demand.",
-    "Adding product scope before the beachhead use case is proven.",
-  ];
-
   return [
-    "Top 5 priorities:",
-    ...priorities.map((item) => `- ${item}`),
-    "Top 3 mistakes to avoid:",
-    ...mistakes.map((item) => `- ${item}`),
-    `Biggest opportunity: Convert the focused ${context.metrics.som.displayValue} obtainable market into validated early revenue before expanding.`,
-    `Biggest hidden risk: ${context.investmentScore.topRisks[0] || "The model may look investable before demand and payback evidence are proven."}`,
-    `One-sentence executive conclusion: ${context.investmentScore.recommendation} is justified only if the founder proves the highest-risk assumption before scaling capital.`,
+    `- Decision posture: ${context.investmentScore.recommendation}; current confidence is ${context.investmentScore.confidence}/100.`,
+    `- Immediate board priority: ${context.investmentScore.nextCriticalAction}`,
+    `- Demand proof must come from ${context.inputs.targetCustomer} willingness to pay, not market-size narrative alone.`,
+    `- Financial discipline depends on protecting ${context.metrics.grossMargin.displayValue} gross margin and ${context.metrics.cacPayback.displayValue} CAC payback.`,
+    `- Capital allocation should stay constrained by ${context.metrics.runway.displayValue} runway until repeatable conversion evidence exists.`,
+    "- Avoid scaling paid acquisition before conversion, retention, and payback evidence are repeatable.",
+    "- Avoid expanding product scope before the beachhead use case is validated.",
+    `- Biggest opportunity: turn the focused ${context.metrics.som.displayValue} obtainable market into validated early revenue before broad expansion.`,
+    `- Biggest hidden risk: ${context.investmentScore.topRisks[0] || "the model may appear investable before demand and payback evidence are proven."}`,
+    `- Executive conclusion: ${context.investmentScore.recommendation} is justified only if the highest-risk assumption is proven before scaling capital.`,
   ];
 }
 
