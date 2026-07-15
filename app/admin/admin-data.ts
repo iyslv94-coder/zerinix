@@ -43,6 +43,31 @@ export type AdminReportRow = {
   status: string;
 };
 
+export type AdminUsageQuotaRow = {
+  id: string;
+  label: string;
+  detail: string;
+  totalRequests: number;
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  aiCostUsd: number;
+};
+
+export type AdminUsageQuotasData = {
+  dateRange: AdminDateRange;
+  totalAiRequests: number;
+  totalPromptTokens: number;
+  totalCompletionTokens: number;
+  totalTokens: number;
+  totalAiCostUsd: number;
+  averageCostPerReport: number;
+  averageTokensPerReport: number;
+  topUsers: AdminUsageQuotaRow[];
+  topReports: AdminUsageQuotaRow[];
+  detail: string;
+};
+
 export type AdminDashboardData = {
   dateRange: AdminDateRange;
   totalUsers: number;
@@ -1281,6 +1306,143 @@ export async function loadAdminReports(input: {
       ? "Read from reports, Supabase Auth users, and attributed ai_usage_events."
       : "Reports query succeeded, but no reports match the selected filters.",
   };
+}
+
+export async function loadAdminUsageQuotas(input: {
+  search?: string;
+  dateRange?: AdminDateRange;
+}) {
+  const dateRange = input.dateRange || resolveAdminDateRange();
+  const search = normalizeSearchQuery(input.search || "").toLowerCase();
+
+  if (isLocalAdminMockMode()) {
+    return {
+      dateRange,
+      totalAiRequests: 0,
+      totalPromptTokens: 0,
+      totalCompletionTokens: 0,
+      totalTokens: 0,
+      totalAiCostUsd: 0,
+      averageCostPerReport: 0,
+      averageTokensPerReport: 0,
+      topUsers: [],
+      topReports: [],
+      detail: "Usage records are unavailable without SUPABASE_SERVICE_ROLE_KEY.",
+    } satisfies AdminUsageQuotasData;
+  }
+
+  const serviceClient = createServiceRoleClient();
+  const usageResult = await loadRecentUsage(dateRange);
+  const authData = await listAuthUsersForAdminScan();
+  const emailByUserId = new Map(
+    authData.users.map((user) => [user.id, user.email || "No email"])
+  );
+  const { data: reportsData, error: reportsError } = await serviceClient
+    .from("reports")
+    .select("id,title,report_type,created_at")
+    .order("created_at", { ascending: false })
+    .limit(5000);
+
+  if (reportsError) {
+    console.error("[admin:usage-quotas] reports query failed", {
+      message: reportsError.message,
+      code: reportsError.code,
+    });
+  }
+
+  const reportRows = ((reportsData || []) as unknown as Array<Record<string, unknown>>);
+  const reportById = new Map(
+    reportRows.map((row) => [
+      readString(row.id),
+      {
+        title: readString(row.title, "Untitled report"),
+        type: readString(row.report_type, "Report"),
+      },
+    ])
+  );
+  const filteredUsage = usageResult.rows.filter((row) => {
+    if (!search) {
+      return true;
+    }
+
+    const email = emailByUserId.get(readString(row.user_id)) || "";
+    const report = reportById.get(readString(row.report_id));
+
+    return (
+      email.toLowerCase().includes(search) ||
+      (report?.title || "").toLowerCase().includes(search)
+    );
+  });
+  const userMap = new Map<string, AdminUsageQuotaRow>();
+  const reportMap = new Map<string, AdminUsageQuotaRow>();
+
+  filteredUsage.forEach((row) => {
+    const tokens = readUsageTokenCounts(row);
+    const cost = getUsageCost(row).costUsd;
+    const userId = readString(row.user_id);
+    const reportId = readString(row.report_id);
+
+    if (userId) {
+      const current = userMap.get(userId) || {
+        id: userId,
+        label: emailByUserId.get(userId) || "Unknown user",
+        detail: userId,
+        totalRequests: 0,
+        promptTokens: 0,
+        completionTokens: 0,
+        totalTokens: 0,
+        aiCostUsd: 0,
+      };
+
+      current.totalRequests += 1;
+      current.promptTokens += tokens.inputTokens;
+      current.completionTokens += tokens.outputTokens;
+      current.totalTokens += tokens.totalTokens;
+      current.aiCostUsd += cost;
+      userMap.set(userId, current);
+    }
+
+    if (reportId) {
+      const report = reportById.get(reportId);
+      const current = reportMap.get(reportId) || {
+        id: reportId,
+        label: report?.title || "Untitled report",
+        detail: report?.type || "Report",
+        totalRequests: 0,
+        promptTokens: 0,
+        completionTokens: 0,
+        totalTokens: 0,
+        aiCostUsd: 0,
+      };
+
+      current.totalRequests += 1;
+      current.promptTokens += tokens.inputTokens;
+      current.completionTokens += tokens.outputTokens;
+      current.totalTokens += tokens.totalTokens;
+      current.aiCostUsd += cost;
+      reportMap.set(reportId, current);
+    }
+  });
+
+  const totalPromptTokens = filteredUsage.reduce((sum, row) => sum + readUsageTokenCounts(row).inputTokens, 0);
+  const totalCompletionTokens = filteredUsage.reduce((sum, row) => sum + readUsageTokenCounts(row).outputTokens, 0);
+  const totalTokens = filteredUsage.reduce((sum, row) => sum + readUsageTokenCounts(row).totalTokens, 0);
+  const totalAiCostUsd = filteredUsage.reduce((sum, row) => sum + getUsageCost(row).costUsd, 0);
+  const attributedReports = reportMap.size;
+
+  return {
+    dateRange,
+    totalAiRequests: filteredUsage.length,
+    totalPromptTokens,
+    totalCompletionTokens,
+    totalTokens,
+    totalAiCostUsd,
+    averageCostPerReport: attributedReports > 0 ? totalAiCostUsd / attributedReports : 0,
+    averageTokensPerReport: attributedReports > 0 ? totalTokens / attributedReports : 0,
+    topUsers: [...userMap.values()].sort((a, b) => b.aiCostUsd - a.aiCostUsd).slice(0, 10),
+    topReports: [...reportMap.values()].sort((a, b) => b.aiCostUsd - a.aiCostUsd).slice(0, 10),
+    detail: usageResult.detail,
+  } satisfies AdminUsageQuotasData;
 }
 
 export async function loadAdminUserDetail(userId: string) {
