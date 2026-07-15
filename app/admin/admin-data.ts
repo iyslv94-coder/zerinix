@@ -122,7 +122,17 @@ export type AdminDashboardData = {
     averageUsage: number | null;
   };
   topReports: {
-    mostExpensive: Array<{ title: string; value: number; detail: string }>;
+    mostExpensive: Array<{
+      id: string;
+      title: string;
+      reportType: string;
+      value: number;
+      tokens: number;
+      requestCount: number;
+      createdAt: string;
+      costStatus: AdminMetricStatus;
+      detail: string;
+    }>;
     mostUsed: Array<{ title: string; value: number; detail: string }>;
     mostGenerated: Array<{ title: string; value: number; detail: string }>;
   };
@@ -1678,20 +1688,6 @@ function readUsageMetadata(row: Record<string, unknown>) {
     : {};
 }
 
-function readUsageReportId(row: Record<string, unknown>) {
-  const metadata = readUsageMetadata(row);
-
-  return (
-    readString(row.report_id) ||
-    readString(metadata.report_id) ||
-    readString(metadata.reportId) ||
-    readString(metadata.saved_report_id) ||
-    readString(metadata.savedReportId) ||
-    readString(metadata.report_uuid) ||
-    readString(metadata.reportUuid)
-  );
-}
-
 function buildOpenAiFeatureCosts(
   usage: Array<Record<string, unknown>>,
   officialCostUsd: number,
@@ -2347,24 +2343,56 @@ async function buildTopReports(input: {
   reportTypeDistribution: Array<{ label: string; value: number }>;
   usage: Array<Record<string, unknown>>;
 }) {
-  const reportCostMap = new Map<string, number>();
+  const reportUsageMap = new Map<
+    string,
+    { costUsd: number; tokens: number; requestCount: number; hasEstimatedCost: boolean }
+  >();
 
   input.usage.forEach((row) => {
-    const reportId = readUsageReportId(row);
-    const cost = readNumber(row.estimated_cost_usd);
+    const reportId = readString(row.report_id);
 
-    if (!reportId || cost <= 0) {
+    if (!reportId) {
       return;
     }
 
-    reportCostMap.set(reportId, (reportCostMap.get(reportId) || 0) + cost);
+    const metadata = readUsageMetadata(row);
+    const inputTokens = readNumber(row.prompt_tokens);
+    const outputTokens = readNumber(row.completion_tokens);
+    const cachedTokens =
+      readNumber(metadata.cached_tokens) ||
+      readNumber(metadata.cachedTokens) ||
+      readNumber(metadata.input_cached_tokens);
+    const totalTokens = readNumber(row.total_tokens) || inputTokens + outputTokens + cachedTokens;
+    const storedCost = readNumber(row.estimated_cost_usd);
+    const estimatedCost = storedCost > 0
+      ? storedCost
+      : estimateModelCostUsd(readString(row.model), {
+          promptTokens: inputTokens,
+          completionTokens: outputTokens,
+          totalTokens,
+        });
+    const current = reportUsageMap.get(reportId) || {
+      costUsd: 0,
+      tokens: 0,
+      requestCount: 0,
+      hasEstimatedCost: false,
+    };
+
+    current.costUsd += estimatedCost ?? 0;
+    current.tokens += totalTokens;
+    current.requestCount += 1;
+    current.hasEstimatedCost ||= storedCost <= 0 && estimatedCost !== null;
+    reportUsageMap.set(reportId, current);
   });
 
-  let mostExpensive: Array<{ title: string; value: number; detail: string }> = [];
+  let mostExpensive: AdminDashboardData["topReports"]["mostExpensive"] = [];
 
-  if (reportCostMap.size > 0) {
+  if (reportUsageMap.size > 0) {
     const serviceClient = createServiceRoleClient();
-    const reportIds = [...reportCostMap.keys()].slice(0, 100);
+    const reportIds = [...reportUsageMap.entries()]
+      .sort(([, a], [, b]) => b.costUsd - a.costUsd)
+      .slice(0, 100)
+      .map(([reportId]) => reportId);
     const { data, error } = await serviceClient
       .from("reports")
       .select("id,title,report_type,created_at")
@@ -2377,11 +2405,25 @@ async function buildTopReports(input: {
       });
     } else {
       mostExpensive = (data || [])
-        .map((row) => ({
-          title: readString(row.title, "Untitled report"),
-          value: roundUsd(reportCostMap.get(readString(row.id)) || 0),
-          detail: `${readString(row.report_type, "Report")} · ${readString(row.created_at)}`,
-        }))
+        .map((row) => {
+          const id = readString(row.id);
+          const usage = reportUsageMap.get(id);
+          const reportType = readString(row.report_type, "Report");
+          const tokens = usage?.tokens || 0;
+          const requestCount = usage?.requestCount || 0;
+
+          return {
+            id,
+            title: readString(row.title, "Untitled report"),
+            reportType,
+            value: roundUsd(usage?.costUsd || 0),
+            tokens,
+            requestCount,
+            createdAt: readString(row.created_at),
+            costStatus: usage?.hasEstimatedCost ? "ESTIMATED" as const : "LIVE" as const,
+            detail: `${reportType} · ${requestCount} requests · ${tokens} tokens`,
+          };
+        })
         .filter((row) => row.value > 0)
         .sort((a, b) => b.value - a.value)
         .slice(0, 5);
