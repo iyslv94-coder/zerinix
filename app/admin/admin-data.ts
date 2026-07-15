@@ -34,6 +34,7 @@ export type AdminUserRow = {
 export type AdminDashboardData = {
   dateRange: AdminDateRange;
   totalUsers: number;
+  newUsers: number;
   activeUsers: number;
   reportsGenerated: number;
   aiConversations: number;
@@ -495,6 +496,26 @@ function normalizeStatusFromFailureRate(failed: number, total: number): AdminSys
   return "Operational";
 }
 
+function combineMetricStatuses(...statuses: AdminMetricStatus[]): AdminMetricStatus {
+  if (statuses.includes("ERROR")) {
+    return "ERROR";
+  }
+
+  if (statuses.includes("NOT CONNECTED")) {
+    return "NOT CONNECTED";
+  }
+
+  if (statuses.includes("LIVE")) {
+    return "LIVE";
+  }
+
+  if (statuses.includes("ESTIMATED")) {
+    return "ESTIMATED";
+  }
+
+  return "NO DATA";
+}
+
 async function fetchHealth(
   url: string,
   init: RequestInit,
@@ -645,6 +666,7 @@ function buildMockAdminDashboardData(dateRange: AdminDateRange): AdminDashboardD
   return {
     dateRange,
     totalUsers: 0,
+    newUsers: 0,
     activeUsers: 0,
     reportsGenerated: 0,
     aiConversations: 0,
@@ -1185,21 +1207,25 @@ async function countTableDetailed(table: string, range?: AdminDateRange) {
 
     return {
       count: 0,
-      status: "NO DATA" as AdminMetricStatus,
+      status: "ERROR" as AdminMetricStatus,
       detail: `${table} could not be queried.`,
     };
   }
 
+  const resolvedCount = count || 0;
+
   return {
-    count: count || 0,
-    status: "LIVE" as AdminMetricStatus,
-    detail: `Read from ${table}.`,
+    count: resolvedCount,
+    status: resolvedCount > 0 ? "LIVE" as AdminMetricStatus : "NO DATA" as AdminMetricStatus,
+    detail: resolvedCount > 0
+      ? `Read from ${table}.`
+      : `${table} query succeeded, but no records exist in the selected range.`,
   };
 }
 
 async function loadRecentUsage(range: AdminDateRange) {
   const serviceClient = createServiceRoleClient();
-  const { data, count } = await serviceClient
+  const { data, count, error } = await serviceClient
     .from("ai_usage_events")
     .select(
       "id,user_id,endpoint,report_field,model,status,prompt_tokens,completion_tokens,total_tokens,estimated_cost_usd,cache_hit,metadata,created_at",
@@ -1210,9 +1236,27 @@ async function loadRecentUsage(range: AdminDateRange) {
     .order("created_at", { ascending: false })
     .limit(5000);
 
+  if (error) {
+    console.error("[admin:data] ai usage query failed", {
+      message: error.message,
+      code: error.code,
+    });
+
+    return {
+      rows: [] as Array<Record<string, unknown>>,
+      totalRequests: 0,
+      status: "ERROR" as AdminMetricStatus,
+      detail: "ai_usage_events could not be queried.",
+    };
+  }
+
   return {
     rows: data || [],
     totalRequests: count || (data || []).length,
+    status: (count || (data || []).length) > 0 ? "LIVE" as AdminMetricStatus : "NO DATA" as AdminMetricStatus,
+    detail: (count || (data || []).length) > 0
+      ? "Read from ai_usage_events for the selected date range."
+      : "ai_usage_events query succeeded, but no records exist in the selected date range.",
   };
 }
 
@@ -1228,9 +1272,15 @@ async function loadAllAccountStatuses() {
   );
 }
 
-async function loadReportDistribution() {
+async function loadReportDistribution(range?: AdminDateRange) {
   const serviceClient = createServiceRoleClient();
-  const { data } = await serviceClient.from("reports").select("report_type");
+  let query = serviceClient.from("reports").select("report_type");
+
+  if (range) {
+    query = query.gte("created_at", range.fromIso).lte("created_at", range.toIso);
+  }
+
+  const { data } = await query;
   const map = new Map<string, number>();
 
   (data || []).forEach((row) => {
@@ -1239,6 +1289,43 @@ async function loadReportDistribution() {
   });
 
   return [...map.entries()].map(([label, value]) => ({ label, value }));
+}
+
+async function loadReportStatusSummary(range: AdminDateRange) {
+  const serviceClient = createServiceRoleClient();
+  const { data, error } = await serviceClient
+    .from("reports")
+    .select("status")
+    .gte("created_at", range.fromIso)
+    .lte("created_at", range.toIso)
+    .limit(5000);
+
+  if (error) {
+    console.error("[admin:data] report status summary query failed", {
+      message: error.message,
+      code: error.code,
+    });
+
+    return {
+      completed: 0,
+      failed: 0,
+      detail: "Report status counts could not be queried.",
+      status: "ERROR" as AdminMetricStatus,
+    };
+  }
+
+  const rows = data || [];
+  const completed = rows.filter((row) => ["complete", "completed"].includes(readString(row.status).toLowerCase())).length;
+  const failed = rows.filter((row) => readString(row.status).toLowerCase() === "failed").length;
+
+  return {
+    completed,
+    failed,
+    detail: rows.length
+      ? `${completed} completed, ${failed} failed reports in the selected range.`
+      : "No report status records exist in the selected range.",
+    status: rows.length ? "LIVE" as AdminMetricStatus : "NO DATA" as AdminMetricStatus,
+  };
 }
 
 async function loadBillingSummary() {
@@ -1569,6 +1656,23 @@ function mapAiFeature(value: unknown): OpenAiCostCenterData["featureCosts"][numb
   return "Other AI features";
 }
 
+function readUsageMetadata(row: Record<string, unknown>) {
+  return row.metadata && typeof row.metadata === "object"
+    ? row.metadata as Record<string, unknown>
+    : {};
+}
+
+function readUsageReportId(row: Record<string, unknown>) {
+  const metadata = readUsageMetadata(row);
+
+  return (
+    readString(metadata.report_id) ||
+    readString(metadata.reportId) ||
+    readString(metadata.saved_report_id) ||
+    readString(metadata.savedReportId)
+  );
+}
+
 function buildOpenAiFeatureCosts(
   usage: Array<Record<string, unknown>>,
   officialCostUsd: number,
@@ -1586,11 +1690,16 @@ function buildOpenAiFeatureCosts(
   }
 
   const localCostTotal = usage.reduce((sum, row) => sum + readNumber(row.estimated_cost_usd), 0);
+
+  if (localCostTotal <= 0) {
+    return features;
+  }
+
   const featureTotals = new Map<string, number>();
 
   usage.forEach((row) => {
     const feature = mapAiFeature(readString(row.endpoint) || readString(row.report_field));
-    const weight = localCostTotal > 0 ? readNumber(row.estimated_cost_usd) : 1;
+    const weight = readNumber(row.estimated_cost_usd);
 
     featureTotals.set(feature, (featureTotals.get(feature) || 0) + weight);
   });
@@ -2080,24 +2189,6 @@ function calculateOpenAiAnalytics(input: {
     };
   }
 
-  if (input.official) {
-    return {
-      inputTokens: 0,
-      outputTokens: 0,
-      cachedTokens: 0,
-      totalTokens: 0,
-      cost: 0,
-      costPerUser: null,
-      costPerReport: null,
-      costRanges: input.official.costRanges,
-      dailyCostHistory: input.official.dailyCostHistory,
-      featureCosts: input.official.featureCosts,
-      costAlerts: input.official.costAlerts,
-      modelUsage: [],
-      unknownModels: [],
-    };
-  }
-
   const inputTokens = input.usage.reduce((sum, row) => sum + readNumber(row.prompt_tokens), 0);
   const outputTokens = input.usage.reduce((sum, row) => sum + readNumber(row.completion_tokens), 0);
   const cachedTokens = input.usage.reduce((sum, row) => {
@@ -2150,7 +2241,11 @@ function calculateOpenAiAnalytics(input: {
       allTime: null,
     },
     dailyCostHistory: [],
-    featureCosts: buildOpenAiFeatureCosts(input.usage, cost, "ESTIMATED"),
+    featureCosts: buildOpenAiFeatureCosts(
+      input.usage,
+      cost,
+      input.usage.length && cost > 0 ? "LIVE" : "NO DATA"
+    ),
     costAlerts: buildOpenAiCostAlerts(
       { today: null, thisMonth: null, last24h: null, last7d: null, last30d: null, allTime: null },
       input.totalUsers,
@@ -2187,11 +2282,53 @@ function calculateUserAnalytics(input: {
   };
 }
 
-function buildTopReports(input: {
+async function buildTopReports(input: {
   reportTypeDistribution: Array<{ label: string; value: number }>;
+  usage: Array<Record<string, unknown>>;
 }) {
+  const reportCostMap = new Map<string, number>();
+
+  input.usage.forEach((row) => {
+    const reportId = readUsageReportId(row);
+    const cost = readNumber(row.estimated_cost_usd);
+
+    if (!reportId || cost <= 0) {
+      return;
+    }
+
+    reportCostMap.set(reportId, (reportCostMap.get(reportId) || 0) + cost);
+  });
+
+  let mostExpensive: Array<{ title: string; value: number; detail: string }> = [];
+
+  if (reportCostMap.size > 0) {
+    const serviceClient = createServiceRoleClient();
+    const reportIds = [...reportCostMap.keys()].slice(0, 100);
+    const { data, error } = await serviceClient
+      .from("reports")
+      .select("id,title,report_type,created_at")
+      .in("id", reportIds);
+
+    if (error) {
+      console.error("[admin:data] report cost attribution query failed", {
+        message: error.message,
+        code: error.code,
+      });
+    } else {
+      mostExpensive = (data || [])
+        .map((row) => ({
+          title: readString(row.title, "Untitled report"),
+          value: roundUsd(reportCostMap.get(readString(row.id)) || 0),
+          detail: `${readString(row.report_type, "Report")} · ${readString(row.created_at)}`,
+        }))
+        .filter((row) => row.value > 0)
+        .sort((a, b) => b.value - a.value)
+        .slice(0, 5);
+    }
+  }
+
   return {
-    mostExpensive: [],
+    mostExpensive,
     mostUsed: [],
     mostGenerated: input.reportTypeDistribution
       .slice()
@@ -2644,6 +2781,7 @@ export async function loadAdminDashboardData(input?: {
   const aiConversations = conversationCount.count;
   const workspaceCount = workspaceSummary.count;
   const totalUsers = authData.total || authData.users.length;
+  const newUsers = authData.users.filter((user) => isWithinRange(user.created_at || "", dateRange)).length;
   const activeUsers = authData.users.filter(
     (user) =>
       user.last_sign_in_at &&
@@ -2656,7 +2794,14 @@ export async function loadAdminDashboardData(input?: {
     usage,
     totalUsers,
   });
-  const aiApiCost = openAiCostCenter.status === "LIVE" ? openAiCostCenter.costUsd : 0;
+  const localAiApiCost = usage.reduce((sum, row) => sum + readNumber(row.estimated_cost_usd), 0);
+  const aiUsageSourceStatus: AdminMetricStatus =
+    openAiCostCenter.status === "LIVE"
+      ? "LIVE"
+      : usageResult.status === "LIVE"
+        ? "ESTIMATED"
+        : usageResult.status;
+  const aiApiCost = openAiCostCenter.status === "LIVE" ? openAiCostCenter.costUsd : localAiApiCost;
   const failedRequests = usage.filter((row) => readString(row.status) === "failed");
   const [charts, recentActivity, revenueSummary] = await Promise.all([
     loadAdminChartData(authData.users, dateRange),
@@ -2689,9 +2834,10 @@ export async function loadAdminDashboardData(input?: {
     failedJobs: recentActivity.filter((item) => item.id.startsWith("failure:")).slice(0, 5),
   };
 
-  const [userGrowth, reportTypeDistribution, billingSummary] = await Promise.all([
+  const [userGrowth, reportTypeDistribution, reportStatusSummary, billingSummary] = await Promise.all([
     loadUserGrowth(),
-    loadReportDistribution(),
+    loadReportDistribution(dateRange),
+    loadReportStatusSummary(dateRange),
     loadBillingSummary(),
   ]);
   const revenueValue = revenueSummary.value;
@@ -2718,7 +2864,7 @@ export async function loadAdminDashboardData(input?: {
     totalUsers,
     totalRequests: usageSummary.totalRequests,
   });
-  const topReports = buildTopReports({ reportTypeDistribution });
+  const topReports = await buildTopReports({ reportTypeDistribution, usage });
   const alerts = buildAdminAlerts({
     aiCost: aiApiCost,
     failedRequests: usageSummary.failedRequests,
@@ -2726,10 +2872,19 @@ export async function loadAdminDashboardData(input?: {
     tokenUsage: openAiAnalytics.totalTokens,
     systemStatus,
   });
+  const userSourceStatus: AdminMetricStatus = totalUsers > 0 || newUsers > 0 || activeUsers > 0
+    ? "LIVE"
+    : "NO DATA";
+  const reportsSourceStatus = combineMetricStatuses(
+    reportCount.status,
+    conversationCount.status,
+    reportStatusSummary.status
+  );
 
   return {
     dateRange,
     totalUsers,
+    newUsers,
     activeUsers,
     reportsGenerated,
     aiConversations,
@@ -2739,23 +2894,23 @@ export async function loadAdminDashboardData(input?: {
     aiApiCost,
 	    sourceStatus: {
 	      revenue: revenueSummary.status,
-	      aiUsage: openAiCostCenter.status,
-	      users: "LIVE",
-	      reports:
-	        reportCount.status === "LIVE" && conversationCount.status === "LIVE"
-	          ? "LIVE"
-	          : "NO DATA",
+	      aiUsage: aiUsageSourceStatus,
+	      users: userSourceStatus,
+	      reports: reportsSourceStatus,
 	      workspaces: workspaceSummary.status,
 	      subscriptions: billingSummary.status,
 	    },
 	    sourceDetails: {
 	      revenue: revenueSummary.detail,
-	      aiUsage: openAiCostCenter.detail,
-	      users: "Read from Supabase Auth admin users.",
-	      reports:
-	        reportCount.status === "LIVE" && conversationCount.status === "LIVE"
-	          ? "Read from reports, ai_conversations and report_workspaces tables."
-	          : `${reportCount.detail} ${conversationCount.detail} ${workspaceSummary.detail}`,
+	      aiUsage: openAiCostCenter.status === "LIVE"
+	        ? openAiCostCenter.detail
+	        : `${usageResult.detail} Official OpenAI organization cost data is unavailable: ${openAiCostCenter.detail}`,
+	      users: userSourceStatus === "LIVE"
+	        ? "Read from Supabase Auth admin users. Total users are all-time; new users and active users use the selected date range."
+	        : "Supabase Auth query succeeded, but no users were returned.",
+	      reports: reportsSourceStatus === "LIVE"
+	        ? `Read from reports and ai_conversations tables for the selected date range. ${reportStatusSummary.detail}`
+	        : `${reportCount.detail} ${conversationCount.detail} ${reportStatusSummary.detail}`,
 	      workspaces: workspaceSummary.detail,
 	      subscriptions: billingSummary.detail,
 	    },
