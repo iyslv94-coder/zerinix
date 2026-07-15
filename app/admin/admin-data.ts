@@ -101,6 +101,8 @@ export type AdminDashboardData = {
     grossProfit: number | null;
     grossMargin: number | null;
     netProfit: number | null;
+    financialSourceStatus: AdminMetricStatus;
+    financialSourceDetail: string;
     averageCostPerUser: number | null;
     averageCostPerReport: number | null;
     dailyAiCost: number | null;
@@ -771,6 +773,8 @@ function buildMockAdminDashboardData(dateRange: AdminDateRange): AdminDashboardD
       grossProfit: null,
       grossMargin: null,
       netProfit: null,
+      financialSourceStatus: "NOT CONNECTED",
+      financialSourceDetail: "Stripe is not connected. Revenue, Gross Profit, Gross Margin, and Net Profit will switch to live Stripe data automatically when Stripe is connected.",
       averageCostPerUser: null,
       averageCostPerReport: null,
       dailyAiCost: null,
@@ -2537,6 +2541,8 @@ function calculateCostControl(input: {
 
 function calculateFinancials(input: {
   revenue: number | null;
+  revenueStatus: AdminMetricStatus;
+  revenueDetail: string;
   aiCost: number;
   aiCostConnected?: boolean;
   totalUsers: number;
@@ -2558,6 +2564,10 @@ function calculateFinancials(input: {
     input.revenue && input.revenue > 0 && grossProfit !== null
       ? Number(((grossProfit / input.revenue) * 100).toFixed(1))
       : null;
+  const financialSourceConnected = input.revenueStatus === "LIVE" || input.revenueStatus === "NO DATA";
+  const financialSourceDetail = financialSourceConnected
+    ? input.revenueDetail
+    : `${input.revenueDetail} Revenue, Gross Profit, Gross Margin, and Net Profit will switch to live Stripe data automatically when Stripe is connected.`;
 
   return {
     revenue: input.revenue,
@@ -2565,6 +2575,8 @@ function calculateFinancials(input: {
     grossProfit,
     grossMargin,
     netProfit: null,
+    financialSourceStatus: input.revenueStatus,
+    financialSourceDetail,
     averageCostPerUser:
       input.totalUsers > 0 ? Number((input.aiCost / input.totalUsers).toFixed(4)) : null,
     averageCostPerReport: null,
@@ -3379,6 +3391,8 @@ export async function loadAdminDashboardData(input?: {
   const subscriptions = billingSummary.activePaidSubscriptions;
   const financials = calculateFinancials({
     revenue: revenueValue,
+    revenueStatus: revenueSummary.status,
+    revenueDetail: revenueSummary.detail,
     aiCost: aiApiCost,
     aiCostConnected: aiUsageSourceStatus === "LIVE" || aiUsageSourceStatus === "ESTIMATED",
     totalUsers,

@@ -632,10 +632,10 @@ export default async function AdminDashboardPage({
     {
       label: "Gross Profit",
       value: formatCurrency(data.financials.grossProfit),
-      detail: data.financials.grossProfit === null ? data.sourceDetails.revenue : "Revenue minus estimated AI/API cost.",
+      detail: data.financials.grossProfit === null ? data.financials.financialSourceDetail : "Revenue minus estimated AI/API cost.",
       icon: CircleDollarSign,
       accent: "green" as const,
-      status: data.financials.grossProfit === null ? "NOT CONNECTED" as const : "ESTIMATED" as const,
+      status: data.financials.grossProfit === null ? data.financials.financialSourceStatus : "ESTIMATED" as const,
       trend: profitSeries.length ? calculateTrend(profitSeries, "Last 7d") : undefined,
       sparkline: profitSeries,
       animatedValue: data.financials.grossProfit ?? undefined,
@@ -644,19 +644,21 @@ export default async function AdminDashboardPage({
     {
       label: "Gross Margin",
       value: formatPercent(data.financials.grossMargin),
-      detail: "Gross profit divided by revenue",
+      detail: data.financials.grossMargin === null ? data.financials.financialSourceDetail : "Gross profit divided by revenue",
       icon: Gauge,
       accent: "blue" as const,
-      status: data.financials.grossMargin === null ? "NOT CONNECTED" as const : "ESTIMATED" as const,
+      status: data.financials.grossMargin === null ? data.financials.financialSourceStatus : "ESTIMATED" as const,
       sparkline: profitSeries,
     },
     {
       label: "Net Profit",
       value: formatCurrency(data.financials.netProfit),
-      detail: "Operating expense source required",
+      detail: data.financials.financialSourceStatus === "NOT CONNECTED"
+        ? data.financials.financialSourceDetail
+        : "Operating expense source required",
       icon: WalletCards,
       accent: "amber" as const,
-      status: "NOT CONNECTED" as const,
+      status: data.financials.netProfit === null ? data.financials.financialSourceStatus : "ESTIMATED" as const,
       sparkline: [],
     },
   ];
