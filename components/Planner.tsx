@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
   type DragEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
 } from "react";
 import { jsPDF } from "jspdf";
@@ -152,6 +153,14 @@ type ReportFieldDefinition = {
 
 type ChatMode = "plan" | "market" | "chat";
 type ChatModelPreference = "fast" | "balanced";
+type ExecutiveBriefField =
+  | "decisionGoal"
+  | "company"
+  | "industryMarket"
+  | "region"
+  | "businessObjective"
+  | "additionalContext";
+type ExecutiveBriefFields = Record<ExecutiveBriefField, string>;
 
 type ResponseLanguage = "English" | "Turkish";
 
@@ -333,6 +342,69 @@ const executiveDecisionCategories = [
   { label: "Business model", detail: "Pricing, margins, scalability", icon: PieChart },
   { label: "Execution risk", detail: "Team, capital, operations", icon: ShieldAlert },
 ];
+
+const executiveBriefFields: Array<{
+  field: ExecutiveBriefField;
+  label: string;
+  placeholder: string;
+  multiline?: boolean;
+}> = [
+  {
+    field: "decisionGoal",
+    label: "Decision Goal",
+    placeholder: "What decision should this report support?",
+  },
+  {
+    field: "company",
+    label: "Company",
+    placeholder: "Company, product or business idea",
+  },
+  {
+    field: "industryMarket",
+    label: "Industry / Market",
+    placeholder: "Industry, category, customer segment",
+  },
+  {
+    field: "region",
+    label: "Target Country or Region",
+    placeholder: "Country, region or launch geography",
+  },
+  {
+    field: "businessObjective",
+    label: "Business Objective",
+    placeholder: "Validation, fundraising, expansion, pricing, GTM...",
+    multiline: true,
+  },
+  {
+    field: "additionalContext",
+    label: "Additional Context",
+    placeholder: "Known constraints, competitors, budget, timeline, assumptions or links",
+    multiline: true,
+  },
+];
+
+const emptyExecutiveBrief: ExecutiveBriefFields = {
+  decisionGoal: "",
+  company: "",
+  industryMarket: "",
+  region: "",
+  businessObjective: "",
+  additionalContext: "",
+};
+
+function buildExecutiveBriefPrompt(fields: ExecutiveBriefFields) {
+  return [
+    ["Decision Goal", fields.decisionGoal],
+    ["Company", fields.company],
+    ["Industry / Market", fields.industryMarket],
+    ["Target Country or Region", fields.region],
+    ["Business Objective", fields.businessObjective],
+    ["Additional Context", fields.additionalContext],
+  ]
+    .filter(([, value]) => value.trim())
+    .map(([label, value]) => `${label}: ${value.trim()}`)
+    .join("\n");
+}
 
 const decisionGoalLabels: Record<ChatMode, string> = {
   plan: "Business Idea Validation",
@@ -5274,7 +5346,13 @@ export default function Planner({
           emptyMarketReport as Record<MarketReportField, string>
         )
       : null;
-  const [prompt, setPrompt] = useState("");
+  const initialExecutiveBrief: ExecutiveBriefFields = {
+    ...emptyExecutiveBrief,
+    additionalContext: regenerationContext?.prompt || "",
+  };
+  const [prompt, setPrompt] = useState(() => buildExecutiveBriefPrompt(initialExecutiveBrief));
+  const [executiveBrief, setExecutiveBrief] = useState<ExecutiveBriefFields>(initialExecutiveBrief);
+  const [advancedOptionsOpen, setAdvancedOptionsOpen] = useState(false);
   const [result, setResult] = useState(
     initialReport?.status?.toLowerCase() === "completed" ? "" : ""
   );
@@ -5359,7 +5437,7 @@ export default function Planner({
   const [activeReportLanguage, setActiveReportLanguage] =
     useState<ResponseLanguage>("English");
   const chatScrollerRef = useRef<HTMLDivElement | null>(null);
-  const composerRef = useRef<HTMLTextAreaElement | null>(null);
+  const composerRef = useRef<HTMLInputElement | null>(null);
   const isNearBottomRef = useRef(true);
   const scrollFrameRef = useRef<number | null>(null);
   const persistedConversationIdsRef = useRef(
@@ -5495,7 +5573,7 @@ export default function Planner({
 
     setConversations((current) => [conversation, ...current]);
     setActiveConversationId(id);
-    setPrompt("");
+    clearComposerPrompt();
     setResult("");
     setReportGenerationError("");
     setReportGenerationWarning("");
@@ -5853,7 +5931,7 @@ export default function Planner({
     if (latestMode) {
       setActiveMode(latestMode);
     }
-    setPrompt("");
+    clearComposerPrompt();
     setResult("");
     setReportGenerationError("");
     setReportGenerationWarning("");
@@ -5905,6 +5983,26 @@ export default function Planner({
 
   function removeAttachment(id: string) {
     setAttachments((current) => current.filter((attachment) => attachment.id !== id));
+  }
+
+  function updateExecutiveBriefField(field: ExecutiveBriefField, value: string) {
+    setExecutiveBrief((current) => {
+      const next = { ...current, [field]: value };
+
+      setPrompt(buildExecutiveBriefPrompt(next));
+
+      return next;
+    });
+  }
+
+  function setComposerPrompt(value: string, field: ExecutiveBriefField = "additionalContext") {
+    setPrompt(value);
+    setExecutiveBrief({ ...emptyExecutiveBrief, [field]: value });
+  }
+
+  function clearComposerPrompt() {
+    setPrompt("");
+    setExecutiveBrief(emptyExecutiveBrief);
   }
 
   function addUserMessage(mode: ChatMode, content: string, conversationId = activeConversationId) {
@@ -5973,7 +6071,7 @@ export default function Planner({
   }
 
   function editMessage(message: ChatMessage) {
-    setPrompt(message.content);
+    setComposerPrompt(message.content);
     setActiveMode(message.mode || "plan");
     composerRef.current?.focus();
   }
@@ -6025,7 +6123,7 @@ export default function Planner({
       await deletePersistedMessage(previousAssistantMessage.id);
     }
 
-    setPrompt(request.prompt);
+    setComposerPrompt(request.prompt);
 
     if (request.mode === "plan") {
       void generatePlan(request.prompt, false);
@@ -6073,7 +6171,7 @@ export default function Planner({
       status: "complete",
       createdAt: Date.now(),
     });
-    setPrompt("");
+    clearComposerPrompt();
     setResult("");
     setMarketReport(null);
     setPlanReport(null);
@@ -6098,6 +6196,28 @@ export default function Planner({
       await analyzeMarket(submittedPrompt);
     } else {
       await sendChatMessage(submittedPrompt);
+    }
+  }
+
+  function handleExecutiveBriefKeyDown(
+    event: ReactKeyboardEvent<HTMLInputElement | HTMLTextAreaElement>
+  ) {
+    if (
+      activeMode === "chat" &&
+      event.key === "Enter" &&
+      !event.shiftKey &&
+      !event.nativeEvent.isComposing
+    ) {
+      event.preventDefault();
+      if (prompt.trim() && !isWorking) {
+        void submitPrompt();
+      }
+      return;
+    }
+
+    if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+      event.preventDefault();
+      void submitPrompt();
     }
   }
 
@@ -6515,7 +6635,7 @@ export default function Planner({
 
       updateAssistantMessage(assistantMessageId, finalText, "complete", conversationId);
       void updatePersistedMessage(assistantMessageId, finalText, "complete");
-      setPrompt("");
+      clearComposerPrompt();
     } catch (error) {
       const aborted = error instanceof DOMException && error.name === "AbortError";
       const errorMessage =
@@ -7430,7 +7550,7 @@ export default function Planner({
                           <button
                             key={suggestion}
                             type="button"
-                            onClick={() => setPrompt(suggestion)}
+                            onClick={() => setComposerPrompt(suggestion, "decisionGoal")}
                             className="group rounded-[1.25rem] border border-white/10 bg-white/[0.035] p-4 text-left text-sm leading-6 text-zinc-300 shadow-lg shadow-black/10 transition duration-300 hover:-translate-y-0.5 hover:border-teal-200/30 hover:bg-teal-200/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200/30"
                           >
                             <span className="flex items-start justify-between gap-3">
@@ -7594,32 +7714,72 @@ export default function Planner({
                     {prompt.trim().length} chars
                   </span>
                 </div>
-                <textarea
-                  ref={composerRef}
-                  value={prompt}
-                  onChange={(event) => setPrompt(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (
-                      activeMode === "chat" &&
-                      event.key === "Enter" &&
-                      !event.shiftKey &&
-                      !event.nativeEvent.isComposing
-                    ) {
-                      event.preventDefault();
-                      if (prompt.trim() && !isWorking) {
-                        void submitPrompt();
-                      }
-                      return;
-                    }
-
-                    if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
-                      event.preventDefault();
-                      void submitPrompt();
-                    }
-                  }}
-                  className="min-h-36 w-full resize-none bg-transparent p-4 text-base leading-7 text-white outline-none placeholder:text-zinc-600"
-                  placeholder={activeEmptyState.placeholder}
-                />
+                <div className="grid gap-3 p-4 md:grid-cols-2">
+                  {executiveBriefFields.slice(0, 4).map((fieldConfig, index) => (
+                    <label key={fieldConfig.field} className="block">
+                      <span className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                        {fieldConfig.label}
+                      </span>
+                      <input
+                        ref={index === 0 ? composerRef : undefined}
+                        value={executiveBrief[fieldConfig.field]}
+                        onChange={(event) => updateExecutiveBriefField(fieldConfig.field, event.target.value)}
+                        onKeyDown={handleExecutiveBriefKeyDown}
+                        className="mt-2 min-h-12 w-full rounded-2xl border border-white/10 bg-black/35 px-4 text-sm text-white outline-none transition placeholder:text-zinc-600 focus:border-teal-300/35 focus:ring-2 focus:ring-teal-200/10"
+                        placeholder={fieldConfig.placeholder}
+                      />
+                    </label>
+                  ))}
+                  {executiveBriefFields.slice(4, 5).map((fieldConfig) => (
+                    <label key={fieldConfig.field} className="block md:col-span-2">
+                      <span className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                        {fieldConfig.label}
+                      </span>
+                      <textarea
+                        value={executiveBrief[fieldConfig.field]}
+                        onChange={(event) => updateExecutiveBriefField(fieldConfig.field, event.target.value)}
+                        onKeyDown={handleExecutiveBriefKeyDown}
+                        className="mt-2 min-h-24 w-full resize-none rounded-2xl border border-white/10 bg-black/35 p-4 text-sm leading-6 text-white outline-none transition placeholder:text-zinc-600 focus:border-teal-300/35 focus:ring-2 focus:ring-teal-200/10"
+                        placeholder={fieldConfig.placeholder}
+                      />
+                    </label>
+                  ))}
+                </div>
+                <details
+                  open={advancedOptionsOpen}
+                  onToggle={(event) => setAdvancedOptionsOpen(event.currentTarget.open)}
+                  className="border-t border-white/10"
+                >
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-3 text-left transition hover:bg-white/[0.035] [&::-webkit-details-marker]:hidden">
+                    <span>
+                      <span className="block text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                        Advanced Options
+                      </span>
+                      <span className="mt-1 block text-xs text-zinc-600">
+                        Add constraints, known assumptions or extra context.
+                      </span>
+                    </span>
+                    <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs font-semibold text-zinc-400">
+                      {advancedOptionsOpen ? "Hide" : "Expand"}
+                    </span>
+                  </summary>
+                  <div className="px-4 pb-4">
+                    {executiveBriefFields.slice(5).map((fieldConfig) => (
+                      <label key={fieldConfig.field} className="block">
+                        <span className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                          {fieldConfig.label}
+                        </span>
+                        <textarea
+                          value={executiveBrief[fieldConfig.field]}
+                          onChange={(event) => updateExecutiveBriefField(fieldConfig.field, event.target.value)}
+                          onKeyDown={handleExecutiveBriefKeyDown}
+                          className="mt-2 min-h-28 w-full resize-none rounded-2xl border border-white/10 bg-black/35 p-4 text-sm leading-6 text-white outline-none transition placeholder:text-zinc-600 focus:border-teal-300/35 focus:ring-2 focus:ring-teal-200/10"
+                          placeholder={fieldConfig.placeholder}
+                        />
+                      </label>
+                    ))}
+                  </div>
+                </details>
               </div>
 
               <div className="flex flex-col gap-3 pt-3 md:flex-row md:items-center md:justify-between">
