@@ -184,10 +184,38 @@ export function verifyStripeWebhookSignature({
   });
 }
 
-function getStripeNotConfiguredResult<T>() {
-  const config = getStripeConfiguration();
+function getStripeMissingConfigurationResult<T>(missing: string[]) {
+  return integrationNotConfigured<T>("Stripe", missing);
+}
 
-  return integrationNotConfigured<T>("Stripe", config.missing);
+export function getStripeCheckoutConfiguration(planId: BillingPlanId) {
+  const config = getStripeConfiguration();
+  const plan = billingPlans.find((item) => item.id === planId);
+  const priceId = plan?.priceEnv ? process.env[plan.priceEnv] || "" : "";
+  const missing = [
+    !config.hasSecretKey ? "STRIPE_SECRET_KEY" : "",
+    !config.appUrl ? "NEXT_PUBLIC_APP_URL" : "",
+    plan?.priceEnv && !priceId ? plan.priceEnv : "",
+  ].filter(Boolean);
+
+  return {
+    configured: missing.length === 0,
+    missing,
+    priceId,
+  };
+}
+
+export function getStripePortalConfiguration() {
+  const config = getStripeConfiguration();
+  const missing = [
+    !config.hasSecretKey ? "STRIPE_SECRET_KEY" : "",
+    !config.appUrl ? "NEXT_PUBLIC_APP_URL" : "",
+  ].filter(Boolean);
+
+  return {
+    configured: missing.length === 0,
+    missing,
+  };
 }
 
 function buildStripeHeaders(idempotencyKey?: string) {
@@ -218,12 +246,11 @@ function encodeStripeForm(payload: Record<string, string | number | boolean | un
 async function postStripeForm<T>(
   path: string,
   payload: Record<string, string | number | boolean | undefined>,
-  idempotencyKey?: string
+  idempotencyKey?: string,
+  missingConfiguration?: string[]
 ): Promise<IntegrationResult<T>> {
-  const config = getStripeConfiguration();
-
-  if (!config.configured || !config.enabled) {
-    return getStripeNotConfiguredResult<T>();
+  if (missingConfiguration?.length) {
+    return getStripeMissingConfigurationResult<T>(missingConfiguration);
   }
 
   let response: Response;
@@ -285,18 +312,19 @@ export async function createStripeCheckoutSession(input: {
   idempotencyKey: string;
 }): Promise<IntegrationResult<{ id: string; url: string | null }>> {
   const config = getStripeConfiguration();
-  const plan = billingPlans.find((item) => item.id === input.plan);
-  const priceId = plan?.priceEnv ? process.env[plan.priceEnv] || "" : "";
+  const checkoutConfig = getStripeCheckoutConfiguration(input.plan);
 
-  if (!config.configured || !config.enabled || !priceId) {
-    return getStripeNotConfiguredResult<{ id: string; url: string | null }>();
+  if (!checkoutConfig.configured) {
+    return getStripeMissingConfigurationResult<{ id: string; url: string | null }>(
+      checkoutConfig.missing
+    );
   }
 
   return postStripeForm(
     "checkout/sessions",
     {
       mode: "subscription",
-      "line_items[0][price]": priceId,
+      "line_items[0][price]": checkoutConfig.priceId,
       "line_items[0][quantity]": 1,
       customer: input.existingCustomerId || undefined,
       customer_email: input.existingCustomerId ? undefined : input.userEmail,
@@ -308,7 +336,8 @@ export async function createStripeCheckoutSession(input: {
       "subscription_data[metadata][user_id]": input.userId,
       "subscription_data[metadata][plan]": input.plan,
     },
-    input.idempotencyKey
+    input.idempotencyKey,
+    checkoutConfig.missing
   );
 }
 
@@ -318,9 +347,12 @@ export async function createStripeCustomerPortalSession(input: {
   idempotencyKey: string;
 }): Promise<IntegrationResult<{ id: string; url: string }>> {
   const config = getStripeConfiguration();
+  const portalConfig = getStripePortalConfiguration();
 
-  if (!config.configured || !config.enabled) {
-    return getStripeNotConfiguredResult<{ id: string; url: string }>();
+  if (!portalConfig.configured) {
+    return getStripeMissingConfigurationResult<{ id: string; url: string }>(
+      portalConfig.missing
+    );
   }
 
   return postStripeForm(
@@ -329,7 +361,8 @@ export async function createStripeCustomerPortalSession(input: {
       customer: input.customerId,
       return_url: `${config.appUrl}/dashboard/billing`,
     },
-    input.idempotencyKey
+    input.idempotencyKey,
+    portalConfig.missing
   );
 }
 

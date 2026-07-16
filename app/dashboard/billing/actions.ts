@@ -13,7 +13,8 @@ import {
   createStripeCheckoutSession,
   createStripeCustomerPortalSession,
   getPlanPriceState,
-  getStripeConfiguration,
+  getStripeCheckoutConfiguration,
+  getStripePortalConfiguration,
 } from "@/app/lib/billing/stripe";
 import { getUserBillingProfile } from "@/app/lib/billing/stripe-sync";
 
@@ -93,10 +94,10 @@ export async function startPlanChange(formData: FormData) {
     });
   }
 
-  const stripeConfig = getStripeConfiguration();
   const priceState = getPlanPriceState(plan);
+  const checkoutConfig = getStripeCheckoutConfiguration(plan);
 
-  if (!stripeConfig.configured || !stripeConfig.enabled || !priceState.configured) {
+  if (!checkoutConfig.configured || !priceState.configured) {
     billingRedirect({
       billing_notice: "Billing is not configured yet. Your current plan was not changed.",
     });
@@ -126,9 +127,9 @@ export async function startPlanChange(formData: FormData) {
 
 export async function openCustomerPortal() {
   const { supabase, user } = await getBillingActionContext("portal");
-  const stripeConfig = getStripeConfiguration();
+  const stripeConfig = getStripePortalConfiguration();
 
-  if (!stripeConfig.configured || !stripeConfig.enabled) {
+  if (!stripeConfig.configured) {
     billingRedirect({
       billing_notice: "Billing is not configured yet. The customer portal is unavailable.",
     });
@@ -169,9 +170,9 @@ export async function confirmDowngrade(formData: FormData) {
     billingRedirect({ billing_error: "Invalid downgrade target." });
   }
 
-  const stripeConfig = getStripeConfiguration();
+  const stripeConfig = getStripePortalConfiguration();
 
-  if (!stripeConfig.configured || !stripeConfig.enabled) {
+  if (!stripeConfig.configured) {
     billingRedirect({
       billing_notice: "Billing is not configured yet. Downgrade was not applied.",
     });
@@ -184,9 +185,9 @@ export async function confirmDowngrade(formData: FormData) {
 
 export async function requestCancellation() {
   await getBillingActionContext("cancel");
-  const stripeConfig = getStripeConfiguration();
+  const stripeConfig = getStripePortalConfiguration();
 
-  if (!stripeConfig.configured || !stripeConfig.enabled) {
+  if (!stripeConfig.configured) {
     billingRedirect({
       billing_notice: "Billing is not configured yet. No subscription was cancelled.",
     });

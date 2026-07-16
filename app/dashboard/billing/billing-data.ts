@@ -6,7 +6,9 @@ import {
 } from "@/app/lib/ai/governance";
 import {
   billingPlans,
+  getStripeCheckoutConfiguration,
   getPlanPriceState,
+  getStripePortalConfiguration,
   getStripeConfiguration,
   getStripePublishableStatus,
 } from "@/app/lib/billing/stripe";
@@ -182,10 +184,12 @@ export async function loadBillingOverview(
       ...plan,
       current: plan.databaseTier === planTier,
       priceState: getPlanPriceState(plan.id),
+      checkout: getStripeCheckoutConfiguration(plan.id),
       supportedBySchema: Boolean(plan.databaseTier),
     })),
     stripe: {
       server: getStripeConfiguration(),
+      portal: getStripePortalConfiguration(),
       publishable: getStripePublishableStatus(),
     },
     paymentMethod: null as null,

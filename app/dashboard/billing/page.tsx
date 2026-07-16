@@ -109,11 +109,16 @@ export default async function BillingPage({
     loadBillingOverview(supabase, user),
   ]);
   const currentPlan = billing.plans.find((plan) => plan.current);
-  const stripeMissing = billing.stripe.server.missing;
-  const billingConfigured = billing.stripe.server.configured;
-  const billingActionsAvailable = billingConfigured && billing.stripe.server.enabled;
+  const paidCheckoutPlans = billing.plans.filter(
+    (plan) => plan.supportedBySchema && plan.id !== "free"
+  );
+  const checkoutConfigured = paidCheckoutPlans.some((plan) => plan.checkout.configured);
+  const checkoutMissing = Array.from(
+    new Set(paidCheckoutPlans.flatMap((plan) => plan.checkout.missing))
+  );
+  const portalActionsAvailable = billing.stripe.portal.configured;
   const billingUnavailableMessage =
-    "Secure billing actions are disabled until Stripe is configured for this environment.";
+    "Customer portal actions are disabled until Stripe customer management is configured for this environment.";
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-black text-white">
@@ -173,7 +178,7 @@ export default async function BillingPage({
             </div>
           ) : null}
 
-          {!billingConfigured ? (
+          {!checkoutConfigured ? (
             <div className="mt-6 rounded-[1.75rem] border border-amber-300/20 bg-amber-950/20 p-5 shadow-2xl shadow-black/20">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
                 <AlertTriangle className="h-6 w-6 shrink-0 text-amber-200" />
@@ -187,7 +192,7 @@ export default async function BillingPage({
                     cancellation will be executed in this state.
                   </p>
                   <div className="mt-4 flex flex-wrap gap-2">
-                    {stripeMissing.map((item) => (
+                    {checkoutMissing.map((item) => (
                       <span
                         key={item}
                         className="rounded-full border border-amber-300/20 bg-black/25 px-3 py-1 text-xs font-medium text-amber-100"
@@ -307,7 +312,7 @@ export default async function BillingPage({
                 Every action is validated on the server. ZERINIX never accepts a
                 customer, price or subscription owner directly from the browser.
               </p>
-              {!billingActionsAvailable ? (
+              {!portalActionsAvailable ? (
                 <div className="mt-5 rounded-2xl border border-amber-300/20 bg-amber-950/20 p-4 text-sm leading-6 text-amber-100/85">
                   {billingUnavailableMessage}
                 </div>
@@ -315,11 +320,11 @@ export default async function BillingPage({
               <form action={openCustomerPortal} className="mt-5">
                 <button
                   type="submit"
-                  disabled={!billingActionsAvailable}
-                  aria-disabled={!billingActionsAvailable}
+                  disabled={!portalActionsAvailable}
+                  aria-disabled={!portalActionsAvailable}
                   className="inline-flex min-h-11 w-full items-center justify-center rounded-2xl bg-white px-4 text-sm font-semibold text-black transition hover:bg-zinc-200 focus:outline-none focus:ring-2 focus:ring-teal-200/30 disabled:cursor-not-allowed disabled:border disabled:border-white/10 disabled:bg-white/10 disabled:text-zinc-500"
                 >
-                  {billingActionsAvailable ? "Open customer portal" : "Customer portal unavailable"}
+                  {portalActionsAvailable ? "Open customer portal" : "Customer portal unavailable"}
                 </button>
               </form>
 
@@ -335,7 +340,7 @@ export default async function BillingPage({
                   <select
                     name="plan"
                     defaultValue="free"
-                    disabled={!billingActionsAvailable}
+                    disabled={!portalActionsAvailable}
                     className="min-h-11 rounded-2xl border border-white/10 bg-black/40 px-4 text-sm text-zinc-200 outline-none focus:border-teal-300/40 disabled:cursor-not-allowed disabled:text-zinc-600"
                     aria-label="Downgrade target plan"
                   >
@@ -344,10 +349,10 @@ export default async function BillingPage({
                   </select>
                   <button
                     type="submit"
-                    disabled={!billingActionsAvailable}
+                    disabled={!portalActionsAvailable}
                     className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-amber-300/20 bg-amber-300/10 px-4 text-sm font-semibold text-amber-100 transition hover:bg-amber-300/15 focus:outline-none focus:ring-2 focus:ring-amber-200/20 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.04] disabled:text-zinc-500"
                   >
-                    {billingActionsAvailable ? "Confirm downgrade" : "Downgrade unavailable"}
+                    {portalActionsAvailable ? "Confirm downgrade" : "Downgrade unavailable"}
                   </button>
                 </form>
               </details>
@@ -363,10 +368,10 @@ export default async function BillingPage({
                 <form action={requestCancellation} className="mt-4">
                   <button
                     type="submit"
-                    disabled={!billingActionsAvailable}
+                    disabled={!portalActionsAvailable}
                     className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-red-300/25 bg-red-300/10 px-4 text-sm font-semibold text-red-100 transition hover:bg-red-300/15 focus:outline-none focus:ring-2 focus:ring-red-200/20 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.04] disabled:text-zinc-500"
                   >
-                    {billingActionsAvailable ? "Request cancellation" : "Cancellation unavailable"}
+                    {portalActionsAvailable ? "Request cancellation" : "Cancellation unavailable"}
                   </button>
                 </form>
               </details>
@@ -395,9 +400,9 @@ export default async function BillingPage({
             <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               {billing.plans.map((plan) => {
                 const planSelectable =
-                  billingActionsAvailable &&
                   plan.supportedBySchema &&
                   plan.priceState.configured &&
+                  plan.checkout.configured &&
                   !plan.current;
 
                 return (
@@ -421,9 +426,9 @@ export default async function BillingPage({
                   <p className="mt-5 text-2xl font-semibold text-white">
                     {plan.priceState.label}
                   </p>
-                  {!billingActionsAvailable ? (
+                  {!plan.checkout.configured ? (
                     <p className="mt-2 text-xs leading-5 text-amber-100/80">
-                      Billing actions are disabled in this environment.
+                      Checkout is disabled until this plan has the required Stripe configuration.
                     </p>
                   ) : !plan.supportedBySchema ? (
                     <p className="mt-2 text-xs leading-5 text-amber-100/80">
@@ -537,7 +542,7 @@ export default async function BillingPage({
                     ["Authenticated user required", true],
                     ["Stripe secret kept server-side", true],
                     ["Webhook signature helper available", true],
-                    ["Stripe checkout configured", billingConfigured],
+                    ["Stripe checkout configured", checkoutConfigured],
                     ["Publishable Stripe key configured", billing.stripe.publishable.configured],
                     ["Team plan schema support", false],
                   ].map(([label, ok]) => (

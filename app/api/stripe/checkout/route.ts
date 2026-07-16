@@ -6,7 +6,7 @@ import {
   billingPlans,
   createStripeCheckoutSession,
   getPlanPriceState,
-  getStripeConfiguration,
+  getStripeCheckoutConfiguration,
 } from "@/app/lib/billing/stripe";
 import { getUserBillingProfile } from "@/app/lib/billing/stripe-sync";
 import { noStoreJson } from "@/app/lib/security/api-response";
@@ -83,14 +83,14 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const stripeConfig = getStripeConfiguration();
   const priceState = getPlanPriceState(plan);
+  const checkoutConfig = getStripeCheckoutConfiguration(plan);
 
-  if (!stripeConfig.configured || !stripeConfig.enabled || !priceState.configured) {
+  if (!checkoutConfig.configured || !priceState.configured) {
     return noStoreJson(
       {
         error: "Billing is not configured yet. Your current plan was not changed.",
-        missing: stripeConfig.missing,
+        missing: checkoutConfig.missing,
       },
       { status: 503 }
     );
