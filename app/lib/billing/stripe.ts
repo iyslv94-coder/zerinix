@@ -277,17 +277,40 @@ async function postStripeForm<T>(
 
   if (!response.ok) {
     let providerError = "";
+    let rawStripeResponseBody = "";
+    let stripeError:
+      | {
+          type?: string;
+          code?: string;
+          message?: string;
+          param?: string;
+        }
+      | undefined;
 
     try {
-      const payload = (await response.json()) as {
-        error?: { type?: string; code?: string; message?: string };
+      rawStripeResponseBody = await response.text();
+      const payload = JSON.parse(rawStripeResponseBody) as {
+        error?: { type?: string; code?: string; message?: string; param?: string };
       };
 
+      stripeError = payload.error;
       providerError =
-        payload.error?.code || payload.error?.type || payload.error?.message || "";
+        stripeError?.code || stripeError?.type || stripeError?.message || "";
     } catch {
       providerError = "unreadable_error";
     }
+
+    console.error("[api:stripe:checkout] Stripe error details", {
+      path,
+      error: stripeError,
+      type: stripeError?.type,
+      code: stripeError?.code,
+      message: stripeError?.message,
+      param: stripeError?.param,
+      requestId: response.headers.get("request-id") || "",
+      statusCode: response.status,
+      rawStripeResponseBody,
+    });
 
     logOperationalError("[stripe:request]", new Error("Stripe rejected the request."), {
       path,
