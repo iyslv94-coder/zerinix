@@ -13,6 +13,7 @@ import {
 import { jsPDF } from "jspdf";
 import type { LucideIcon } from "lucide-react";
 import {
+  ArrowUpRight,
   BarChart3,
   Bot,
   BriefcaseBusiness,
@@ -251,24 +252,6 @@ const chatModelOptions: Array<{
   },
 ];
 
-const modeSuggestions: Record<ChatMode, string[]> = {
-  chat: [
-    "Should we enter the German clinic software market this year?",
-    "Pressure-test whether we should raise capital or stay bootstrapped.",
-    "Assess the strongest positioning for a premium B2B SaaS launch.",
-  ],
-  plan: [
-    "Validate an AI CRM for private clinics in Germany before fundraising.",
-    "Assess whether a premium private hospital chain can reach investor readiness.",
-    "Evaluate a B2B SaaS launch plan for enterprise finance teams.",
-  ],
-  market: [
-    "Evaluate the EV charging opportunity in Turkey for a new entrant.",
-    "Size the premium online education market in Germany for expansion.",
-    "Assess demand, competition and risks for luxury electric yachts.",
-  ],
-};
-
 const modeEmptyState: Record<ChatMode, { title: string; description: string; placeholder: string }> =
   {
     chat: {
@@ -304,27 +287,51 @@ const modeCards: Array<{
   {
     mode: "plan",
     label: "Business Idea Validation",
-    description: "Validate a new business idea, market fit and risks.",
-    output: "Board-ready report",
+    description: "Pressure-test a venture thesis, customer fit, risks and execution path.",
+    output: "Validation report",
     opens: "Creates a structured business validation report",
     icon: BriefcaseBusiness,
   },
   {
     mode: "market",
     label: "Market Intelligence",
-    description: "Analyze market size, competition and opportunity.",
-    output: "Diligence memo",
+    description: "Map market size, competitors, timing, entry strategy and opportunity quality.",
+    output: "Market memo",
     opens: "Creates a market intelligence report",
     icon: BarChart3,
   },
   {
     mode: "chat",
     label: "Strategic Advisory",
-    description: "Pressure-test decisions with ZERINIX advisor.",
-    output: "Strategic decision guidance",
+    description: "Use ZERINIX as an executive advisor for a specific strategic decision.",
+    output: "Advisor session",
     opens: "Advisor session",
     icon: Bot,
   },
+];
+
+const executiveDecisionExamples: Record<ChatMode, string[]> = {
+  plan: [
+    "Validate an AI procurement platform for mid-market CFOs before raising a seed round.",
+    "Assess whether a premium wellness clinic can scale in Dubai with a membership model.",
+    "Evaluate a B2B SaaS idea for automated compliance reporting in EU financial services.",
+  ],
+  market: [
+    "Analyze the Turkish premium fitness market, buyer segments, pricing and competitive gaps.",
+    "Map the European EV charging software market for fleet operators and municipalities.",
+    "Size the opportunity for AI customer support automation in boutique e-commerce brands.",
+  ],
+  chat: [
+    "Should we enter the enterprise segment now or keep focusing on SMB customers?",
+    "Which GTM risk matters most before we spend on paid acquisition?",
+    "How should we prioritize product, sales and fundraising over the next 90 days?",
+  ],
+};
+
+const executiveDecisionCategories = [
+  { label: "Market entry", detail: "Timing, demand, competitors", icon: BarChart3 },
+  { label: "Business model", detail: "Pricing, margins, scalability", icon: PieChart },
+  { label: "Execution risk", detail: "Team, capital, operations", icon: ShieldAlert },
 ];
 
 const decisionGoalLabels: Record<ChatMode, string> = {
@@ -7368,27 +7375,72 @@ export default function Planner({
               <div className={`min-h-[52vh] items-center justify-center text-center ${
                 shouldHideDesktopCreationOnMobile ? "hidden md:flex" : "flex"
               }`}>
-                <div className="w-full max-w-4xl rounded-[2rem] border border-white/10 bg-white/[0.045] p-6 shadow-2xl shadow-black/40 backdrop-blur-2xl sm:p-8">
-                  <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-3xl border border-teal-200/20 bg-teal-200/10 shadow-2xl shadow-teal-950/20">
-                    <Sparkles className="h-6 w-6 text-teal-200" />
-                  </div>
-                  <h2 className="mt-6 text-3xl font-semibold tracking-tight text-white sm:text-5xl">
-                    {activeEmptyState.title}
-                  </h2>
-                  <p className="mx-auto mt-3 max-w-2xl text-sm leading-6 text-zinc-500">
-                    {activeEmptyState.description}
-                  </p>
-                  <div className="mt-6 grid gap-3 text-left md:grid-cols-3">
-                    {modeSuggestions[activeMode].map((suggestion) => (
-                      <button
-                        key={suggestion}
-                        type="button"
-                        onClick={() => setPrompt(suggestion)}
-                        className="rounded-2xl border border-white/10 bg-black/30 p-4 text-sm leading-6 text-zinc-300 shadow-lg shadow-black/10 transition hover:-translate-y-0.5 hover:border-teal-200/30 hover:bg-teal-200/[0.06] hover:text-white"
-                      >
-                        {suggestion}
-                      </button>
-                    ))}
+                <div className="relative w-full max-w-6xl overflow-hidden rounded-[2.35rem] border border-white/10 bg-white/[0.045] p-5 text-left shadow-2xl shadow-black/40 ring-1 ring-white/[0.025] backdrop-blur-2xl sm:p-7 lg:p-8">
+                  <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_82%_12%,rgba(45,212,191,0.18),transparent_30%),linear-gradient(135deg,rgba(255,255,255,0.08),transparent_38%)]" />
+                  <div className="relative grid gap-8 lg:grid-cols-[0.95fr_1.05fr] lg:items-center">
+                    <div>
+                      <div className="inline-flex items-center gap-2 rounded-full border border-teal-300/20 bg-teal-300/10 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.22em] text-teal-100">
+                        <Sparkles className="h-3.5 w-3.5" />
+                        Decision intelligence workspace
+                      </div>
+                      <h2 className="mt-5 max-w-3xl text-4xl font-semibold tracking-[-0.045em] text-white sm:text-6xl">
+                        {activeEmptyState.title}
+                      </h2>
+                      <p className="mt-4 max-w-2xl text-base leading-8 text-zinc-400">
+                        {activeEmptyState.description}
+                      </p>
+                      <div className="mt-6 grid gap-3 sm:grid-cols-3">
+                        {executiveDecisionCategories.map((category) => {
+                          const Icon = category.icon;
+
+                          return (
+                            <div
+                              key={category.label}
+                              className="rounded-[1.35rem] border border-white/10 bg-black/25 p-4 shadow-lg shadow-black/10 ring-1 ring-white/[0.02]"
+                            >
+                              <Icon className="h-4 w-4 text-teal-200" />
+                              <p className="mt-3 text-sm font-semibold text-white">
+                                {category.label}
+                              </p>
+                              <p className="mt-1 text-xs leading-5 text-zinc-500">
+                                {category.detail}
+                              </p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="rounded-[1.85rem] border border-white/10 bg-black/30 p-4 shadow-2xl shadow-black/25 ring-1 ring-white/[0.025]">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-200/75">
+                            Executive examples
+                          </p>
+                          <p className="mt-1 text-sm text-zinc-500">
+                            Start from a board-level business question.
+                          </p>
+                        </div>
+                        <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] font-medium text-zinc-400">
+                          {decisionGoalLabels[activeMode]}
+                        </span>
+                      </div>
+                      <div className="mt-4 grid gap-3">
+                        {executiveDecisionExamples[activeMode].map((suggestion) => (
+                          <button
+                            key={suggestion}
+                            type="button"
+                            onClick={() => setPrompt(suggestion)}
+                            className="group rounded-[1.25rem] border border-white/10 bg-white/[0.035] p-4 text-left text-sm leading-6 text-zinc-300 shadow-lg shadow-black/10 transition duration-300 hover:-translate-y-0.5 hover:border-teal-200/30 hover:bg-teal-200/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200/30"
+                          >
+                            <span className="flex items-start justify-between gap-3">
+                              <span>{suggestion}</span>
+                              <ArrowUpRight className="mt-1 h-4 w-4 shrink-0 text-zinc-600 transition group-hover:text-teal-200" />
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -7456,8 +7508,8 @@ export default function Planner({
               </div>
             ) : null}
 
-            <div className="rounded-[2rem] border border-white/10 bg-white/[0.06] p-3 shadow-2xl shadow-black/50 ring-1 ring-white/[0.03] backdrop-blur-2xl">
-              <div className="mb-2 flex flex-wrap items-center gap-2 px-2 pt-1">
+            <div className="rounded-[2.15rem] border border-white/10 bg-white/[0.06] p-3 shadow-2xl shadow-black/50 ring-1 ring-white/[0.03] backdrop-blur-2xl transition duration-300 hover:border-teal-200/15">
+              <div className="mb-3 flex flex-wrap items-center gap-2 px-2 pt-1">
                 <span className="rounded-full border border-teal-200/20 bg-teal-200/10 px-3 py-1 text-xs font-medium text-teal-100">
                   {decisionGoalLabels[activeMode]}
                 </span>
@@ -7483,7 +7535,7 @@ export default function Planner({
                   </label>
                 ) : null}
               </div>
-              <div className="mb-3 grid gap-2 md:grid-cols-3">
+              <div className="mb-4 grid gap-2 md:grid-cols-3">
                 {modeCards.map((modeCard) => {
                   const Icon = modeCard.icon;
                   const selected = activeMode === modeCard.mode;
@@ -7493,9 +7545,9 @@ export default function Planner({
                       key={modeCard.mode}
                       type="button"
                       onClick={() => setActiveMode(modeCard.mode)}
-                      className={`rounded-2xl border p-3 text-left shadow-lg shadow-black/10 transition duration-300 ${
+                      className={`rounded-[1.35rem] border p-4 text-left shadow-lg shadow-black/10 transition duration-300 ${
                         selected
-                          ? "border-teal-200/35 bg-teal-200/10 shadow-lg shadow-teal-950/20"
+                          ? "border-teal-200/35 bg-teal-200/10 shadow-lg shadow-teal-950/20 ring-1 ring-teal-200/10"
                           : "border-white/10 bg-black/25 hover:-translate-y-0.5 hover:border-white/20 hover:bg-white/[0.055]"
                       }`}
                     >
@@ -7528,32 +7580,47 @@ export default function Planner({
                   );
                 })}
               </div>
-              <textarea
-                ref={composerRef}
-                value={prompt}
-                onChange={(event) => setPrompt(event.target.value)}
-                onKeyDown={(event) => {
-                  if (
-                    activeMode === "chat" &&
-                    event.key === "Enter" &&
-                    !event.shiftKey &&
-                    !event.nativeEvent.isComposing
-                  ) {
-                    event.preventDefault();
-                    if (prompt.trim() && !isWorking) {
+              <div className="overflow-hidden rounded-[1.55rem] border border-white/10 bg-black/35 shadow-inner shadow-black/20 ring-1 ring-white/[0.025] transition focus-within:border-teal-200/30 focus-within:ring-teal-200/15">
+                <div className="flex flex-col gap-2 border-b border-white/10 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-teal-200/70">
+                      Executive brief
+                    </p>
+                    <p className="mt-1 text-xs text-zinc-500">
+                      Include business model, market, decision goal and known constraints.
+                    </p>
+                  </div>
+                  <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] text-zinc-500">
+                    {prompt.trim().length} chars
+                  </span>
+                </div>
+                <textarea
+                  ref={composerRef}
+                  value={prompt}
+                  onChange={(event) => setPrompt(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (
+                      activeMode === "chat" &&
+                      event.key === "Enter" &&
+                      !event.shiftKey &&
+                      !event.nativeEvent.isComposing
+                    ) {
+                      event.preventDefault();
+                      if (prompt.trim() && !isWorking) {
+                        void submitPrompt();
+                      }
+                      return;
+                    }
+
+                    if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+                      event.preventDefault();
                       void submitPrompt();
                     }
-                    return;
-                  }
-
-                  if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
-                    event.preventDefault();
-                    void submitPrompt();
-                  }
-                }}
-                className="min-h-28 w-full resize-none rounded-2xl bg-black/35 p-4 text-base leading-7 text-white outline-none ring-1 ring-white/5 transition placeholder:text-zinc-600 focus:ring-teal-200/25"
-                placeholder={activeEmptyState.placeholder}
-              />
+                  }}
+                  className="min-h-36 w-full resize-none bg-transparent p-4 text-base leading-7 text-white outline-none placeholder:text-zinc-600"
+                  placeholder={activeEmptyState.placeholder}
+                />
+              </div>
 
               <div className="flex flex-col gap-3 pt-3 md:flex-row md:items-center md:justify-between">
                 <div className="flex flex-wrap items-center gap-2">
