@@ -1,9 +1,9 @@
-import { getStripeConfiguration } from "@/app/lib/billing/stripe";
+import { getStripeWebhookConfiguration } from "@/app/lib/billing/stripe";
 import { handleStripeWebhookPayload } from "@/app/lib/billing/stripe-webhook";
 import { noStoreJson } from "@/app/lib/security/api-response";
 
 export async function POST(req: Request) {
-  const config = getStripeConfiguration();
+  const config = getStripeWebhookConfiguration();
 
   if (!config.configured || !config.hasWebhookSecret) {
     return noStoreJson(

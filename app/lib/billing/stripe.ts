@@ -4,6 +4,7 @@ import {
   integrationNotConfigured,
   isFeatureEnabled,
 } from "@/app/lib/integrations/config";
+import { logOperationalError } from "@/app/lib/security/logging";
 
 export type BillingPlanId = "free" | "pro" | "team" | "business";
 
@@ -45,7 +46,8 @@ export const billingPlans: Array<{
 export function getStripeConfiguration() {
   const secretKey = process.env.STRIPE_SECRET_KEY || "";
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET || "";
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL || "";
+  const configuredAppUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL || "";
+  const appUrl = normalizeStripeReturnOrigin(configuredAppUrl);
   const priceIds = {
     pro: process.env.STRIPE_PRICE_PRO || "",
     team: process.env.STRIPE_PRICE_TEAM || "",
@@ -67,6 +69,31 @@ export function getStripeConfiguration() {
     hasWebhookSecret: Boolean(webhookSecret),
     appUrl,
     priceIds,
+  };
+}
+
+function normalizeStripeReturnOrigin(value: string) {
+  const origin = value.trim().replace(/\/+$/, "");
+
+  if (!origin) {
+    return "";
+  }
+
+  return origin.startsWith("http") ? origin : `https://${origin}`;
+}
+
+export function getStripeWebhookConfiguration() {
+  const config = getStripeConfiguration();
+  const missing = [
+    !config.hasWebhookSecret ? "STRIPE_WEBHOOK_SECRET" : "",
+    !config.priceIds.pro ? "STRIPE_PRICE_PRO" : "",
+    !config.priceIds.business ? "STRIPE_PRICE_BUSINESS" : "",
+  ].filter(Boolean);
+
+  return {
+    configured: missing.length === 0,
+    missing,
+    hasWebhookSecret: config.hasWebhookSecret,
   };
 }
 
@@ -199,13 +226,45 @@ async function postStripeForm<T>(
     return getStripeNotConfiguredResult<T>();
   }
 
-  const response = await fetch(`https://api.stripe.com/v1/${path}`, {
-    method: "POST",
-    headers: buildStripeHeaders(idempotencyKey),
-    body: encodeStripeForm(payload),
-  });
+  let response: Response;
+
+  try {
+    response = await fetch(`https://api.stripe.com/v1/${path}`, {
+      method: "POST",
+      headers: buildStripeHeaders(idempotencyKey),
+      body: encodeStripeForm(payload),
+    });
+  } catch (error) {
+    logOperationalError("[stripe:request]", error, { path });
+
+    return {
+      ok: false,
+      reason: "invalid_input",
+      message: "Stripe could not be reached.",
+    };
+  }
 
   if (!response.ok) {
+    let providerError = "";
+
+    try {
+      const payload = (await response.json()) as {
+        error?: { type?: string; code?: string; message?: string };
+      };
+
+      providerError =
+        payload.error?.code || payload.error?.type || payload.error?.message || "";
+    } catch {
+      providerError = "unreadable_error";
+    }
+
+    logOperationalError("[stripe:request]", new Error("Stripe rejected the request."), {
+      path,
+      status: response.status,
+      requestId: response.headers.get("request-id") || "",
+      providerError,
+    });
+
     return {
       ok: false,
       reason: "invalid_input",
@@ -269,7 +328,6 @@ export async function createStripeCustomerPortalSession(input: {
     {
       customer: input.customerId,
       return_url: `${config.appUrl}/dashboard/billing`,
-      "metadata[user_id]": input.userId,
     },
     input.idempotencyKey
   );
