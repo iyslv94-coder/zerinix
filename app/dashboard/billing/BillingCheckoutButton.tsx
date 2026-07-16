@@ -45,17 +45,22 @@ export default function BillingCheckoutButton({
         body: JSON.stringify({ plan: planId }),
       });
       const payload = (await response.json().catch(() => null)) as {
+        error?: string;
         url?: string;
       } | null;
 
       if (!response.ok || !payload?.url) {
-        throw new Error("Checkout request failed.");
+        throw new Error(payload?.error || "Checkout request failed.");
       }
 
       window.location.assign(payload.url);
-    } catch {
+    } catch (error) {
       setIsOpening(false);
-      setError("Billing action could not be completed. Please try again shortly.");
+      setError(
+        process.env.NODE_ENV === "development" && error instanceof Error
+          ? error.message
+          : "Billing action could not be completed. Please try again shortly."
+      );
     }
   }
 

@@ -299,7 +299,10 @@ async function postStripeForm<T>(
     return {
       ok: false,
       reason: "invalid_input",
-      message: "Stripe rejected the request.",
+      message:
+        process.env.NODE_ENV === "production"
+          ? "Stripe rejected the request."
+          : providerError || "Stripe rejected the request.",
     };
   }
 
@@ -318,7 +321,24 @@ export async function createStripeCheckoutSession(input: {
   const config = getStripeConfiguration();
   const checkoutConfig = getStripeCheckoutConfiguration(input.plan);
 
+  console.log("[stripe:checkout] create session input", {
+    userId: input.userId,
+    userEmail: input.userEmail,
+    plan: input.plan,
+    hasExistingCustomer: Boolean(input.existingCustomerId),
+    existingCustomerId: input.existingCustomerId || null,
+    priceId: checkoutConfig.priceId,
+    successUrl: `${config.appUrl}/dashboard/billing?checkout=success`,
+    cancelUrl: `${config.appUrl}/dashboard/billing?checkout=cancelled`,
+  });
+
   if (!checkoutConfig.configured) {
+    console.log("[stripe:checkout] missing configuration", {
+      plan: input.plan,
+      missing: checkoutConfig.missing,
+      priceId: checkoutConfig.priceId,
+    });
+
     return getStripeMissingConfigurationResult<{ id: string; url: string | null }>(
       checkoutConfig.missing
     );
