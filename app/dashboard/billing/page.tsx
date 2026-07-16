@@ -397,8 +397,8 @@ export default async function BillingPage({
               </Link>
             </div>
 
-            <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              {billing.plans.map((plan) => {
+            <div className="mt-5 grid gap-4 md:grid-cols-3">
+              {billing.plans.filter((plan) => plan.id !== "team").map((plan) => {
                 const planSelectable =
                   plan.supportedBySchema &&
                   plan.priceState.configured &&
