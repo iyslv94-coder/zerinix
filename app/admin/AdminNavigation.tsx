@@ -10,6 +10,7 @@ import {
   FileText,
   Headphones,
   KeyRound,
+  Landmark,
   LayoutDashboard,
   LockKeyhole,
   Receipt,
@@ -34,6 +35,7 @@ const navGroups = [
     items: [
       { label: "Subscriptions", href: "/admin/subscriptions", icon: Receipt },
       { label: "Payments", href: "/admin/payments", icon: CreditCard },
+      { label: "Financial Dashboard", href: "/admin/financial-dashboard", icon: Landmark },
       { label: "AI Usage", href: "/admin/ai-usage", icon: Activity },
       { label: "Usage & Quotas", href: "/admin/usage-quotas", icon: SlidersHorizontal },
     ],

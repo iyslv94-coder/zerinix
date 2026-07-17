@@ -3501,12 +3501,23 @@ function ConversationSidebar({
   const sortedConversations = [...conversations].sort(
     (a, b) => b.updatedAt - a.updatedAt
   );
+  const displayConversations = sortedConversations.filter((conversation) => {
+    const title = getAnalysisSessionTitle(conversation.title).trim().toLowerCase();
+    const preview = getConversationPreview(conversation).trim().toLowerCase();
+    const combined = `${title} ${preview}`;
+
+    return !(
+      /^(merhaba|test|testing|deneme|dev|development|demo|sample|dummy|placeholder|asdf|hello)$/.test(title) ||
+      /\b(local\s+test|development\s+test|test\s+conversation|demo\s+conversation|sample\s+conversation|dummy\s+conversation|placeholder\s+conversation)\b/.test(combined) ||
+      /\b(bana\s+para\s+kazand[ıi]racak\s+i[sş]\s+s[öo]yle|para\s+kazand[ıi]racak\s+y[öo]ntemler\s+neler)\b/.test(combined)
+    );
+  });
   const normalizedSearchQuery = searchQuery.trim().toLowerCase();
   const visibleConversations = normalizedSearchQuery
-    ? sortedConversations.filter((conversation) =>
+    ? displayConversations.filter((conversation) =>
         getAnalysisSessionTitle(conversation.title).toLowerCase().includes(normalizedSearchQuery)
       )
-    : sortedConversations;
+    : displayConversations;
 
   function startRename(conversation: Conversation) {
     setRenameTarget(conversation);
@@ -3547,7 +3558,7 @@ function ConversationSidebar({
     setDeleteTarget(null);
   }
 
-  const reportCount = conversations.reduce(
+  const reportCount = displayConversations.reduce(
     (count, conversation) =>
       count +
       conversation.messages.filter((message) => message.role === "assistant").length,
@@ -5351,6 +5362,7 @@ export default function Planner({
     additionalContext: regenerationContext?.prompt || "",
   };
   const [prompt, setPrompt] = useState(() => buildExecutiveBriefPrompt(initialExecutiveBrief));
+  const [chatPrompt, setChatPrompt] = useState("");
   const [executiveBrief, setExecutiveBrief] = useState<ExecutiveBriefFields>(initialExecutiveBrief);
   const [advancedOptionsOpen, setAdvancedOptionsOpen] = useState(false);
   const [result, setResult] = useState(
@@ -6199,25 +6211,23 @@ export default function Planner({
     }
   }
 
-  function handleExecutiveBriefKeyDown(
-    event: ReactKeyboardEvent<HTMLInputElement | HTMLTextAreaElement>
-  ) {
-    if (
-      activeMode === "chat" &&
-      event.key === "Enter" &&
-      !event.shiftKey &&
-      !event.nativeEvent.isComposing
-    ) {
-      event.preventDefault();
-      if (prompt.trim() && !isWorking) {
-        void submitPrompt();
-      }
+  async function submitChatPrompt() {
+    const submittedPrompt = chatPrompt.trim();
+
+    if (!submittedPrompt || isWorking) {
       return;
     }
 
+    await sendChatMessage(submittedPrompt);
+    setChatPrompt("");
+  }
+
+  function handleExecutiveBriefKeyDown(
+    event: ReactKeyboardEvent<HTMLInputElement | HTMLTextAreaElement>
+  ) {
     if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
       event.preventDefault();
-      void submitPrompt();
+      void (activeMode === "market" ? analyzeMarket(prompt) : generatePlan(prompt));
     }
   }
 
@@ -7087,6 +7097,39 @@ export default function Planner({
   const shouldShowMobileWizard = mobileWizardActive;
   const shouldHideDesktopCreationOnMobile = mobileWizardActive;
   const shouldShowToolbarRegenerate = true;
+  const hasConversationMessages = messages.length > 0;
+  const hasWorkspaceActivity =
+    hasConversationMessages ||
+    isReportWorking ||
+    Boolean(planReport || marketReport || result || reportGenerationError);
+  const advisorSuggestions = [
+    "Validate my business idea",
+    "Find my strongest competitors",
+    "Build a pricing strategy",
+    "Plan expansion into a new market",
+  ];
+  const firstInteractionSuggestions = [
+    "Validate my business idea",
+    "Analyze my market",
+    "Find competitors",
+    "Improve my pricing",
+  ];
+  const recentAssistantOutputs = useMemo(
+    () =>
+      (activeConversation?.messages || [])
+        .filter((message) => message.role === "assistant" && message.content.trim())
+        .map((message) => ({
+          id: message.id,
+          title: activeConversation
+            ? getAnalysisSessionTitle(activeConversation.title)
+            : "Current analysis",
+          content: message.content,
+          createdAt: message.createdAt,
+        }))
+        .sort((a, b) => b.createdAt - a.createdAt)
+        .slice(0, 3),
+    [activeConversation]
+  );
 
   function buildMobileWizardPrompt() {
     const lines = [
@@ -7177,7 +7220,7 @@ export default function Planner({
             <h1 className="mt-1 truncate text-xl font-semibold text-white md:text-2xl">
               {activeConversation
                 ? getAnalysisSessionTitle(activeConversation.title)
-                : "Strategic Analysis Builder"}
+                : "Business Decision Advisor"}
             </h1>
           </div>
           <div className="flex shrink-0 items-center gap-2">
@@ -7194,7 +7237,7 @@ export default function Planner({
                 type="button"
                 onClick={regenerateResponse}
                 disabled={isWorking}
-                className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-medium text-zinc-200 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+              className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-medium text-zinc-200 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <RefreshCcw className="h-4 w-4 text-teal-200" />
                 <span className="inline">Regenerate response</span>
@@ -7223,7 +7266,7 @@ export default function Planner({
           onScroll={updateNearBottomState}
           className="relative z-10 min-h-0 flex-1 overflow-y-auto scroll-smooth px-4 py-5 sm:px-5 lg:px-8"
         >
-          <div className="mx-auto flex max-w-6xl flex-col gap-5 pb-48">
+          <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 pb-48">
             {shouldShowMobileWizard ? (
               <section className="space-y-4 md:hidden">
                 <div className="rounded-[2rem] border border-white/10 bg-white/[0.045] p-5 shadow-2xl shadow-black/30 ring-1 ring-white/[0.025] backdrop-blur-2xl">
@@ -7480,414 +7523,352 @@ export default function Planner({
               </section>
             ) : null}
 
-            {conversationError ? (
-              <div className="rounded-3xl border border-red-300/20 bg-red-950/30 p-4 text-sm leading-6 text-red-100 shadow-2xl shadow-black/30">
-                <p className="font-semibold text-red-50">
-                  Analysis history could not be loaded or saved.
-                </p>
-                <p className="mt-1 break-words text-red-100/80">
-                  Your workspace is safe. Please refresh the page or try again shortly.
-                </p>
-              </div>
-            ) : null}
+            <div
+              className={`mx-auto w-full gap-6 pb-14 ${
+                shouldHideDesktopCreationOnMobile ? "hidden md:flex md:flex-col" : "flex flex-col"
+              }`}
+            >
+              <div className="flex min-w-0 flex-col gap-5 transition-all duration-200 ease-out">
+              {conversationError ? (
+                <div className="rounded-3xl border border-red-300/20 bg-red-950/30 p-4 text-sm leading-6 text-red-100 shadow-2xl shadow-black/30">
+                  <p className="font-semibold text-red-50">
+                    Analysis history could not be loaded or saved.
+                  </p>
+                  <p className="mt-1 break-words text-red-100/80">
+                    Your workspace is safe. Please refresh the page or try again shortly.
+                  </p>
+                </div>
+              ) : null}
 
-            {messages.length === 0 ? (
-              <div className={`min-h-[52vh] items-center justify-center text-center ${
-                shouldHideDesktopCreationOnMobile ? "hidden md:flex" : "flex"
-              }`}>
-                <div className="relative w-full max-w-6xl overflow-hidden rounded-[2.35rem] border border-white/10 bg-white/[0.045] p-5 text-left shadow-2xl shadow-black/40 ring-1 ring-white/[0.025] backdrop-blur-2xl sm:p-7 lg:p-8">
-                  <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_82%_12%,rgba(45,212,191,0.18),transparent_30%),linear-gradient(135deg,rgba(255,255,255,0.08),transparent_38%)]" />
-                  <div className="relative grid gap-8 lg:grid-cols-[0.95fr_1.05fr] lg:items-center">
-                    <div>
-                      <div className="inline-flex items-center gap-2 rounded-full border border-teal-300/20 bg-teal-300/10 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.22em] text-teal-100">
-                        <Sparkles className="h-3.5 w-3.5" />
-                        Decision intelligence workspace
-                      </div>
-                      <h2 className="mt-5 max-w-3xl text-4xl font-semibold tracking-[-0.045em] text-white sm:text-6xl">
-                        {activeEmptyState.title}
-                      </h2>
-                      <p className="mt-4 max-w-2xl text-base leading-8 text-zinc-400">
-                        {activeEmptyState.description}
+                    <div className="px-1">
+                      <p className="text-xs font-semibold tracking-[0.32em] text-teal-300/70">
+                        ZERINIX AI
                       </p>
-                      <div className="mt-6 grid gap-3 sm:grid-cols-3">
-                        {executiveDecisionCategories.map((category) => {
-                          const Icon = category.icon;
-
-                          return (
-                            <div
-                              key={category.label}
-                              className="rounded-[1.35rem] border border-white/10 bg-black/25 p-4 shadow-lg shadow-black/10 ring-1 ring-white/[0.02]"
-                            >
-                              <Icon className="h-4 w-4 text-teal-200" />
-                              <p className="mt-3 text-sm font-semibold text-white">
-                                {category.label}
-                              </p>
-                              <p className="mt-1 text-xs leading-5 text-zinc-500">
-                                {category.detail}
-                              </p>
-                            </div>
-                          );
-                        })}
-                      </div>
+                      <p className="mt-1 max-w-2xl text-sm leading-6 text-zinc-400">
+                        AI-powered business decision intelligence for founders and teams.
+                      </p>
                     </div>
 
-                    <div className="rounded-[1.85rem] border border-white/10 bg-black/30 p-4 shadow-2xl shadow-black/25 ring-1 ring-white/[0.025]">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-200/75">
-                            Executive examples
-                          </p>
-                          <p className="mt-1 text-sm text-zinc-500">
-                            Start from a board-level business question.
-                          </p>
-                        </div>
-                        <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] font-medium text-zinc-400">
-                          {decisionGoalLabels[activeMode]}
-                        </span>
-                      </div>
-                      <div className="mt-4 grid gap-3">
-                        {executiveDecisionExamples[activeMode].map((suggestion) => (
-                          <button
-                            key={suggestion}
-                            type="button"
-                            onClick={() => setComposerPrompt(suggestion, "decisionGoal")}
-                            className="group rounded-[1.25rem] border border-white/10 bg-white/[0.035] p-4 text-left text-sm leading-6 text-zinc-300 shadow-lg shadow-black/10 transition duration-300 hover:-translate-y-0.5 hover:border-teal-200/30 hover:bg-teal-200/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200/30"
-                          >
-                            <span className="flex items-start justify-between gap-3">
-                              <span>{suggestion}</span>
-                              <ArrowUpRight className="mt-1 h-4 w-4 shrink-0 text-zinc-600 transition group-hover:text-teal-200" />
-                            </span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              messages.map((message) => (
-                <ChatMessageBubble
-                  key={message.id}
-                  message={message}
-                  onEdit={editMessage}
-                  onSaveEdit={saveEditedMessage}
-                  onRegenerate={regenerateResponse}
-                />
-              ))
-            )}
+						            <section className="rounded-[1.75rem] border border-teal-200/15 bg-white/[0.055] p-3.5 shadow-2xl shadow-black/35 ring-1 ring-teal-200/[0.035] backdrop-blur-2xl sm:p-4">
+		                  <div className="mb-2">
+				                <p className="text-base font-semibold text-white">Ask ZERINIX</p>
+		                <p className="mt-0.5 text-xs text-zinc-400">
+		                  Describe a business decision, opportunity, or challenge you want ZERINIX to analyze.
+		                </p>
+		              </div>
+				              <div className="rounded-[1.35rem] border border-white/10 bg-black/35 p-2.5 shadow-inner shadow-black/25 transition duration-200 ease-out focus-within:border-teal-300/50 focus-within:shadow-teal-950/25 focus-within:ring-2 focus-within:ring-teal-200/15">
+		                <textarea
+		                  value={chatPrompt}
+		                  onChange={(event) => setChatPrompt(event.target.value)}
+					              className="min-h-12 w-full resize-none border-0 bg-transparent p-1 text-sm leading-5 text-white outline-none transition placeholder:text-zinc-500/80 sm:min-h-14"
+		                  placeholder="Ask ZERINIX about your business, market or strategy..."
+		                />
+		                <div className="mt-1.5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+		                  <div className="flex flex-wrap gap-1.5">
+		                    {firstInteractionSuggestions.map((suggestion) => (
+		                      <button
+		                        key={suggestion}
+		                        type="button"
+		                        onClick={() => setChatPrompt(suggestion)}
+		                        className="rounded-full border border-white/10 bg-white/[0.035] px-2.5 py-1 text-[11px] font-medium text-zinc-400 transition hover:border-teal-300/25 hover:bg-teal-300/10 hover:text-teal-100"
+		                      >
+		                        {suggestion}
+		                      </button>
+		                    ))}
+		                  </div>
+		                  <button
+		                    type="button"
+		                    onClick={() => void submitChatPrompt()}
+		                    disabled={!chatPrompt.trim() || isWorking}
+					            className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-2xl bg-teal-300 px-4 py-2 text-sm font-semibold text-black shadow-lg shadow-teal-950/30 transition duration-200 ease-out hover:-translate-y-0.5 hover:bg-teal-200 hover:shadow-xl hover:shadow-teal-950/45 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-lg"
+		                  >
+			                    {chatLoading ? "ZERINIX is thinking..." : "Ask ZERINIX"}
+			                    <Send className="h-4 w-4" />
+		                  </button>
+		                </div>
+		              </div>
+		            </section>
 
-            <WorkflowPanel active={isReportWorking} completedSteps={workflowCompletedSteps} />
+		            {messages.length > 0 ? (
+		              <section className="min-h-[54vh] rounded-[2rem] border border-white/10 bg-white/[0.045] p-4 shadow-2xl shadow-black/35 ring-1 ring-white/[0.035] backdrop-blur-2xl transition-all duration-200 ease-out sm:p-6">
+		                <div className="space-y-6">
+		                  {messages.map((message) => (
+		                    <ChatMessageBubble
+		                      key={message.id}
+		                      message={message}
+		                      onEdit={editMessage}
+		                      onSaveEdit={saveEditedMessage}
+		                      onRegenerate={regenerateResponse}
+		                    />
+		                  ))}
+		                </div>
+		              </section>
+		            ) : null}
 
-            {isReportWorking ? (
-              <ReportGenerationShell
-                title={currentReportTitle}
-                currentSection={currentReportSectionName}
-                progress={reportProgress}
-              />
-            ) : (planReport || marketReport || result) ? (
-              <ReportPanel
-                reportData={planReport || marketReport}
-                reportFields={activeReportFields}
-                reportTitle={currentReportTitle}
-                sourcePrompt={lastRequest?.prompt}
-                waitingMessage={currentLanguageCopy.waitingSection}
-                result={result}
-                failureMessage={reportGenerationError}
-                warningMessage={reportGenerationWarning}
-              />
-            ) : null}
-          </div>
-        </div>
+		              <section className="space-y-4 transition-all duration-200 ease-out">
+		                <details
+		                  open={!hasConversationMessages}
+		                  className="group"
+		                >
+		                  {hasConversationMessages ? (
+			                    <summary className="flex cursor-pointer list-none items-center justify-between gap-4 rounded-[1.5rem] border border-white/10 bg-white/[0.04] p-3.5 shadow-xl shadow-black/20 transition hover:bg-white/[0.06] [&::-webkit-details-marker]:hidden">
+		                      <div>
+		                        <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-teal-200/70">
+		                          Decision Intelligence
+		                        </p>
+		                        <h2 className="mt-1 text-base font-semibold tracking-tight text-white">
+		                          Create an analysis
+		                        </h2>
+			                        <p className="mt-1 text-xs leading-5 text-zinc-500">
+			                          Expand report generation tools when you need a structured output.
+			                        </p>
+		                      </div>
+		                      <span className="rounded-full border border-white/10 bg-black/25 px-3 py-1 text-xs font-medium text-zinc-400 transition group-open:border-teal-200/25 group-open:text-teal-100">
+		                        Expand
+		                      </span>
+		                    </summary>
+		                  ) : (
+		                    <div>
+		                      <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-teal-200/70">
+		                        Decision Intelligence
+		                      </p>
+			                      <h2 className="mt-1.5 text-2xl font-semibold tracking-tight text-white">
+			                        Create an analysis
+			                      </h2>
+			                      <p className="mt-1.5 max-w-2xl text-sm leading-6 text-zinc-500">
+			                        Choose an analysis type and describe the decision you want ZERINIX to evaluate.
+			                      </p>
+		                    </div>
+		                  )}
 
-        <div
-          className={`relative z-20 border-t border-white/10 bg-black/75 px-4 py-4 shadow-2xl shadow-black/40 backdrop-blur-2xl sm:px-5 lg:px-8 ${
-            shouldHideDesktopCreationOnMobile ? "hidden md:block" : ""
-          }`}
-        >
-          <div className="mx-auto max-w-6xl">
-            {attachments.length > 0 ? (
-              <div className="mb-3 flex flex-wrap gap-2">
-                {attachments.map((attachment) => (
-                  <span
-                    key={attachment.id}
-                    className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-zinc-950 px-3 py-1.5 text-xs text-zinc-300"
-                  >
-                    <Paperclip className="h-3.5 w-3.5 text-teal-200" />
-                    {attachment.name}
-                    <span className="text-zinc-600">{formatFileSize(attachment.size)}</span>
-                    <button
-                      type="button"
-                      onClick={() => removeAttachment(attachment.id)}
-                      className="rounded-full p-0.5 transition hover:bg-white/10"
-                      aria-label="Remove attachment"
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                  </span>
-                ))}
-              </div>
-            ) : null}
+					                <div className={`${hasConversationMessages ? "mt-3" : "mt-3"} overflow-hidden rounded-[1.75rem] border border-white/10 bg-white/[0.045] p-3.5 shadow-2xl shadow-black/35 ring-1 ring-white/[0.035] backdrop-blur-2xl`}>
+	                  <div className="grid gap-3 md:grid-cols-3">
+                    {modeCards.map((modeCard) => {
+                      const Icon = modeCard.icon;
+                      const selected = activeMode === modeCard.mode;
 
-            <div className="rounded-[2.15rem] border border-white/10 bg-white/[0.06] p-3 shadow-2xl shadow-black/50 ring-1 ring-white/[0.03] backdrop-blur-2xl transition duration-300 hover:border-teal-200/15">
-              <div className="mb-3 flex flex-wrap items-center gap-2 px-2 pt-1">
-                <span className="rounded-full border border-teal-200/20 bg-teal-200/10 px-3 py-1 text-xs font-medium text-teal-100">
-                  {decisionGoalLabels[activeMode]}
-                </span>
-                <span className="text-xs text-zinc-600">
-                  {activeMode === "chat"
-                    ? `Advisory session · ${chatModelOptions.find((option) => option.value === chatModelPreference)?.label || "Fast"} mode`
-                    : "Decision intelligence workspace"}
-                </span>
-                {activeMode !== "chat" && initialWorkspaces.length > 0 ? (
-                  <label className="ml-auto flex items-center gap-2 text-xs text-zinc-500">
-                    Save to
-                    <select
-                      value={selectedWorkspaceId}
-                      onChange={(event) => setSelectedWorkspaceId(event.target.value)}
-                      className="rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-xs font-medium text-zinc-200 outline-none transition focus:border-teal-300/40"
-                    >
-                      {initialWorkspaces.map((workspace) => (
-                        <option key={workspace.id} value={workspace.id}>
-                          {workspace.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                ) : null}
-              </div>
-              <div className="mb-4 grid gap-2 md:grid-cols-3">
-                {modeCards.map((modeCard) => {
-                  const Icon = modeCard.icon;
-                  const selected = activeMode === modeCard.mode;
-
-                  return (
-                    <button
-                      key={modeCard.mode}
-                      type="button"
-                      onClick={() => setActiveMode(modeCard.mode)}
-                      className={`rounded-[1.35rem] border p-4 text-left shadow-lg shadow-black/10 transition duration-300 ${
-                        selected
-                          ? "border-teal-200/35 bg-teal-200/10 shadow-lg shadow-teal-950/20 ring-1 ring-teal-200/10"
-                          : "border-white/10 bg-black/25 hover:-translate-y-0.5 hover:border-white/20 hover:bg-white/[0.055]"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04]">
-                          <Icon className="h-4 w-4 text-teal-200" />
-                        </span>
-                        <span
-                          className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] ${
-                            selected
-                              ? "bg-teal-200 text-black"
-                              : "border border-white/10 text-zinc-500"
-                          }`}
-                        >
-                          {selected ? "Recommended" : "Select"}
-                        </span>
-                      </div>
-                      <p className="mt-3 text-sm font-semibold text-white">
-                        {modeCard.label}
-                      </p>
-                      <p className="mt-1 line-clamp-2 text-xs leading-5 text-zinc-500">
-                        {modeCard.description}
-                      </p>
-                      <p className="mt-2 text-[11px] font-medium text-teal-100/80">
-                        {modeCard.mode === "chat"
-                          ? modeCard.output
-                          : `${modeCard.output} · ${modeCard.opens}`}
-                      </p>
-                    </button>
-                  );
-                })}
-              </div>
-              <div className="overflow-hidden rounded-[1.55rem] border border-white/10 bg-black/35 shadow-inner shadow-black/20 ring-1 ring-white/[0.025] transition focus-within:border-teal-200/30 focus-within:ring-teal-200/15">
-                <div className="flex flex-col gap-2 border-b border-white/10 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <p className="text-sm font-bold uppercase tracking-[0.18em] text-teal-200/80">
-                      Executive brief
-                    </p>
-                    <p className="mt-1 text-xs text-zinc-500">
-                      Include business model, market, decision goal and known constraints.
-                    </p>
-                  </div>
-                  <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] text-zinc-500">
-                    {prompt.trim().length} / 5000
-                  </span>
-                </div>
-                <div className="grid gap-3 p-4 md:grid-cols-2">
-                  {executiveBriefFields.slice(0, 4).map((fieldConfig, index) => (
-                    <label key={fieldConfig.field} className="block">
-                      <span className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
-                        {fieldConfig.label}
-                      </span>
-                      <input
-                        ref={index === 0 ? composerRef : undefined}
-                        value={executiveBrief[fieldConfig.field]}
-                        onChange={(event) => updateExecutiveBriefField(fieldConfig.field, event.target.value)}
-                        onKeyDown={handleExecutiveBriefKeyDown}
-                        className="mt-2 min-h-12 w-full rounded-2xl border border-white/10 bg-black/35 px-4 text-sm text-white outline-none transition placeholder:text-zinc-600 focus:border-teal-300/35 focus:ring-2 focus:ring-teal-200/10"
-                        placeholder={fieldConfig.placeholder}
-                      />
-                    </label>
-                  ))}
-                  {executiveBriefFields.slice(4, 5).map((fieldConfig) => (
-                    <label key={fieldConfig.field} className="block md:col-span-2">
-                      <span className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
-                        {fieldConfig.label}
-                      </span>
-                      <textarea
-                        value={executiveBrief[fieldConfig.field]}
-                        onChange={(event) => updateExecutiveBriefField(fieldConfig.field, event.target.value)}
-                        onKeyDown={handleExecutiveBriefKeyDown}
-                        className="mt-2 min-h-[4.75rem] w-full resize-none rounded-2xl border border-white/10 bg-black/35 p-4 text-sm leading-6 text-white outline-none transition placeholder:text-zinc-600 focus:border-teal-300/35 focus:ring-2 focus:ring-teal-200/10"
-                        placeholder={fieldConfig.placeholder}
-                      />
-                    </label>
-                  ))}
-                </div>
-                <details
-                  open={advancedOptionsOpen}
-                  onToggle={(event) => setAdvancedOptionsOpen(event.currentTarget.open)}
-                  className="border-t border-white/10"
-                >
-                  <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-3 text-left transition hover:bg-white/[0.035] [&::-webkit-details-marker]:hidden">
-                    <span>
-                      <span className="block text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
-                        Advanced Options
-                      </span>
-                      <span className="mt-1 block text-xs text-zinc-600">
-                        Add constraints, known assumptions or extra context.
-                      </span>
-                    </span>
-                    <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs font-semibold text-zinc-400">
-                      {advancedOptionsOpen ? "Hide" : "Expand"}
-                    </span>
-                  </summary>
-                  <div className="px-4 pb-4">
-                    {executiveBriefFields.slice(5).map((fieldConfig) => (
-                      <label key={fieldConfig.field} className="block">
-                        <span className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
-                          {fieldConfig.label}
-                        </span>
-                        <textarea
-                          value={executiveBrief[fieldConfig.field]}
-                          onChange={(event) => updateExecutiveBriefField(fieldConfig.field, event.target.value)}
-                          onKeyDown={handleExecutiveBriefKeyDown}
-                          className="mt-2 min-h-28 w-full resize-none rounded-2xl border border-white/10 bg-black/35 p-4 text-sm leading-6 text-white outline-none transition placeholder:text-zinc-600 focus:border-teal-300/35 focus:ring-2 focus:ring-teal-200/10"
-                          placeholder={fieldConfig.placeholder}
-                        />
-                      </label>
-                    ))}
-                  </div>
-                </details>
-              </div>
-
-              <div className="flex flex-col gap-3 pt-3 md:flex-row md:items-center md:justify-between">
-                <div className="flex flex-wrap items-center gap-2">
-                  <label className="inline-flex cursor-pointer items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-medium text-zinc-200 transition hover:-translate-y-0.5 hover:bg-white/10">
-                    <Paperclip className="h-4 w-4 text-teal-200" />
-                    Upload files
-                    <input
-                      type="file"
-                      multiple
-                      className="hidden"
-                      onChange={(event) => void handleFiles(event.target.files)}
-                    />
-                  </label>
-
-                  <button
-                    type="button"
-                    onClick={() => setActiveMode("plan")}
-                    className={`rounded-2xl px-4 py-2 text-sm font-medium transition ${
-                      activeMode === "plan"
-                        ? "bg-white text-black"
-                        : "border border-white/10 bg-white/[0.04] text-zinc-300 hover:bg-white/10"
-                    }`}
-                  >
-                    Business Idea Validation
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setActiveMode("market")}
-                    className={`rounded-2xl px-4 py-2 text-sm font-medium transition ${
-                      activeMode === "market"
-                        ? "bg-white text-black"
-                        : "border border-white/10 bg-white/[0.04] text-zinc-300 hover:bg-white/10"
-                    }`}
-                  >
-                    Market Intelligence
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setActiveMode("chat")}
-                    className={`rounded-2xl px-4 py-2 text-sm font-medium transition ${
-                      activeMode === "chat"
-                        ? "bg-white text-black"
-                        : "border border-white/10 bg-white/[0.04] text-zinc-300 hover:bg-white/10"
-                    }`}
-                  >
-                    Strategic Advisory
-                  </button>
-                  {activeMode === "chat" ? (
-                    <div className="flex flex-wrap items-center gap-1 rounded-2xl border border-white/10 bg-black/25 p-1">
-                      {chatModelOptions.map((option) => (
+                      return (
                         <button
-                          key={option.value}
+	                          key={modeCard.mode}
+	                          type="button"
+	                          onClick={() => setActiveMode(modeCard.mode)}
+				                          className={`flex min-h-36 flex-col rounded-[1.25rem] border p-3.5 text-left shadow-lg shadow-black/10 transition duration-200 ease-out hover:-translate-y-0.5 hover:shadow-xl md:shadow-sm ${
+			                            selected
+				                              ? "border-teal-200/35 bg-teal-200/[0.12] shadow-xl shadow-teal-950/30 ring-1 ring-teal-200/20"
+			                              : "border-white/10 bg-black/25 hover:border-white/20 hover:bg-white/[0.055] hover:shadow-black/25"
+			                          }`}
+		                        >
+                          <div className="flex items-center justify-between gap-3">
+	                            <span
+		                              className={`flex h-9 w-9 items-center justify-center rounded-xl border ${
+	                                selected
+			                                  ? "border-teal-200/30 bg-teal-200/10"
+			                                  : "border-white/10 bg-white/[0.04]"
+		                              }`}
+		                            >
+				                              <Icon className={`h-4 w-4 ${selected ? "text-teal-100" : "text-teal-200"}`} />
+		                            </span>
+                            <span
+                              className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] ${
+                                selected
+		                                  ? "bg-teal-200 text-black"
+		                                  : "border border-white/10 text-zinc-500"
+                              }`}
+                            >
+                              {selected ? "Recommended" : "Select"}
+                            </span>
+                          </div>
+			                          <p className="mt-3 text-sm font-semibold text-white">
+	                            {modeCard.label}
+	                          </p>
+			                          <p className="mt-1.5 line-clamp-2 text-xs leading-5 text-zinc-500">
+	                            {modeCard.description}
+	                          </p>
+			                          <p className="mt-auto pt-2 text-[11px] font-medium text-teal-100/80">
+                            {modeCard.mode === "chat"
+                              ? modeCard.output
+                              : `${modeCard.output} · ${modeCard.opens}`}
+                          </p>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+				                  <div className="mt-3 rounded-[1.45rem] border border-white/10 bg-black/30 p-3.5 shadow-inner shadow-black/20">
+			                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+		                      <div className="flex flex-wrap items-center gap-2">
+					                        <label className="inline-flex cursor-pointer items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-3.5 py-2 text-sm font-medium text-zinc-200 shadow-sm shadow-black/10 transition duration-200 ease-out hover:-translate-y-0.5 hover:border-teal-300/25 hover:bg-white/10 hover:shadow-lg hover:shadow-black/25 active:translate-y-0">
+				                          <Paperclip className="h-4 w-4 text-teal-200" />
+		                          Upload files
+		                          <input
+		                            type="file"
+		                            multiple
+		                            className="hidden"
+		                            onChange={(event) => void handleFiles(event.target.files)}
+		                          />
+		                        </label>
+		                        {attachments.map((attachment) => (
+		                          <span
+		                            key={attachment.id}
+				                            className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-zinc-950 px-3 py-1.5 text-xs text-zinc-300"
+		                          >
+		                            <Paperclip className="h-3.5 w-3.5 text-teal-200" />
+		                            {attachment.name}
+		                            <span className="text-zinc-600">{formatFileSize(attachment.size)}</span>
+		                            <button
+		                              type="button"
+		                              onClick={() => removeAttachment(attachment.id)}
+		                              className="rounded-full p-0.5 transition hover:bg-white/10"
+		                              aria-label="Remove attachment"
+		                            >
+		                              <X className="h-3.5 w-3.5" />
+		                            </button>
+		                          </span>
+		                        ))}
+		                      </div>
+		                      <div className="flex flex-col items-stretch gap-2 sm:items-end">
+				                        <p className="text-xs text-zinc-500">
+		                          Uses the text from the ZERINIX AI input above.
+		                        </p>
+		                        <button
+		                          type="button"
+		                          disabled={!chatPrompt.trim() || isWorking}
+		                          onClick={() => {
+		                            const sharedPrompt = chatPrompt.trim();
+
+		                            if (!sharedPrompt || isWorking) {
+		                              return;
+		                            }
+
+		                            void (activeMode === "market"
+		                              ? analyzeMarket(sharedPrompt)
+		                              : generatePlan(sharedPrompt));
+		                          }}
+					                          className="inline-flex items-center justify-center gap-2 rounded-2xl border border-teal-200/20 bg-teal-300 px-4.5 py-2.5 text-sm font-semibold text-black shadow-lg shadow-teal-950/35 transition duration-200 ease-out hover:-translate-y-0.5 hover:border-teal-100/40 hover:bg-teal-200 hover:shadow-xl hover:shadow-teal-950/45 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-lg"
+		                        >
+		                          {isWorking ? "Generating..." : "Generate Strategic Report"}
+		                          <Send className="h-4 w-4" />
+		                        </button>
+		                      </div>
+		                    </div>
+		                  </div>
+	                </div>
+	                </details>
+	              </section>
+
+              {hasWorkspaceActivity ? (
+                <>
+                  <section className="rounded-[1.55rem] border border-white/10 bg-white/[0.045] p-3.5 shadow-xl shadow-black/20 ring-1 ring-white/[0.025] backdrop-blur-2xl">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-teal-200/70">
+                      Advisor
+                    </p>
+                    <h3 className="mt-1.5 text-base font-semibold text-white">
+                      AI Suggestions
+                    </h3>
+                    <div className="mt-3 grid gap-2 md:grid-cols-2">
+                      {advisorSuggestions.map((suggestion) => (
+                        <button
+                          key={suggestion}
                           type="button"
-                          onClick={() => setChatModelPreference(option.value)}
-                          className={`rounded-xl px-3 py-2 text-left transition ${
-                            chatModelPreference === option.value
-                              ? "bg-teal-200 text-black"
-                              : "text-zinc-400 hover:bg-white/10 hover:text-white"
-                          }`}
-                          aria-pressed={chatModelPreference === option.value}
+                          onClick={() => setChatPrompt(suggestion)}
+                          className="flex w-full items-center gap-2 rounded-2xl border border-white/10 bg-black/25 px-3 py-2 text-left text-xs font-medium text-zinc-300 transition duration-200 ease-out hover:-translate-y-0.5 hover:border-teal-300/25 hover:bg-white/[0.06] hover:text-white"
                         >
-                          <span className="block text-xs font-semibold">{option.label}</span>
-                          <span
-                            className={`block text-[10px] ${
-                              chatModelPreference === option.value
-                                ? "text-black/60"
-                                : "text-zinc-600"
-                            }`}
-                          >
-                            {option.description}
-                          </span>
+                          <Sparkles className="h-3.5 w-3.5 shrink-0 text-teal-200/80" />
+                          {suggestion}
                         </button>
                       ))}
                     </div>
+                  </section>
+
+                  <section className="rounded-[1.55rem] border border-white/10 bg-white/[0.045] p-3.5 shadow-xl shadow-black/20 ring-1 ring-white/[0.025] backdrop-blur-2xl">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-teal-200/70">
+                      Context
+                    </p>
+                    <h3 className="mt-1.5 text-base font-semibold text-white">
+                      Conversation Context
+                    </h3>
+                    <div className="mt-3 grid gap-2 md:grid-cols-4">
+                      <div className="rounded-2xl border border-white/10 bg-black/25 p-2.5 md:col-span-2">
+                        <p className="text-[11px] font-medium text-zinc-500">Current session</p>
+                        <p className="mt-1 line-clamp-2 text-sm font-semibold text-zinc-100">
+                          {activeConversation
+                            ? getAnalysisSessionTitle(activeConversation.title)
+                            : "Strategic Analysis Builder"}
+                        </p>
+                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-black/25 p-2.5">
+                        <p className="text-base font-semibold text-white">{messages.length}</p>
+                        <p className="text-[11px] text-zinc-500">Messages</p>
+                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-black/25 p-2.5">
+                        <p className="text-base font-semibold text-white">{attachments.length}</p>
+                        <p className="text-[11px] text-zinc-500">Files</p>
+                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-black/25 p-2.5 md:col-span-4">
+                        <p className="text-[11px] font-medium text-zinc-500">Analysis type</p>
+                        <p className="mt-1 text-sm font-semibold text-zinc-100">
+                          {decisionGoalLabels[activeMode]}
+                        </p>
+                      </div>
+                    </div>
+                  </section>
+
+                  {recentAssistantOutputs.length > 0 ? (
+                    <section className="rounded-[1.55rem] border border-white/10 bg-white/[0.045] p-3.5 shadow-xl shadow-black/20 ring-1 ring-white/[0.025] backdrop-blur-2xl">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-teal-200/70">
+                            Outputs
+                          </p>
+                          <h3 className="mt-1.5 text-base font-semibold text-white">
+                            Recent Outputs
+                          </h3>
+                        </div>
+                        <span className="rounded-full border border-white/10 bg-black/25 px-2 py-1 text-[11px] text-zinc-500">
+                          {recentAssistantOutputs.length}
+                        </span>
+                      </div>
+                      <div className="mt-3 grid gap-2 md:grid-cols-3">
+                        {recentAssistantOutputs.map((output) => (
+                          <div
+                            key={output.id}
+                            className="rounded-2xl border border-white/10 bg-black/25 p-2.5"
+                          >
+                            <p className="line-clamp-1 text-sm font-semibold text-zinc-100">
+                              {output.title}
+                            </p>
+                            <p className="mt-1 line-clamp-2 text-xs leading-5 text-zinc-500">
+                              {output.content}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </section>
                   ) : null}
-                </div>
+                </>
+              ) : null}
 
-                <button
-                  type="button"
-                  disabled={!prompt.trim() || isWorking}
-                  onClick={() => void submitPrompt()}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-teal-300 px-5 py-3 text-sm font-semibold text-black shadow-lg shadow-teal-950/40 transition hover:-translate-y-0.5 hover:bg-teal-200 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
-                >
-                  {isWorking
-                    ? activeMode === "chat"
-                      ? "Advising..."
-                      : "Generating..."
-                    : activeMode === "chat"
-                      ? "Ask Advisor"
-                      : "Generate Strategic Report"}
-                  <Send className="h-4 w-4" />
-                </button>
+              <WorkflowPanel active={isReportWorking} completedSteps={workflowCompletedSteps} />
+
+              {isReportWorking ? (
+                <ReportGenerationShell
+                  title={currentReportTitle}
+                  currentSection={currentReportSectionName}
+                  progress={reportProgress}
+                />
+              ) : (planReport || marketReport || result) ? (
+                <ReportPanel
+                  reportData={planReport || marketReport}
+                  reportFields={activeReportFields}
+                  reportTitle={currentReportTitle}
+                  sourcePrompt={lastRequest?.prompt}
+                  waitingMessage={currentLanguageCopy.waitingSection}
+                  result={result}
+                  failureMessage={reportGenerationError}
+                  warningMessage={reportGenerationWarning}
+                />
+	              ) : null}
               </div>
-            </div>
-
-            <div className="mt-3 flex flex-wrap items-center justify-center gap-3 text-center text-xs text-zinc-600">
-              <span className="inline-flex items-center gap-1">
-                <CornerDownLeft className="h-3.5 w-3.5" />
-                {activeMode === "chat"
-                  ? "Enter to send · Shift + Enter for newline"
-                  : "Cmd/Ctrl + Enter to generate report"}
-              </span>
-              <span className="inline-flex items-center gap-1">
-                <Search className="h-3.5 w-3.5" />
-                Cmd/Ctrl + K to focus
-              </span>
-              <span>ZERINIX can make mistakes; verify critical decisions.</span>
             </div>
           </div>
         </div>
