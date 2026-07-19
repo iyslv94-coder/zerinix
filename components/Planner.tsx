@@ -1396,6 +1396,42 @@ function getCitationDomain(url?: string, organization = "") {
   );
 }
 
+function getCitationSourceName(citation: Pick<CitationData, "sourceTitle" | "organization" | "url">) {
+  return (
+    getCitationDomain(citation.url, citation.organization) ||
+    citation.organization ||
+    citation.sourceTitle ||
+    "Source"
+  );
+}
+
+function getCitationDedupeKey(citation: CitationData) {
+  const domain = getCitationDomain(citation.url, citation.organization);
+  const titleKey = normalizePdfText(citation.sourceTitle).toLowerCase().replace(/\W+/g, " ").trim();
+  const organizationKey = normalizePdfText(citation.organization).toLowerCase().replace(/\W+/g, " ").trim();
+  const domainNameKey = normalizePdfText(domain.split(".")[0] || "").toLowerCase().replace(/\W+/g, " ").trim();
+  const sourceNameKey = normalizePdfText(getCitationSourceName(citation))
+    .toLowerCase()
+    .replace(/\W+/g, " ")
+    .trim();
+  const normalizedSourceName =
+    domainNameKey &&
+    (titleKey === domainNameKey ||
+      organizationKey === domainNameKey ||
+      sourceNameKey === domainNameKey ||
+      titleKey.startsWith(`${domainNameKey} `) ||
+      organizationKey.startsWith(`${domainNameKey} `))
+      ? domainNameKey
+      : sourceNameKey || titleKey || organizationKey;
+
+  return [
+    "source",
+    domain || "no-domain",
+    organizationKey || "unknown-publisher",
+    normalizedSourceName || "unknown-source",
+  ].join("|");
+}
+
 function normalizeCitationUrl(value = "") {
   const normalized = normalizePdfText(value).trim();
 
@@ -1518,25 +1554,7 @@ function parseCitations(content: string): CitationData[] {
   const unique = new Map<string, CitationData>();
 
   entries.forEach((citation) => {
-    const domain = getCitationDomain(citation.url, citation.organization);
-    const titleKey = normalizePdfText(citation.sourceTitle).toLowerCase().replace(/\W+/g, " ").trim();
-    const organizationKey = normalizePdfText(citation.organization).toLowerCase().replace(/\W+/g, " ").trim();
-    const domainNameKey = normalizePdfText(domain.split(".")[0] || "").toLowerCase().replace(/\W+/g, " ").trim();
-    const key = domain && domainNameKey && (
-      titleKey === domainNameKey ||
-      organizationKey === domainNameKey ||
-      titleKey.startsWith(`${domainNameKey} `) ||
-      organizationKey.startsWith(`${domainNameKey} `)
-    )
-      ? `domain:${domain}`
-      : domain && titleKey
-        ? `domain-title-publisher:${domain}|${titleKey}|${organizationKey}`
-        : [
-            "source",
-            domain || "no-domain",
-            organizationKey,
-            titleKey,
-          ].join("|");
+    const key = getCitationDedupeKey(citation);
     const existing = unique.get(key);
 
     unique.set(key, {
@@ -1557,24 +1575,14 @@ function Citation({ citation }: { citation?: CitationData }) {
   }
 
   const domain = getCitationDomain(citation.url, citation.organization);
-  const sourceName = domain || citation.organization || citation.sourceTitle;
-  const trustLabel =
-    citation.sourceType === "Planning assumption"
-      ? "Planning assumption"
-      : citation.confidence === "High"
-        ? "High trust"
-        : citation.confidence === "Medium"
-          ? "Moderate trust"
-          : citation.confidence === "Low"
-            ? "Needs validation"
-            : "Trust reviewed";
+  const sourceName = getCitationSourceName(citation);
+  const trustLabel = citation.sourceType === "Verified source" && citation.url ? "Verified" : "Reference";
 
   return (
     <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold leading-6 text-white">{sourceName}</p>
-          <p className="mt-1 line-clamp-1 text-xs text-zinc-500">{citation.sourceTitle}</p>
         </div>
         <div className="flex shrink-0 flex-wrap gap-2">
           <span className="rounded-full border border-teal-200/15 bg-teal-200/10 px-2.5 py-1 text-[11px] font-semibold text-teal-100">
