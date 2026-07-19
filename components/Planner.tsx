@@ -61,8 +61,19 @@ import {
   containsReportGenerationFailure,
   isReportGenerationFailureText,
 } from "@/app/lib/report-errors";
+import { dedupeReportSections } from "@/app/lib/report-section-normalization";
 import {
+  detectPdfPresentationLocale,
+  localizePdfPresentationLabel,
+  localizePdfPresentationText,
+  localizePdfReportSections,
+  normalizePdfCanonicalTamSamSomContent,
+  normalizePdfFinancialSectionContent,
+  normalizePdfTamSamSomBodyContent,
+  normalizePdfTamSamSomOwnershipContent,
   normalizePdfText,
+  normalizePdfSourceContent,
+  normalizePdfSourceDomain,
   repairPdfLineFragments,
 } from "@/app/lib/pdf-normalization.mjs";
 
@@ -739,11 +750,13 @@ function serializeReportSections(
   reportData: Partial<MarketReport & PlanReport>,
   fields: ReportFieldDefinition[]
 ) {
-  const sections = fields.map(({ field, title }) => ({
-    field,
-    title,
-    content: sanitizeReportFieldContent(field, reportData[field] || ""),
-  }));
+  const sections = dedupeReportSections(
+    fields.map(({ field, title }) => ({
+      field,
+      title,
+      content: sanitizeReportFieldContent(field, reportData[field] || ""),
+    }))
+  );
 
   const invalidSection = sections.find(
     (section) =>
@@ -1334,7 +1347,7 @@ type CitationData = {
   publicationYear?: string;
   confidence?: "High" | "Medium" | "Low";
   url?: string;
-  sourceType?: "Verified source" | "Planning assumption";
+  sourceType?: "Verified source" | "Company reference" | "Industry reference" | "Planning assumption";
 };
 
 function normalizeCitationConfidence(value: string): CitationData["confidence"] | undefined {
@@ -1356,25 +1369,45 @@ function normalizeCitationConfidence(value: string): CitationData["confidence"] 
 }
 
 function normalizeSourceType(value: string): CitationData["sourceType"] {
-  return /\b(assumption|planning input|estimate|ai assumption|market-derived)\b/i.test(value)
-    ? "Planning assumption"
-    : "Verified source";
+  if (/\b(assumption|planning input|estimate|ai assumption|market-derived|model-derived|needs validation)\b/i.test(value)) {
+    return "Planning assumption";
+  }
+
+  if (/\b(company|official website|website|pricing page|annual report|investor relations|press release|case study|customer story)\b/i.test(value)) {
+    return "Company reference";
+  }
+
+  if (/\b(industry|market report|research|benchmark|government|statistics|statista|euromonitor|gartner|forrester|mckinsey|bcg|deloitte|pwc|oecd|world bank|imf|eurostat|tüik|tuik|association)\b/i.test(value)) {
+    return "Industry reference";
+  }
+
+  return "Verified source";
 }
 
 function getCitationDomain(url?: string, organization = "") {
   if (url) {
-    try {
-      return new URL(url).hostname.replace(/^www\./i, "").toLowerCase();
-    } catch {
-      return "";
-    }
+    return normalizePdfSourceDomain(url);
   }
 
-  return normalizePdfText(organization)
-    .toLowerCase()
-    .replace(/\b(inc|llc|ltd|corp|company|publisher|organization)\b\.?/g, "")
-    .replace(/[^a-z0-9ığüşöçİĞÜŞÖÇ]+/gi, ".")
-    .replace(/^\.+|\.+$/g, "");
+  return normalizePdfSourceDomain(
+    normalizePdfText(organization)
+      .toLowerCase()
+      .replace(/\b(inc|llc|ltd|corp|company|publisher|organization)\b\.?/g, "")
+  );
+}
+
+function normalizeCitationUrl(value = "") {
+  const normalized = normalizePdfText(value).trim();
+
+  if (
+    !normalized ||
+    /^[-–—]+$/.test(normalized) ||
+    /^(?:not verified|url doğrulanmadı|n\/?a|not available|none|null|undefined)$/i.test(normalized)
+  ) {
+    return "";
+  }
+
+  return /^https?:\/\//i.test(normalized) ? normalized : "";
 }
 
 function parseCitations(content: string): CitationData[] {
@@ -1407,9 +1440,11 @@ function parseCitations(content: string): CitationData[] {
   content
     .split("\n")
     .forEach((rawLine) => {
-      const url =
+      const url = normalizeCitationUrl(
         rawLine.match(/\]\((https?:\/\/[^)]+)\)/i)?.[1]?.trim() ||
-        rawLine.match(/\bhttps?:\/\/[^\s)]+/i)?.[0]?.trim();
+          rawLine.match(/\bhttps?:\/\/[^\s)]+/i)?.[0]?.trim() ||
+          ""
+      );
       const line = rawLine
         .replace(/^[-*•]\s*/, "")
         .replace(/\*\*/g, "")
@@ -1439,7 +1474,8 @@ function parseCitations(content: string): CitationData[] {
         } else if (key === "year" || key === "publication year") {
           current.publicationYear = value.match(/\b(19|20)\d{2}\b/)?.[0];
         } else if (key === "url") {
-          current.url = url || value;
+          const normalizedUrl = normalizeCitationUrl(url || value);
+          if (normalizedUrl) current.url = normalizedUrl;
         } else if (key === "confidence") {
           current.confidence = normalizeCitationConfidence(value);
         } else {
@@ -1482,16 +1518,23 @@ function parseCitations(content: string): CitationData[] {
   const unique = new Map<string, CitationData>();
 
   entries.forEach((citation) => {
-    const normalizedUrl = citation.url?.trim().toLowerCase().replace(/\/+$/, "");
     const domain = getCitationDomain(citation.url, citation.organization);
     const titleKey = normalizePdfText(citation.sourceTitle).toLowerCase().replace(/\W+/g, " ").trim();
-    const key = domain && titleKey
-      ? `domain-title:${domain}|${titleKey}`
-      : normalizedUrl
-        ? `url:${normalizedUrl}`
+    const organizationKey = normalizePdfText(citation.organization).toLowerCase().replace(/\W+/g, " ").trim();
+    const domainNameKey = normalizePdfText(domain.split(".")[0] || "").toLowerCase().replace(/\W+/g, " ").trim();
+    const key = domain && domainNameKey && (
+      titleKey === domainNameKey ||
+      organizationKey === domainNameKey ||
+      titleKey.startsWith(`${domainNameKey} `) ||
+      organizationKey.startsWith(`${domainNameKey} `)
+    )
+      ? `domain:${domain}`
+      : domain && titleKey
+        ? `domain-title-publisher:${domain}|${titleKey}|${organizationKey}`
         : [
             "source",
-            normalizePdfText(citation.organization).toLowerCase().replace(/\W+/g, " ").trim(),
+            domain || "no-domain",
+            organizationKey,
             titleKey,
           ].join("|");
     const existing = unique.get(key);
@@ -1557,7 +1600,9 @@ function Citation({ citation }: { citation?: CitationData }) {
         >
           {citation.url}
         </a>
-      ) : null}
+      ) : (
+        <p className="mt-2 text-xs text-zinc-500">Not verified</p>
+      )}
     </div>
   );
 }
@@ -1927,6 +1972,80 @@ function compactPdfMetricValue(value: string) {
   );
 
   return numericMatch?.[0]?.replace(/\s+/g, " ").replace(/([kKmMbB%])\s+([$€₺])/g, "$1$2") || cleanValue.split(/\s{2,}/)[0] || "";
+}
+
+function dedupePdfFinancialMetricValue(value: string) {
+  const compactValue = compactPdfMetricValue(value);
+
+  if (!compactValue) {
+    return "";
+  }
+
+  const normalizedValue = normalizePdfText(value).replace(/\s+/g, " ").trim();
+  const metricTokens = normalizedValue.match(/(?:[$€₺]\s*)?\d+(?:[.,]\d+)*(?:\.\d+)?\s*(?:[kKmMbB%]|months?|ay|gün|days?)?\s*(?:[$€₺])?/gi) || [];
+  const normalizedTokens = metricTokens.map((token) => compactPdfMetricValue(token)).filter(Boolean);
+  const uniqueTokens = new Set(normalizedTokens.map((token) => token.toLowerCase()));
+
+  if (normalizedTokens.length > 1 && uniqueTokens.size === 1) {
+    return normalizedTokens[0];
+  }
+
+  return compactValue;
+}
+
+type FinancialMetricConfidenceBadge =
+  | "Verified"
+  | "Model Estimate"
+  | "Planning Assumption"
+  | "Validation Required";
+
+function getFinancialMetricConfidenceBadge(
+  label: string,
+  aliases: string[] | readonly string[],
+  content: string,
+  value: string
+): FinancialMetricConfidenceBadge {
+  const metricContext = normalizePdfText(
+    `${label}\n${value}\n${extractMetricDetail(content, aliases)}`
+  );
+
+  if (!value || /\b(no data|not available|validation required|needs validation|validate|low confidence)\b/i.test(metricContext)) {
+    return "Validation Required";
+  }
+
+  if (/\b(verified|actual|audited|invoice|bookkeeping|accounting|bank|stripe)\b/i.test(metricContext)) {
+    return "Verified";
+  }
+
+  if (/\b(cac|customer acquisition cost|ltv|lifetime value|payback)\b/i.test(metricContext)) {
+    return "Validation Required";
+  }
+
+  if (/\b(burn|runway|break[\s-]?even|investment needed|planning input|assumption|manual input|founder input|target|threshold|warning)\b/i.test(metricContext)) {
+    return "Planning Assumption";
+  }
+
+  return "Model Estimate";
+}
+
+function getPdfFinancialMetricConfidenceBadge(badge: FinancialMetricConfidenceBadge) {
+  return badge;
+}
+
+function getFinancialMetricConfidenceBadgeClass(badge: FinancialMetricConfidenceBadge) {
+  if (badge === "Model Estimate") {
+    return "bg-teal-200 text-black";
+  }
+
+  if (badge === "Validation Required") {
+    return "bg-amber-300/15 text-amber-200";
+  }
+
+  if (badge === "Planning Assumption") {
+    return "bg-sky-300/10 text-sky-200";
+  }
+
+  return "bg-white/10 text-zinc-300";
 }
 
 function extractMarketSizeValue(content: string, label: string) {
@@ -2314,13 +2433,15 @@ function extractKpiStatus(content: string, label: string) {
 }
 
 function removeDuplicateVisualText(title: string, content: string) {
-  const normalizedTitle = title.toLowerCase();
+  const financialContent = normalizePdfFinancialSectionContent(content, { title });
 
-  if (normalizedTitle.includes("tam / sam / som")) {
+  if (!financialContent) {
     return "";
   }
 
-  if (normalizedTitle.includes("financial dashboard")) {
+  const normalizedTitle = title.toLowerCase();
+
+  if (isTamSamSomTitle(title)) {
     return "";
   }
 
@@ -2328,7 +2449,53 @@ function removeDuplicateVisualText(title: string, content: string) {
     return "";
   }
 
-  return normalizePdfText(content);
+  return removeDuplicatePdfExecutiveInsightText(
+    normalizePdfTamSamSomOwnershipContent(financialContent, { title })
+  );
+}
+
+function isTamSamSomTitle(title: string) {
+  return /\btam\b[\s/|,·-]*\bsam\b[\s/|,·-]*\bsom\b/i.test(title);
+}
+
+function removeDuplicatePdfExecutiveInsightText(content: string) {
+  const seenLines = new Set<string>();
+  const seenSentences = new Set<string>();
+
+  return normalizePdfText(content)
+    .replace(
+      /(^|\n)\s*(?:#{1,6}\s*)?(?:\*\*)?(?:AI\s+)?Executive Insight(?:\*\*)?\s*[:\-–—]\s*/gi,
+      "$1"
+    )
+    .replace(
+      /\b([A-Z][A-Za-z /-]{1,40}\s*[:\-–—]\s*)((?:[€$₺]?\d+(?:[.,]\d+)*\s*[kKmMbBtT%]?)(?:\s+(?:months?|days?|ay|gün))?)\s+\2\b/gi,
+      "$1$2"
+    )
+    .replace(/\b([A-Za-zÇĞİÖŞÜçğıöşü]{3,})\s+\1\b/gi, "$1")
+    .split("\n")
+    .filter((line) => {
+      const key = line.replace(/^[-*•]\s*/, "").toLowerCase().replace(/\s+/g, " ").trim();
+      const sentenceKey = key.replace(/[.!?]+$/g, "");
+
+      if (sentenceKey.length >= 32 && seenSentences.has(sentenceKey)) {
+        return false;
+      }
+
+      if (key.length < 24 || !seenLines.has(key)) {
+        if (key.length >= 24) {
+          seenLines.add(key);
+        }
+        if (sentenceKey.length >= 32) {
+          seenSentences.add(sentenceKey);
+        }
+        return true;
+      }
+
+      return false;
+    })
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 function splitPdfSentences(content: string) {
@@ -2341,18 +2508,24 @@ function splitPdfSentences(content: string) {
     .filter(Boolean);
 }
 
-function isSourceLikeSection(section: Pick<ReportSection, "field" | "title">) {
+function isSourceLikeSection(section: { field?: string; title: string }) {
   return (
     section.field === "sources" ||
     section.field === "sourcesAssumptions" ||
-    /^(sources|references|kaynaklar|sources \/ assumptions|kaynaklar \/ varsayımlar)$/i.test(
+    /^(sources(?:\s+continued)?|references|kaynaklar|sources \/ assumptions|kaynaklar \/ varsayımlar)$/i.test(
       section.title.trim()
     )
   );
 }
 
 function formatPdfCitationContent(content: string) {
-  const citations = parseCitations(content);
+  const sourceContent = normalizePdfSourceContent(
+    normalizePdfFinancialSectionContent(content, {
+      field: "sourcesAssumptions",
+      title: "Sources / Assumptions",
+    })
+  );
+  const citations = parseCitations(sourceContent);
 
   if (citations.length === 0) {
     return "";
@@ -2361,20 +2534,16 @@ function formatPdfCitationContent(content: string) {
   return citations
     .slice(0, 8)
     .map((citation) => {
-      const year = citation.publicationYear ? `\n  Year: ${citation.publicationYear}` : "";
-      const confidence = citation.confidence ? `\n  Confidence: ${citation.confidence}` : "";
-      const url = citation.url ? `\n  URL: ${citation.url}` : "";
-      const sourceType = citation.sourceType ? `\n  Type: ${citation.sourceType}` : "";
       const domain = getCitationDomain(citation.url, citation.organization);
 
       return [
         `• ${citation.sourceTitle}`,
-        ...(domain ? [`  Domain: ${domain}`] : []),
         `  Publisher: ${citation.organization}`,
-        year,
-        confidence,
-        sourceType,
-        url,
+        `  Domain: ${domain || "Not verified"}`,
+        `  Type: ${citation.sourceType || "Verified source"}`,
+        `  Confidence: ${citation.confidence || "Not specified"}`,
+        `  Year: ${citation.publicationYear || "Not specified"}`,
+        `  URL: ${citation.url || "Not verified"}`,
       ].join("\n");
     })
     .join("\n");
@@ -2383,6 +2552,10 @@ function formatPdfCitationContent(content: string) {
 function formatPdfReadableContent(section: ReportSection) {
   if (isSourceLikeSection(section)) {
     return formatPdfCitationContent(section.content);
+  }
+
+  if (section.field === "tamSamSom" || isTamSamSomTitle(section.title)) {
+    return normalizePdfTamSamSomBodyContent(section.content);
   }
 
   const content = removeDuplicateVisualText(section.title, section.content);
@@ -2416,27 +2589,128 @@ function formatPdfReadableContent(section: ReportSection) {
   return [executiveParagraph, "Key insights", ...insightBullets].join("\n");
 }
 
-function dedupePdfSections<T extends { title: string; content: string }>(sections: T[]) {
+function getPdfSectionDedupeKey(section: { field?: string; title: string; content: string }) {
+  const fieldKey = section.field?.trim().toLowerCase();
+
+  if (fieldKey) {
+    return fieldKey;
+  }
+
+  const titleKey = normalizePdfText(section.title).toLowerCase().replace(/\s+/g, " ").trim();
+
+  if (isTamSamSomTitle(section.title)) {
+    return "tam-sam-som";
+  }
+
+  return titleKey || normalizePdfText(section.content).toLowerCase().slice(0, 180);
+}
+
+function isLegacyTamSamSomSection(section: { field?: string; title: string; content: string }) {
+  const fieldKey = section.field?.trim().toLowerCase();
+
+  if (fieldKey === "tamsamsom" || isTamSamSomTitle(section.title)) {
+    return false;
+  }
+
+  const title = normalizePdfText(section.title).toLowerCase();
+  const content = normalizePdfText(section.content);
+  const explicitMetricLines = content
+    .split("\n")
+    .filter((line) => /^(?:[-*•]\s*)?(?:tam|sam|som)\s*[:\-–—]/i.test(line.trim())).length;
+
+  return (
+    /\bmarket\s+sizing\b|\bmarket\s+size\b|\btam\s*\/\s*sam\s*\/\s*som\b/i.test(title) ||
+    explicitMetricLines >= 2
+  );
+}
+
+function isTamSamSomDuplicateFragment(section: { field?: string; title: string; content: string }) {
+  const fieldKey = section.field?.trim().toLowerCase();
+
+  if (fieldKey === "tamsamsom" || isTamSamSomTitle(section.title)) {
+    return false;
+  }
+
+  const title = normalizePdfText(section.title).toLowerCase().replace(/\s+/g, " ").trim();
+  const content = normalizePdfText(section.content);
+  const titleIsMetricFragment = /^(tam|sam|som)(?:\s+(?:analysis|overview|market|section))?$/i.test(title);
+  const hasMetricLine = content
+    .split("\n")
+    .some((line) => /^(?:[-*•]\s*)?(?:tam|sam|som)\s*[:\-–—]/i.test(line.trim()));
+  const isMarketSizingInsight =
+    /\b(?:ai\s+)?executive insight\b/i.test(content) &&
+    /\b(?:tam|sam|som|market sizing|market size)\b/i.test(`${title}\n${content}`);
+
+  return titleIsMetricFragment || (hasMetricLine && isMarketSizingInsight);
+}
+
+function dedupePdfSections<T extends { field?: string; title: string; content: string }>(sections: T[]) {
   const seen = new Set<string>();
+  const seenContent = new Set<string>();
+  const hasCanonicalTamSamSom = sections.some(
+    (section) => section.field?.trim().toLowerCase() === "tamsamsom"
+  );
+  let hasTamSamSom = false;
 
   return sections.filter((section) => {
-    const key = section.title.trim().toLowerCase().replace(/\s+/g, " ");
+    const fieldKey = section.field?.trim().toLowerCase();
+    const isCanonicalTamSamSom = fieldKey === "tamsamsom";
+    const isTamSamSomSection = isCanonicalTamSamSom || isTamSamSomTitle(section.title);
 
-    if (!key || seen.has(key)) {
+    if (hasCanonicalTamSamSom && isTamSamSomSection && !isCanonicalTamSamSom) {
+      return false;
+    }
+
+    if (isTamSamSomSection) {
+      if (hasTamSamSom) {
+        return false;
+      }
+
+      hasTamSamSom = true;
+    }
+
+    if (hasTamSamSom && isTamSamSomDuplicateFragment(section)) {
+      return false;
+    }
+
+    if (isLegacyTamSamSomSection(section)) {
+      return false;
+    }
+
+    const key = getPdfSectionDedupeKey(section);
+    const normalizedContent = normalizePdfTamSamSomOwnershipContent(section.content, section);
+    const contentKey = removeDuplicatePdfExecutiveInsightText(normalizedContent)
+      .toLowerCase()
+      .replace(/\s+/g, " ")
+      .slice(0, 360);
+
+    if (!key || seen.has(key) || (contentKey && seenContent.has(contentKey))) {
       return false;
     }
 
     seen.add(key);
+    if (contentKey) {
+      seenContent.add(contentKey);
+    }
     return true;
+  }).map((section) => {
+    const fieldKey = section.field?.trim().toLowerCase();
+
+    if (fieldKey === "tamsamsom" || isTamSamSomTitle(section.title)) {
+      return {
+        ...section,
+        field: "tamSamSom",
+        title: "TAM / SAM / SOM",
+        content: normalizePdfCanonicalTamSamSomContent(section.content),
+      };
+    }
+
+    return section;
   });
 }
 
-function mergePdfSourceSections<T extends { title: string; content: string }>(sections: T[]) {
-  const sourceSections = sections.filter((section) =>
-    /^(sources|references|kaynaklar|sources \/ assumptions|kaynaklar \/ varsayımlar)$/i.test(
-      section.title.trim()
-    )
-  );
+function mergePdfSourceSections<T extends { field?: string; title: string; content: string }>(sections: T[]) {
+  const sourceSections = sections.filter((section) => isSourceLikeSection(section));
   const nonSourceSections = sections.filter(
     (section) => !sourceSections.includes(section)
   );
@@ -2444,8 +2718,9 @@ function mergePdfSourceSections<T extends { title: string; content: string }>(se
     .map((section) => section.content.trim())
     .filter(Boolean)
     .join("\n");
+  const normalizedSourceContent = normalizePdfSourceContent(mergedSourceContent);
 
-  if (!mergedSourceContent) {
+  if (!normalizedSourceContent) {
     return nonSourceSections;
   }
 
@@ -2453,8 +2728,9 @@ function mergePdfSourceSections<T extends { title: string; content: string }>(se
     ...nonSourceSections,
     {
       ...sourceSections[0],
+      field: "sources",
       title: "Sources",
-      content: mergedSourceContent,
+      content: removeDuplicatePdfExecutiveInsightText(normalizedSourceContent),
     },
   ];
 }
@@ -2753,9 +3029,6 @@ function PremiumSectionVisual({ section }: { section: ReportSection }) {
                   style={{ width: `${[100, 68, 36][index]}%` }}
                 />
               </div>
-              <p className="mt-4 line-clamp-3 text-sm leading-6 text-zinc-400">
-                {row.description}
-              </p>
             </div>
           ))}
         </div>
@@ -2928,14 +3201,29 @@ if (field === "swotAnalysis") {
           </p>
         </div>
         <div className="grid gap-px bg-white/10 md:grid-cols-5">
-          {flow.map((metric) => (
-            <div key={metric} className="bg-zinc-950/80 p-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">{metric}</p>
-              <p className="mt-3 truncate whitespace-nowrap text-lg font-semibold text-white">
-                {formatMetricCardValue(extractMetricValue(section.content, metric)) || "—"}
-              </p>
-            </div>
-          ))}
+          {flow.map((metric) => {
+            const value = formatMetricCardValue(extractMetricValue(section.content, metric));
+            const confidenceBadge = getFinancialMetricConfidenceBadge(
+              metric,
+              [metric],
+              section.content,
+              value
+            );
+
+            return (
+              <div key={metric} className="bg-zinc-950/80 p-4">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">{metric}</p>
+                  <span className={`shrink-0 rounded-full px-2 py-1 text-[9px] font-semibold ${getFinancialMetricConfidenceBadgeClass(confidenceBadge)}`}>
+                    {confidenceBadge}
+                  </span>
+                </div>
+                <p className="mt-3 truncate whitespace-nowrap text-lg font-semibold text-white">
+                  {value || "—"}
+                </p>
+              </div>
+            );
+          })}
         </div>
       </div>
     );
@@ -3016,6 +3304,12 @@ if (field === "swotAnalysis") {
             const value = formatMetricCardValue(
               extractMetricValueFromAliases(section.content, metric.aliases)
             );
+            const confidenceBadge = getFinancialMetricConfidenceBadge(
+              metric.label,
+              metric.aliases,
+              section.content,
+              value
+            );
 
             return (
               <div
@@ -3026,14 +3320,8 @@ if (field === "swotAnalysis") {
                   <p className="line-clamp-2 min-w-0 break-words text-[11px] font-medium uppercase tracking-[0.16em] text-zinc-500">
                     {metric.label}
                   </p>
-                  <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold ${
-                    index % 3 === 0
-                      ? "bg-teal-200 text-black"
-                      : index % 3 === 1
-                        ? "bg-amber-300/15 text-amber-200"
-                        : "bg-white/10 text-zinc-300"
-                  }`}>
-                    {index % 3 === 0 ? "On track" : index % 3 === 1 ? "Watch" : "Model"}
+                  <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold ${getFinancialMetricConfidenceBadgeClass(confidenceBadge)}`}>
+                    {confidenceBadge}
                   </span>
                 </div>
                 <div className="mt-4 min-w-0">
@@ -3299,28 +3587,43 @@ if (field === "swotAnalysis") {
   }
 
   if (field === "kpiDashboard" || field === "kpis") {
-    const kpiMetrics = ["Acquisition", "Activation", "Retention", "Gross Margin", "Payback", "Conversion"];
+    const kpiMetrics = ["Acquisition", "Activation", "Retention", "Revenue", "CAC", "WTP", "Sales cycle", "Conversion"];
 
     return (
       <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        {kpiMetrics.map((metric) => (
-          <div key={metric} className="grid grid-cols-[4.25rem_1fr] gap-4 rounded-3xl border border-white/10 bg-white/[0.035] p-4">
-            <MiniProgressCircle label="" value={extractPercentScore(section.content, metric)} />
-            <div className="min-w-0">
-              <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-zinc-500">{metric}</p>
-              <p className="mt-2 line-clamp-2 text-xl font-semibold text-white">
-                {extractMetricValue(section.content, metric) || "Target"}
-              </p>
-              <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-zinc-800">
-                <div
-                  className="h-full rounded-full bg-teal-200/80"
-                  style={{ width: `${extractPercentScore(section.content, metric) ?? 66}%` }}
-                />
+        {kpiMetrics.map((metric) => {
+          const value = extractMetricValue(section.content, metric);
+          const confidenceBadge = getFinancialMetricConfidenceBadge(
+            metric,
+            [metric],
+            section.content,
+            value
+          );
+
+          return (
+            <div key={metric} className="grid grid-cols-[4.25rem_1fr] gap-4 rounded-3xl border border-white/10 bg-white/[0.035] p-4">
+              <MiniProgressCircle label="" value={extractPercentScore(section.content, metric)} />
+              <div className="min-w-0">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-zinc-500">{metric}</p>
+                  <span className={`shrink-0 rounded-full px-2 py-1 text-[9px] font-semibold ${getFinancialMetricConfidenceBadgeClass(confidenceBadge)}`}>
+                    {confidenceBadge}
+                  </span>
+                </div>
+                <p className="mt-2 line-clamp-2 text-xl font-semibold text-white">
+                  {value || "Target"}
+                </p>
+                <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-zinc-800">
+                  <div
+                    className="h-full rounded-full bg-teal-200/80"
+                    style={{ width: `${extractPercentScore(section.content, metric) ?? 0}%` }}
+                  />
+                </div>
+                <p className="mt-2 text-xs text-zinc-500">Analytics widget</p>
               </div>
-              <p className="mt-2 text-xs text-zinc-500">Analytics widget</p>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     );
   }
@@ -4042,26 +4345,30 @@ const ReportPanel = memo(function ReportPanel({
   const [pdfFontBase64, setPdfFontBase64] = useState("");
   const sections = useMemo<ReportSection[]>(() => {
     if (reportData) {
-      return reportFields.map(({ field, title, icon }) => ({
-        field,
-        title,
-        icon,
-        content:
-          sanitizeReportFieldContent(field, reportData[field] || "") ||
-          waitingMessage,
-      }));
+      return dedupeReportSections(
+        reportFields.map(({ field, title, icon }) => ({
+          field,
+          title,
+          icon,
+          content:
+            sanitizeReportFieldContent(field, reportData[field] || "") ||
+            waitingMessage,
+        }))
+      );
     }
 
-    return result
-      ? [
-          {
-            field: "executiveSummary",
-            title: "Executive Summary",
-            icon: Sparkles,
-            content: sanitizeReportContent(result),
-          },
-        ]
-      : [];
+    return dedupeReportSections(
+      result
+        ? [
+            {
+              field: "executiveSummary",
+              title: "Executive Summary",
+              icon: Sparkles,
+              content: sanitizeReportContent(result),
+            },
+          ]
+        : []
+    );
   }, [reportData, reportFields, result, waitingMessage]);
   const failedSection = sections.find((section) =>
     isReportGenerationFailureText(section.content)
@@ -4137,12 +4444,20 @@ const ReportPanel = memo(function ReportPanel({
       const bodyLineHeight = 5.85;
       const cardHeaderHeight = 25;
       const cardBottomPadding = 11;
-      const fullReportContent = sections
+      const basePdfSections = dedupePdfSections(mergePdfSourceSections(sections));
+      const pdfLocale = detectPdfPresentationLocale(
+        [reportTitle, sourcePrompt, ...basePdfSections.map((section) => `${section.title}\n${section.content}`)]
+          .filter(Boolean)
+          .join("\n\n")
+      );
+      const pdfSections = localizePdfReportSections(basePdfSections, pdfLocale);
+      const localizedReportTitle = localizePdfPresentationLabel(reportTitle, pdfLocale);
+      const fullReportContent = basePdfSections
         .map((section) => `${section.title}\n${section.content}`)
         .join("\n\n");
       const businessIdea = deriveBusinessDescriptionFromSections(
-        sections,
-        reportTitle,
+        pdfSections,
+        localizedReportTitle,
         sourcePrompt
       );
       const tocEntries: Array<{ title: string; page: number }> = [];
@@ -4179,19 +4494,25 @@ const ReportPanel = memo(function ReportPanel({
         y = margin;
       };
 
-      const drawFooter = () => {
+      const drawFooter = (includePageCounter = false) => {
         const currentPage = pdf.getCurrentPageInfo().pageNumber;
 
         pdf.setFillColor("#000000");
-        pdf.rect(margin, pageHeight - 11, contentWidth, 8, "F");
+        pdf.rect(0, pageHeight - 13, pageWidth, 13, "F");
         pdf.setDrawColor("#27272a");
         pdf.line(margin, pageHeight - 10, pageWidth - margin, pageHeight - 10);
+
+        if (!includePageCounter) {
+          return;
+        }
+
         pdf.setFontSize(7);
         pdf.setTextColor("#71717a");
-        pdf.text("ZERINIX CONFIDENTIAL INVESTOR REPORT", margin, pageHeight - 5);
         pdf.text(
-          `Page ${currentPage} / ${pdf.getNumberOfPages()}`,
-          pageWidth - margin - 28,
+          pdfLocale === "tr"
+            ? `Sayfa ${currentPage} / ${pdf.getNumberOfPages()}`
+            : `Page ${currentPage} / ${pdf.getNumberOfPages()}`,
+          pageWidth - margin - 22,
           pageHeight - 5
         );
       };
@@ -4224,12 +4545,17 @@ const ReportPanel = memo(function ReportPanel({
             }
 
             const isBullet = /^[-*•]\s+/.test(line);
-            const availableWidth = isBullet ? width - 4 : width;
+            const isSourceMetaLine = /^(?:Domain|Publisher|Year|Confidence|Type|URL)\s*:/i.test(line);
+            const availableWidth = isBullet || isSourceMetaLine ? width - 4 : width;
             const wrapped = pdf.splitTextToSize(line, availableWidth) as string[];
 
-            return wrapped.map((wrappedLine, index) =>
-              isBullet && index > 0 ? `  ${wrappedLine}` : wrappedLine
-            );
+            return wrapped.map((wrappedLine, index) => {
+              if (isSourceMetaLine) {
+                return `${index > 0 ? "    " : "  "}${wrappedLine}`;
+              }
+
+              return isBullet && index > 0 ? `  ${wrappedLine}` : wrappedLine;
+            });
           }),
           isOrphanBulletText
         );
@@ -4245,23 +4571,23 @@ const ReportPanel = memo(function ReportPanel({
         drawLogoMark(margin + 12, 32, 14);
         pdf.setFontSize(10);
         pdf.setTextColor("#5eead4");
-        pdf.text("ZERINIX REPORT", margin + 31, 41);
+        pdf.text(localizePdfPresentationLabel("ZERINIX REPORT", pdfLocale), margin + 31, 41);
 
         pdf.setFontSize(32);
         pdf.setTextColor("#ffffff");
-        pdf.text(reportTitle, margin + 12, 60, { maxWidth: contentWidth - 24 });
+        pdf.text(localizedReportTitle, margin + 12, 60, { maxWidth: contentWidth - 24 });
 
         pdf.setFontSize(11);
         pdf.setTextColor("#a1a1aa");
-        pdf.text("Premium AI business intelligence report for founder and investor decisions.", margin + 12, 78, {
+        pdf.text(localizePdfPresentationText("Premium AI business intelligence report for founder and investor decisions.", pdfLocale), margin + 12, 78, {
           maxWidth: contentWidth - 24,
         });
 
-        drawTag("AI Ready", margin + 12, 94, 28);
-        drawTag("Investor Ready", margin + 44, 94, 38);
+        drawTag(localizePdfPresentationLabel("AI Ready", pdfLocale), margin + 12, 94, 28);
+        drawTag(localizePdfPresentationLabel("Investor Ready", pdfLocale), margin + 44, 94, 38);
 
         const coverMeta = [
-          ["Report Type", reportTitle],
+          [localizePdfPresentationLabel("Report Type", pdfLocale), localizedReportTitle],
           ["Business Idea", businessIdea],
           ["Date", new Date().toLocaleDateString("tr-TR")],
           ["Theme", "Strategic analysis, financial dashboard, and executive recommendation"],
@@ -4319,11 +4645,11 @@ const ReportPanel = memo(function ReportPanel({
       pdf.setFontSize(10);
       pdf.setTextColor("#5eead4");
       drawLogoMark(margin, y - 6, 10);
-      pdf.text("ZERINIX REPORT", margin + 14, y);
+      pdf.text(localizePdfPresentationLabel("ZERINIX REPORT", pdfLocale), margin + 14, y);
 
       pdf.setFontSize(24);
       pdf.setTextColor("#ffffff");
-      pdf.text(reportTitle, margin, y + 11);
+      pdf.text(localizedReportTitle, margin, y + 11);
 
       pdf.setFillColor("#042f2e");
       pdf.setDrawColor("#115e59");
@@ -4331,12 +4657,12 @@ const ReportPanel = memo(function ReportPanel({
       pdf.setFont("Geist", "normal");
       pdf.setFontSize(8);
       pdf.setTextColor("#ccfbf1");
-      pdf.text("AI Ready", pageWidth - margin - 25, y + 7.3);
+      pdf.text(localizePdfPresentationLabel("AI Ready", pdfLocale), pageWidth - margin - 25, y + 7.3);
 
       y += 26;
 
       const summaryCards = [
-        `${visibleSections.length} Sections`,
+        `${pdfSections.filter((section) => !isSourceSection(section)).length} Sections`,
         "Investor Ready",
         "Strategy Model",
       ];
@@ -4377,7 +4703,7 @@ const ReportPanel = memo(function ReportPanel({
           ["SAM", "#115e59"],
           ["SOM", "#5eead4"],
         ] as const).map(([label, color]) => {
-          const value = extractMarketSizeValue(`${content}\n${fullReportContent}`, label);
+          const value = extractMarketSizeValue(content, label);
           const snippet = extractSectionSnippet(content, label);
           const description = normalizePdfText(snippet.replace(value, ""))
             .replace(new RegExp(`^${label}\\s*[:\\-–—]?`, "i"), "")
@@ -4403,10 +4729,13 @@ const ReportPanel = memo(function ReportPanel({
           ["Threats", "#1c1917"],
         ] as const;
         const gap = 3;
-        const boxWidth = (width - gap) / 2;
-        const items = quadrants.map(([label, color]) => {
-          const bulletLines = extractSwotBullets(content, label, fullReportContent)
-            .slice(0, 3)
+	        const boxWidth = (width - gap) / 2;
+	        const items = quadrants.map(([label, color]) => {
+	          const bullets = extractSwotBullets(content, label, fullReportContent)
+	            .filter((bullet) => !/\b(?:no data|not available|validation required)\b/i.test(bullet))
+	            .slice(0, 3);
+	          const fallbackBullets = bullets.length > 0 ? bullets : ["No validated insight available"];
+          const bulletLines = fallbackBullets
             .map((bullet) => pdf.splitTextToSize(`• ${bullet}`, boxWidth - 6) as string[]);
           const textLineCount = Math.max(1, bulletLines.reduce((count, lines) => count + lines.length, 0));
           const boxHeight = Math.max(29, 11 + textLineCount * 4.2);
@@ -4426,7 +4755,7 @@ const ReportPanel = memo(function ReportPanel({
       };
 
       const getFinancialLayout = (content: string, width: number) => {
-        const metricContent = `${content}\n${fullReportContent}`;
+        const metricContent = content;
         const labels = getFinancialDashboardMetrics(metricContent);
         const columns = 3;
         const itemWidth = (width - (columns - 1) * 3) / columns;
@@ -4434,7 +4763,7 @@ const ReportPanel = memo(function ReportPanel({
         const items = labels
           .map((item) => {
             const value = formatMetricCardValue(extractMetricValueFromAliases(metricContent, item.aliases));
-            const compactValue = compactPdfMetricValue(value);
+            const compactValue = dedupePdfFinancialMetricValue(value);
             const description = extractShortDescription(metricContent, item.aliases);
             const descriptionLines = description
               ? (pdf.splitTextToSize(`${item.label}: ${description}`, width - 6) as string[])
@@ -4500,7 +4829,7 @@ const ReportPanel = memo(function ReportPanel({
         }
 
         if (section.field === "tamSamSom") {
-          return getTamVisualHeight(section.content, bodyWidth);
+          return 51;
         }
 
         if (section.field === "scenarioAnalysis") {
@@ -4554,7 +4883,9 @@ const ReportPanel = memo(function ReportPanel({
           const rows = getTamRows(section.content, visualWidth);
           let rowY = visualY;
 
-          rows.forEach(({ label, color, value, descriptionLines, rowHeight }, index) => {
+          rows.forEach(({ label, color, value }, index) => {
+            const rowHeight = 15;
+
             pdf.setFillColor("#101113");
             pdf.setDrawColor(color);
             pdf.roundedRect(bodyX, rowY, visualWidth, rowHeight, 3, 3, "FD");
@@ -4566,18 +4897,9 @@ const ReportPanel = memo(function ReportPanel({
             pdf.setTextColor("#ccfbf1");
             drawSingleLine(value || "—", bodyX + 20, rowY + 5.7, visualWidth - 24, 8.2, 4.2, false);
 
-            if (descriptionLines.length > 0) {
-              pdf.setFontSize(5.6);
-              pdf.setTextColor("#a1a1aa");
-              pdf.text(descriptionLines, bodyX + 3, rowY + 12.5, {
-                lineHeightFactor: 1.18,
-                maxWidth: visualWidth - 6,
-              });
-            }
-
             rowY += rowHeight + 3;
           });
-          return getTamVisualHeight(section.content, visualWidth);
+          return 51;
         }
 
         if (section.field === "swotAnalysis") {
@@ -4617,7 +4939,7 @@ const ReportPanel = memo(function ReportPanel({
           labels.forEach((label, index) => {
             const x = bodyX + (index % 3) * (itemWidth + 5);
             const itemY = visualY + Math.floor(index / 3) * 15;
-            const score = extractScore(section.content, label) ?? [76, 68, 61, 58, 64, 72][index] ?? 60;
+            const score = extractScore(section.content, label);
 
             pdf.setFillColor("#18181b");
             pdf.setDrawColor("#27272a");
@@ -4626,12 +4948,12 @@ const ReportPanel = memo(function ReportPanel({
             pdf.circle(x + 7, itemY + 6, 4.2, "S");
             pdf.setFontSize(6);
             pdf.setTextColor("#ccfbf1");
-            pdf.text(String(score), x + 4.2, itemY + 7.8);
+            pdf.text(score === null ? "—" : String(score), x + 4.2, itemY + 7.8);
             pdf.setFontSize(6.5);
             pdf.setTextColor("#e4e4e7");
             pdf.text(label, x + 14, itemY + 5, { maxWidth: itemWidth - 17 });
             pdf.setTextColor("#71717a");
-            pdf.text("Score", x + 14, itemY + 8.8);
+            pdf.text(localizePdfPresentationLabel("Score", pdfLocale), x + 14, itemY + 8.8);
           });
 
           return 31;
@@ -4658,7 +4980,7 @@ const ReportPanel = memo(function ReportPanel({
           pdf.roundedRect(bodyX, visualY, 52, 26, 5, 5, "FD");
           pdf.setFontSize(5.8);
           pdf.setTextColor("#134e4a");
-          pdf.text("RECOMMENDATION", bodyX + 5, visualY + 6);
+          pdf.text(localizePdfPresentationLabel("RECOMMENDATION", pdfLocale), bodyX + 5, visualY + 6);
           pdf.setFontSize(13);
           pdf.setTextColor("#000000");
           drawSingleLine(decisionLabel, bodyX + 5, visualY + 16, 42, 11, 6.5);
@@ -4669,7 +4991,7 @@ const ReportPanel = memo(function ReportPanel({
           pdf.roundedRect(
             bodyX,
             visualY + 31,
-            (52 * (confidence ?? 50)) / 100,
+            (52 * (confidence ?? 0)) / 100,
             4,
             2,
             2,
@@ -4764,17 +5086,17 @@ const ReportPanel = memo(function ReportPanel({
             : section.field === "scenarioAnalysis"
                 ? ["Worst", "Base", "Best"]
                 : section.field === "kpiDashboard" || section.field === "kpis"
-                  ? ["Acquisition", "Activation", "Retention", "Revenue"]
+                  ? ["Acquisition", "Activation", "Retention", "Revenue", "CAC", "WTP", "Sales cycle", "Conversion"]
                   : section.field === "risks"
                     ? ["Market", "Product", "Pricing", "Execution"]
                     : section.field === "unitEconomics"
-                      ? ["Gross Margin", "CAC", "LTV", "Payback"]
+                      ? ["ARPA", "CAC", "LTV", "Payback", "Gross Margin"]
                       : ["Rivalry", "Entrants", "Buyer", "Substitutes"];
         const isFinancialDashboard = section.field === "financialDashboard";
         const isKpiDashboard = section.field === "kpiDashboard" || section.field === "kpis";
         const isScenario = section.field === "scenarioAnalysis";
         const isUnitEconomics = section.field === "unitEconomics";
-        const metricContent = `${section.content}\n${fullReportContent}`;
+        const metricContent = isFinancialDashboard ? section.content : `${section.content}\n${fullReportContent}`;
         const columns = isFinancialDashboard ? 3 : labels.length > 6 ? 4 : labels.length;
         const itemWidth = isFinancialDashboard && financialLayout
           ? financialLayout.itemWidth
@@ -4794,11 +5116,19 @@ const ReportPanel = memo(function ReportPanel({
           const itemY = isFinancialDashboard && financialLayout
             ? visualY + priorRowHeight + rowIndex * 3
             : visualY + rowIndex * (itemHeight + 3);
-          const score = extractScore(metricContent, label) ?? [42, 62, 84, 56][index] ?? 60;
+          const score = extractScore(metricContent, label);
           const value = typeof item !== "string" && "value" in item
             ? item.value
             : formatMetricCardValue(extractMetricValueFromAliases(metricContent, aliases));
-          const compactValue = compactPdfMetricValue(value);
+          const compactValue = isFinancialDashboard
+            ? dedupePdfFinancialMetricValue(value)
+            : compactPdfMetricValue(value);
+          const confidenceBadge = isFinancialDashboard || isUnitEconomics || isKpiDashboard
+            ? getFinancialMetricConfidenceBadge(label, aliases, metricContent, value)
+            : null;
+          const pdfConfidenceBadge = confidenceBadge
+            ? getPdfFinancialMetricConfidenceBadge(confidenceBadge)
+            : null;
 
           pdf.setFillColor("#18181b");
           pdf.setDrawColor("#27272a");
@@ -4809,14 +5139,20 @@ const ReportPanel = memo(function ReportPanel({
           if (isFinancialDashboard && value) {
             pdf.setTextColor("#f4f4f5");
             drawSingleLine(compactValue || "—", x + 2, itemY + 11.7, itemWidth - 4, 8.8, 4.2, false);
+            pdf.setFontSize(4.8);
+            pdf.setTextColor("#5eead4");
+            drawSingleLine(pdfConfidenceBadge || "Validation Required", x + itemWidth - 32, itemY + 16, 30, 4.8, 3.8);
             return;
           }
           if (isUnitEconomics) {
             drawSingleLine(compactValue || "—", x + 2, itemY + 8.8, itemWidth - 4, 7.2, 4.2, false);
+            pdf.setFontSize(3.7);
+            pdf.setTextColor("#5eead4");
+            drawSingleLine(pdfConfidenceBadge || "Validation Required", x + 2, itemY + 12.2, itemWidth - 4, 3.8, 3.2);
             return;
           }
           if (isKpiDashboard) {
-            const kpiValue = extractKpiValue(section.content, label) || `${score}%`;
+            const kpiValue = extractKpiValue(section.content, label) || (score === null ? "—" : `${score}%`);
             const target = extractKpiTarget(section.content, label);
             const status = extractKpiStatus(section.content, label);
             pdf.setTextColor("#f4f4f5");
@@ -4824,11 +5160,14 @@ const ReportPanel = memo(function ReportPanel({
             pdf.setFontSize(5.3);
             pdf.setTextColor("#a1a1aa");
             pdf.text(`Target: ${target || kpiValue || "—"}`, x + 2, itemY + 12.1, { maxWidth: itemWidth - 4 });
-            pdf.text(`Status: ${status}`, x + 2, itemY + 15.5, { maxWidth: itemWidth - 4 });
+            pdf.text(`Status: ${status}`, x + 2, itemY + 15.2, { maxWidth: itemWidth - 4 });
+            pdf.setFontSize(4);
+            pdf.setTextColor("#5eead4");
+            drawSingleLine(pdfConfidenceBadge || "Validation Required", x + 2, itemY + 18.1, itemWidth - 4, 4, 3.4);
             pdf.setFillColor("#27272a");
-            pdf.roundedRect(x + 2, itemY + 18.8, itemWidth - 4, 1.5, 0.7, 0.7, "F");
+            pdf.roundedRect(x + 2, itemY + 20.1, itemWidth - 4, 1.5, 0.7, 0.7, "F");
             pdf.setFillColor("#5eead4");
-            pdf.roundedRect(x + 2, itemY + 18.8, Math.max(3, ((itemWidth - 4) * score) / 100), 1.5, 0.7, 0.7, "F");
+            pdf.roundedRect(x + 2, itemY + 20.1, Math.max(0, ((itemWidth - 4) * (score ?? 0)) / 100), 1.5, 0.7, 0.7, "F");
             return;
           }
           if (isScenario) {
@@ -4842,7 +5181,7 @@ const ReportPanel = memo(function ReportPanel({
             pdf.setFillColor("#27272a");
             pdf.roundedRect(x + 2, itemY + 15, itemWidth - 4, 1.4, 0.7, 0.7, "F");
             pdf.setFillColor(index === 0 ? "#fca5a5" : index === 1 ? "#fde68a" : "#5eead4");
-            pdf.roundedRect(x + 2, itemY + 15, Math.max(3, ((itemWidth - 4) * ([42, 66, 84][index] || score)) / 100), 1.4, 0.7, 0.7, "F");
+            pdf.roundedRect(x + 2, itemY + 15, Math.max(3, ((itemWidth - 4) * ([42, 66, 84][index] ?? score ?? 0)) / 100), 1.4, 0.7, 0.7, "F");
             return;
           }
           pdf.setFillColor("#27272a");
@@ -4851,7 +5190,7 @@ const ReportPanel = memo(function ReportPanel({
           pdf.roundedRect(
             x + 2,
             itemY + 7,
-            Math.max(3, ((itemWidth - 4) * score) / 100),
+            Math.max(0, ((itemWidth - 4) * (score ?? 0)) / 100),
             1.4,
             0.7,
             0.7,
@@ -4868,7 +5207,7 @@ const ReportPanel = memo(function ReportPanel({
             pdf.roundedRect(bodyX, detailsY - 4, visualWidth, financialLayout.detailLines.length * 3.6 + 8, 2.5, 2.5, "FD");
             pdf.setFontSize(6);
             pdf.setTextColor("#5eead4");
-            pdf.text("METRIC DETAILS", bodyX + 3, detailsY);
+            pdf.text(localizePdfPresentationLabel("METRIC DETAILS", pdfLocale), bodyX + 3, detailsY);
             pdf.setFontSize(5.5);
             pdf.setTextColor("#a1a1aa");
             pdf.text(financialLayout.detailLines, bodyX + 3, detailsY + 4, {
@@ -4900,49 +5239,64 @@ const ReportPanel = memo(function ReportPanel({
         drawLogoMark(margin, 24, 13);
         pdf.setFontSize(10);
         pdf.setTextColor("#5eead4");
-        pdf.text("ZERINIX REPORT", margin + 17, 33);
+        pdf.text(localizePdfPresentationLabel("ZERINIX REPORT", pdfLocale), margin + 17, 33);
         pdf.setFontSize(26);
         pdf.setTextColor("#ffffff");
-        pdf.text("Table of Contents", margin, 54);
+        pdf.text(localizePdfPresentationLabel("Table of Contents", pdfLocale), margin, 54);
         pdf.setFontSize(8.5);
         pdf.setTextColor("#a1a1aa");
-        pdf.text("Click a section title to jump directly to that page.", margin, 64);
+        pdf.text(localizePdfPresentationText("Click a section title to jump directly to that page.", pdfLocale), margin, 64);
 
-        let tocY = 82;
-        tocEntries.slice(0, 18).forEach((entry, index) => {
-          if (tocY > pageHeight - 26) {
+        const tocColumnGap = 5;
+        const tocColumnCount = 2;
+        const tocColumnWidth = (contentWidth - tocColumnGap) / tocColumnCount;
+        const tocRowHeight = 10;
+        const tocMaxRows = Math.floor((pageHeight - 108) / tocRowHeight);
+
+        tocEntries.forEach((entry, index) => {
+          const columnIndex = Math.floor(index / tocMaxRows);
+
+          if (columnIndex >= tocColumnCount) {
             return;
           }
 
+          const rowIndex = index % tocMaxRows;
+          const tocX = margin + columnIndex * (tocColumnWidth + tocColumnGap);
+          const tocY = 82 + rowIndex * tocRowHeight;
+
           pdf.setFillColor(index % 2 === 0 ? "#09090b" : "#050505");
           pdf.setDrawColor("#27272a");
-          pdf.roundedRect(margin, tocY - 6, contentWidth, 12, 3, 3, "FD");
-          pdf.setFontSize(8.5);
+          pdf.roundedRect(tocX, tocY - 5.5, tocColumnWidth, 8.5, 2.5, 2.5, "FD");
+          pdf.setFontSize(7.2);
           pdf.setTextColor("#f4f4f5");
-          pdf.textWithLink(normalizePdfText(entry.title), margin + 6, tocY + 1.5, {
+          pdf.textWithLink(normalizePdfText(entry.title), tocX + 3, tocY + 0.8, {
             pageNumber: entry.page,
+            maxWidth: tocColumnWidth - 14,
           });
           pdf.setTextColor("#5eead4");
-          pdf.text(String(entry.page), pageWidth - margin - 10, tocY + 1.5);
-          tocY += 14;
+          pdf.text(String(entry.page), tocX + tocColumnWidth - 8, tocY + 0.8);
         });
 
         drawFooter();
       };
 
-      dedupePdfSections(mergePdfSourceSections(sections)).forEach((section) => {
+      pdfSections.forEach((section) => {
         if (section.content === waitingMessage) {
           return;
         }
 
         const visualHeight = getPdfVisualHeight(section);
-        const sectionBodyContent = formatPdfReadableContent(section);
+        const sectionBodyContent = section.field === "tamSamSom" ? "" : formatPdfReadableContent(section);
 
-        if (isSourceLikeSection(section) && !sectionBodyContent.trim()) {
-          return;
-        }
+	        if (isSourceLikeSection(section) && !sectionBodyContent.trim()) {
+	          return;
+	        }
 
-        const bodyLines = splitPdfReadableLines(sectionBodyContent, bodyWidth);
+	        if (visualHeight <= 0 && !sectionBodyContent.trim()) {
+	          return;
+	        }
+	
+	        const bodyLines = splitPdfReadableLines(sectionBodyContent, bodyWidth);
         const hasBodyText = sectionBodyContent.trim().length > 0;
         const safeBodyLines = bodyLines.length > 0 ? bodyLines : [""];
         let lineIndex = 0;
@@ -4997,9 +5351,15 @@ const ReportPanel = memo(function ReportPanel({
           pdf.setFont("Geist", "normal");
           pdf.setFontSize(14);
           pdf.setTextColor("#ffffff");
-          pdf.text(`${section.title}${isContinued ? " continued" : ""}`, bodyX, y + 12.5, {
-            maxWidth: bodyWidth,
-          });
+          const sectionTitle = isContinued && isSourceLikeSection(section)
+            ? ""
+            : `${section.title}${isContinued ? pdfLocale === "tr" ? " devamı" : " continued" : ""}`;
+
+          if (sectionTitle) {
+            pdf.text(sectionTitle, bodyX, y + 12.5, {
+              maxWidth: bodyWidth,
+            });
+          }
 
           const drawnVisualHeight = activeVisualHeight > 0 && !isContinued ? drawPdfVisual(section, y) : 0;
 
@@ -5026,7 +5386,7 @@ const ReportPanel = memo(function ReportPanel({
 
       for (let pageNumber = 1; pageNumber <= totalPages; pageNumber += 1) {
         pdf.setPage(pageNumber);
-        drawFooter();
+        drawFooter(true);
       }
 
       pdf.setPage(finalPage);
@@ -5144,6 +5504,7 @@ const ReportPanel = memo(function ReportPanel({
           const detailsContent = isFinancialDashboard
             ? ""
             : section.content;
+          const hasVisibleDetailsContent = detailsContent.replace(/[#*_`>\-[\]\s()]/g, "").trim().length > 0;
 
           return (
             <article
@@ -5166,14 +5527,17 @@ const ReportPanel = memo(function ReportPanel({
                     </span>
                   </div>
                   <div className="mt-4 border-t border-white/10 pt-4">
-                    <ExecutiveSummaryVisual section={section} />
+                    {section.field === "executiveSummary" ? (
+                      <ExecutiveSummaryVisual section={section} />
+                    ) : null}
                     {hasPremiumSectionVisual(section) &&
                     section.field !== "executiveSummary" &&
-                    section.field !== "financialDashboard" ? (
+                    section.field !== "financialDashboard" &&
+                    section.field !== "tamSamSom" ? (
                       <ExecutiveInsightBanner section={section} />
                     ) : null}
                     <PremiumSectionVisual section={section} />
-                    {detailsContent.trim() ? (
+                    {hasVisibleDetailsContent && section.field !== "tamSamSom" ? (
                       <AnalysisNotes
                         compact={hasPremiumSectionVisual(section)}
                         label={isFinancialDashboard ? "Metric Details" : "Full analysis notes"}
@@ -7553,7 +7917,7 @@ export default function Planner({
 		                  <div className="mb-2">
 				                <p className="text-base font-semibold text-white">Ask ZERINIX</p>
 		                <p className="mt-0.5 text-xs text-zinc-400">
-		                  Describe a business decision, opportunity, or challenge you want ZERINIX to analyze.
+		                  Discuss your idea with ZERINIX, then turn your conversation into a strategic report.
 		                </p>
 		              </div>
 				              <div className="rounded-[1.35rem] border border-white/10 bg-black/35 p-2.5 shadow-inner shadow-black/25 transition duration-200 ease-out focus-within:border-teal-300/50 focus-within:shadow-teal-950/25 focus-within:ring-2 focus-within:ring-teal-200/15">
@@ -7727,9 +8091,9 @@ export default function Planner({
 		                        ))}
 		                      </div>
 		                      <div className="flex flex-col items-stretch gap-2 sm:items-end">
-				                        <p className="text-xs text-zinc-500">
-		                          Uses the text from the ZERINIX AI input above.
-		                        </p>
+					                        <p className="text-xs text-zinc-500">
+			                          Turn this analysis into a structured decision report.
+			                        </p>
 		                        <button
 		                          type="button"
 		                          disabled={!chatPrompt.trim() || isWorking}

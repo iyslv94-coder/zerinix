@@ -1,5 +1,6 @@
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 import { containsReportGenerationFailure } from "@/app/lib/report-errors";
+import { dedupeReportSections } from "@/app/lib/report-section-normalization";
 
 export type DashboardReport = {
   id: string;
@@ -140,7 +141,7 @@ function normalizeJsonSections(value: unknown) {
       .filter((section) => section.title && section.content);
 
     if (sections.length > 0) {
-      return sections;
+      return dedupeReportSections(sections);
     }
   }
 
@@ -182,7 +183,7 @@ function normalizeSections(row: ReportRow) {
     .filter(Boolean) as DashboardReport["sections"];
 
   if (sections.length > 0) {
-    return sections;
+    return dedupeReportSections(sections);
   }
 
   const fallbackContent = readString(row, ["body", "content", "result", "summary"]);

@@ -1003,11 +1003,15 @@ function getChatMaxOutputTokens(requestKind: AiRequestKind) {
     return 900;
   }
 
-  if (requestKind === "investment_advice") {
-    return 1_400;
+  if (requestKind === "business_advice" || requestKind === "investment_advice") {
+    return 3_200;
   }
 
-  return 1_200;
+  if (requestKind === "file_analysis") {
+    return 3_500;
+  }
+
+  return 3_000;
 }
 
 function getResponseStatus(response: unknown) {

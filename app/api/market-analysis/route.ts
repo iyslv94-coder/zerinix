@@ -295,6 +295,27 @@ function sanitizeMarketReportContent(value: string) {
     .trim();
 }
 
+function removeTamSamSomOwnershipText(content: string) {
+  return sanitizeMarketReportContent(content)
+    .split("\n")
+    .filter((line) => {
+      const normalized = line.replace(/^[-*•]\s*/, "").trim();
+
+      if (!normalized) {
+        return true;
+      }
+
+      return !(
+        /^(?:tam|sam|som)\s*[:\-–—]/i.test(normalized) ||
+        /\btam\s*\/\s*sam\s*\/\s*som\b/i.test(normalized) ||
+        /\bmarket sizing\s*[:\-–—]/i.test(normalized)
+      );
+    })
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 function detectLanguage(value: string): ResponseLanguage {
   const normalized = value.toLowerCase();
   const turkishSignals = [
@@ -425,7 +446,7 @@ function buildCanonicalSwotSection(
       ];
   const opportunities = extractFallbackBullets(
     report.opportunities,
-    `${context.metrics.sam.displayValue} serviceable market gives the founder a focused beachhead to validate before expanding.`
+    "A focused beachhead gives the founder a practical segment to validate before expanding."
   );
   const threats = context.investmentScore.topRisks.length
     ? context.investmentScore.topRisks
@@ -457,7 +478,49 @@ function appendIntelligenceBlock(content: string, title: string, lines: string[]
 }
 
 function buildMarketExecutiveInsight(context: AiFinancialModelContext, focus: string) {
-  return `AI Executive Insight: ${focus} matters because the founder should validate ${context.investmentScore.nextCriticalAction.toLowerCase()} before committing spend against the ${context.metrics.som.displayValue} obtainable market and ${context.metrics.cacPayback.displayValue} payback assumption.`;
+  return `AI Executive Insight: ${focus} matters because the founder should validate ${context.investmentScore.nextCriticalAction.toLowerCase()} before committing spend against the beachhead demand signal and ${context.metrics.cacPayback.displayValue} payback assumption.`;
+}
+
+function cleanTamSamSomCommentary(content: string) {
+  return content
+    .replace(/\b(?:AI\s+)?Executive Insight\s*[:\-–—][\s\S]*$/i, "")
+    .replace(/\b(?:yorum|interpretation|commentary)\s*[:\-–—][\s\S]*$/i, "")
+    .replace(/\b(?:TAM|SAM|SOM)\s*[:\-–—][\s\S]*$/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function extractTamSamSomCommentary(content: string) {
+  const line = sanitizeMarketReportContent(content)
+    .split("\n")
+    .map((item) => item.trim().replace(/^[-*•]\s*/, ""))
+    .find((item) => /^(yorum|interpretation|commentary)\s*[:\-–—]/i.test(item));
+
+  return line
+    ? cleanTamSamSomCommentary(
+        line.replace(/^(yorum|interpretation|commentary)\s*[:\-–—]\s*/i, "")
+      )
+    : "";
+}
+
+function buildCanonicalMarketTamSamSomSection(
+  context: AiFinancialModelContext,
+  sourceContent = ""
+) {
+  const { tam, sam, som } = context.metrics;
+  const commentary =
+    extractTamSamSomCommentary(sourceContent) ||
+    "Treat the sizing as a directional market-entry model until category boundaries, serviceable segment, and obtainable wedge are validated with current market evidence.";
+
+  return sanitizeMarketReportContent(
+    [
+      `TAM: ${tam.displayValue}`,
+      `SAM: ${sam.displayValue}`,
+      `SOM: ${som.displayValue}`,
+      `Yorum: ${commentary}`,
+      buildMarketExecutiveInsight(context, "Market sizing"),
+    ].join("\n")
+  );
 }
 
 function buildMarketOpportunityScore(context: AiFinancialModelContext) {
@@ -528,22 +591,27 @@ function buildMarketFounderDecisionEngine(context: AiFinancialModelContext) {
   return [
     `- If I were the founder: I would first validate ${context.investmentScore.nextCriticalAction.toLowerCase()}.`,
     "- What to postpone: broad geographic expansion and multi-channel acquisition until the beachhead proof is repeatable.",
-    `- Where to spend money: customer interviews, pricing tests, competitor displacement tests, and the smallest launch asset that proves ${context.metrics.som.displayValue} obtainable demand.`,
+    "- Where to spend money: customer interviews, pricing tests, competitor displacement tests, and the smallest launch asset that proves beachhead demand.",
     "- What to avoid: treating category growth as proof of obtainable revenue before willingness-to-pay evidence exists.",
   ];
 }
 
-function buildMarketExecutiveKpis(context: AiFinancialModelContext) {
-  const engine = context.investmentScore.decisionEngine;
+function buildCanonicalMarketKpiDashboard(context: AiFinancialModelContext) {
+  const { metrics, revenueForecast } = context;
+  const yearOne = revenueForecast[0];
+  const customerLabel =
+    context.inputs.industryKey === "mobility" ? "active riders" : "customers";
 
   return [
-    `- Market Readiness: ${scorePercent(engine.marketScore.score, engine.marketScore.maximumScore)}/100 — ${engine.marketScore.explanation}`,
-    `- Product Readiness: ${scorePercent(engine.technologyScore.score, engine.technologyScore.maximumScore)}/100 — readiness depends on differentiated value and early user proof.`,
-    `- Go-To-Market Readiness: ${scorePercent(engine.executionScore.score, engine.executionScore.maximumScore)}/100 — readiness depends on channel CAC and repeatable sales learning.`,
-    `- Investor Readiness: ${context.investmentScore.confidence}/100 — confidence reflects evidence quality across market, economics, and execution.`,
-    `- Scalability: ${scorePercent(engine.financialScore.score, engine.financialScore.maximumScore)}/100 — scalability depends on ${context.metrics.grossMargin.displayValue} gross margin and ${context.metrics.cacPayback.displayValue} payback.`,
-    `- AI Readiness: ${scorePercent(engine.technologyScore.score, engine.technologyScore.maximumScore)}/100 — AI readiness matters only if it improves differentiation, cost, or speed.`,
-  ];
+    `Acquisition: ${yearOne.customers.toLocaleString("en-US")} ${customerLabel} by Month 12 | Target: ${Math.ceil(yearOne.customers / 12).toLocaleString("en-US")} net new ${customerLabel}/month | Status: Model target`,
+    `Activation: ${Math.max(25, Math.min(70, Math.round(metrics.grossMargin.value * 100)))}% | Target: validate paid activation before scaling | Status: Validation required`,
+    `Retention: ${Math.max(55, Math.min(92, Math.round(100 - metrics.cacPayback.value * 3)))}% | Target: keep payback at ${metrics.cacPayback.displayValue} or better | Status: Watch`,
+    `Revenue: ${metrics.mrr.displayValue} monthly / ${metrics.arr.displayValue} yearly | Target: Base-case forecast | Status: Model target`,
+    `CAC: ${metrics.cac.displayValue} | Target: maintain CAC within benchmark payback range | Status: Watch`,
+    `WTP: ${metrics.arpa.displayValue} | Target: validate willingness to pay with paid demand evidence | Status: Validation required`,
+    `Sales cycle: ${metrics.cacPayback.displayValue} payback proxy | Target: shorten time from qualified lead to paid conversion | Status: Watch`,
+    `Conversion: ${Math.max(8, Math.min(45, Math.round((metrics.ltv.value / Math.max(1, metrics.cac.value)) * 7)))}% | Target: prove repeatable conversion before scaling spend | Status: Validation required`,
+  ].join("\n");
 }
 
 function buildMarketCeoBrief(context: AiFinancialModelContext) {
@@ -551,12 +619,12 @@ function buildMarketCeoBrief(context: AiFinancialModelContext) {
     `- Decision posture: ${context.investmentScore.recommendation}; current confidence is ${context.investmentScore.confidence}/100.`,
     `- Immediate board priority: ${context.investmentScore.nextCriticalAction}`,
     `- Validate the beachhead customer for ${context.inputs.targetCustomer} before expanding the entry plan.`,
-    `- Prove willingness to pay before treating ${context.metrics.som.displayValue} as obtainable demand.`,
+    "- Prove willingness to pay before treating the beachhead demand signal as obtainable revenue.",
     `- Financial discipline depends on keeping CAC payback at or below ${context.metrics.cacPayback.displayValue}.`,
     "- Build one repeatable channel before adding geographies, segments, or acquisition motions.",
     "- Avoid confusing broad market growth with reachable demand.",
     "- Avoid scaling acquisition before pricing and conversion evidence is proven.",
-    `- Biggest opportunity: use a narrow entry wedge to capture the first credible share of ${context.metrics.som.displayValue}.`,
+    "- Biggest opportunity: use a narrow entry wedge to convert the first credible beachhead demand into revenue.",
     `- Biggest hidden risk: ${context.investmentScore.topRisks[0] || "buyer urgency may be weaker than the market narrative suggests."}`,
   ];
 }
@@ -592,21 +660,10 @@ function ensureMarketReportQuality(
 
   const model = context.metrics;
 
-  normalized.tamSamSom = sanitizeMarketReportContent(
-    [
-      `TAM: ${model.tam.displayValue}`,
-      `SAM: ${model.sam.displayValue}`,
-      `SOM: ${model.som.displayValue}`,
-      normalized.tamSamSom,
-    ]
-      .filter(Boolean)
-      .join("\n")
-  );
-  normalized.tamSamSom = appendIntelligenceBlock(
-    normalized.tamSamSom,
-    "AI Executive Insight",
-    [buildMarketExecutiveInsight(context, "Market sizing")]
-  );
+  normalized.kpiDashboard = buildCanonicalMarketKpiDashboard(context);
+  normalized.tamSamSom = buildCanonicalMarketTamSamSomSection(context, normalized.tamSamSom);
+  normalized.opportunities = removeTamSamSomOwnershipText(normalized.opportunities);
+  normalized.executiveRecommendation = removeTamSamSomOwnershipText(normalized.executiveRecommendation);
   normalized.opportunities = appendIntelligenceBlock(
     normalized.opportunities,
     "Market Opportunity Score",
@@ -655,11 +712,6 @@ function ensureMarketReportQuality(
     normalized.threats,
     "Risk Matrix",
     buildMarketRiskMatrix(context)
-  );
-  normalized.kpiDashboard = appendIntelligenceBlock(
-    normalized.kpiDashboard,
-    "Executive KPIs",
-    buildMarketExecutiveKpis(context)
   );
   normalized.founderRoadmap = appendIntelligenceBlock(
     normalized.founderRoadmap,

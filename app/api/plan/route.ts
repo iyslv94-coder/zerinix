@@ -341,6 +341,27 @@ function sanitizeVisibleReportContent(content: string) {
     .trim();
 }
 
+function removeTamSamSomOwnershipText(content: string) {
+  return sanitizeVisibleReportContent(content)
+    .split("\n")
+    .filter((line) => {
+      const normalized = line.replace(/^[-*•]\s*/, "").trim();
+
+      if (!normalized) {
+        return true;
+      }
+
+      return !(
+        /^(?:tam|sam|som)\s*[:\-–—]/i.test(normalized) ||
+        /\btam\s*\/\s*sam\s*\/\s*som\b/i.test(normalized) ||
+        /\bmarket sizing\s*[:\-–—]/i.test(normalized)
+      );
+    })
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 function createFullReportJsonSchema(name: string, fields: readonly string[]) {
   return {
     type: "json_schema" as const,
@@ -620,7 +641,7 @@ function createPlanFieldFallback(
         return [
           `Decision: ${context.investmentScore.recommendation}`,
           `Investment Score: ${context.investmentScore.totalScore}/100 with ${context.investmentScore.confidence}% confidence.`,
-          `Thesis: ${context.normalizedBusinessIdea} should be evaluated against ${context.metrics.som.displayValue} obtainable market potential, ${context.metrics.cacPayback.displayValue} payback, and ${context.metrics.runway.displayValue} runway.`,
+          `Thesis: ${context.normalizedBusinessIdea} should be evaluated against beachhead demand proof, ${context.metrics.cacPayback.displayValue} payback, and ${context.metrics.runway.displayValue} runway.`,
           `Next Critical Action: ${context.investmentScore.nextCriticalAction}`,
         ].join("\n");
       default:
@@ -716,6 +737,13 @@ function metricLine(metric: AiFinancialModelContext["metrics"][keyof AiFinancial
   ].join(" | ");
 }
 
+function marketSizeLine(
+  label: string,
+  metric: AiFinancialModelContext["metrics"][keyof AiFinancialModelContext["metrics"]]
+) {
+  return `${label}: ${metric.displayValue}`;
+}
+
 function formatPlanUsd(value: number) {
   const abs = Math.abs(value);
   const sign = value < 0 ? "-" : "";
@@ -729,9 +757,48 @@ function formatPlanUsd(value: number) {
 
 function buildCanonicalTamSamSom(context: AiFinancialModelContext) {
   return [
-    metricLine(context.metrics.tam),
-    metricLine(context.metrics.sam),
-    metricLine(context.metrics.som),
+    marketSizeLine("TAM", context.metrics.tam),
+    marketSizeLine("SAM", context.metrics.sam),
+    marketSizeLine("SOM", context.metrics.som),
+  ].join("\n");
+}
+
+function cleanTamSamSomCommentary(content: string) {
+  return content
+    .replace(/\b(?:AI\s+)?Executive Insight\s*[:\-–—][\s\S]*$/i, "")
+    .replace(/\b(?:yorum|interpretation|commentary)\s*[:\-–—][\s\S]*$/i, "")
+    .replace(/\b(?:TAM|SAM|SOM)\s*[:\-–—][\s\S]*$/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function extractTamSamSomCommentary(content: string) {
+  const line = sanitizeVisibleReportContent(content)
+    .split("\n")
+    .map((item) => item.trim().replace(/^[-*•]\s*/, ""))
+    .find((item) => /^(yorum|interpretation|commentary)\s*[:\-–—]/i.test(item));
+
+  return line
+    ? cleanTamSamSomCommentary(
+        line.replace(/^(yorum|interpretation|commentary)\s*[:\-–—]\s*/i, "")
+      )
+    : "";
+}
+
+function buildCanonicalTamSamSomSection(
+  context: AiFinancialModelContext,
+  sourceContent = ""
+) {
+  const commentary =
+    extractTamSamSomCommentary(sourceContent) ||
+    "Treat the sizing as a directional planning model until category boundaries, reachable customer segments, and obtainable share are verified with current market evidence.";
+
+  return [
+    marketSizeLine("TAM", context.metrics.tam),
+    marketSizeLine("SAM", context.metrics.sam),
+    marketSizeLine("SOM", context.metrics.som),
+    `Yorum: ${commentary}`,
+    buildExecutiveInsight(context, "Market sizing"),
   ].join("\n");
 }
 
@@ -778,7 +845,6 @@ function buildCanonicalScenarioAnalysis(context: AiFinancialModelContext) {
 function buildCanonicalKpiDashboard(context: AiFinancialModelContext) {
   const { metrics, revenueForecast } = context;
   const yearOne = revenueForecast[0];
-  const yearTwo = revenueForecast[1];
   const customerLabel =
     context.inputs.industryKey === "mobility" ? "active riders" : "customers";
 
@@ -786,9 +852,11 @@ function buildCanonicalKpiDashboard(context: AiFinancialModelContext) {
     `Acquisition: ${yearOne.customers.toLocaleString("en-US")} ${customerLabel} by Month 12 | Target: ${Math.ceil(yearOne.customers / 12).toLocaleString("en-US")} net new ${customerLabel}/month | Status: Model target`,
     `Activation: ${Math.max(25, Math.min(70, Math.round(metrics.grossMargin.value * 100)))}% | Target: validate paid activation before scaling | Status: Validation required`,
     `Retention: ${Math.max(55, Math.min(92, Math.round(100 - metrics.cacPayback.value * 3)))}% | Target: keep payback at ${metrics.cacPayback.displayValue} or better | Status: Watch`,
-    `Pipeline: ${Math.max(10, Math.round(yearOne.customers * 0.35)).toLocaleString("en-US")} qualified opportunities | Target: 3x coverage of Month-12 customer goal | Status: Build`,
-    `Revenue Signal: ${metrics.mrr.displayValue} monthly / ${metrics.arr.displayValue} yearly | Target: Base-case forecast | Status: Model target`,
-    `Growth: ${yearTwo.customers.toLocaleString("en-US")} ${customerLabel} in Year 2 | Target: ${metrics.revenueGrowth.displayValue} annual growth | Status: Watch`,
+    `Revenue: ${metrics.mrr.displayValue} monthly / ${metrics.arr.displayValue} yearly | Target: Base-case forecast | Status: Model target`,
+    `CAC: ${metrics.cac.displayValue} | Target: maintain CAC within benchmark payback range | Status: Watch`,
+    `WTP: ${metrics.arpa.displayValue} | Target: validate willingness to pay with signed pilots or paid commitments | Status: Validation required`,
+    `Sales cycle: ${metrics.cacPayback.displayValue} payback proxy | Target: shorten time from qualified lead to paid conversion | Status: Watch`,
+    `Conversion: ${Math.max(8, Math.min(45, Math.round((metrics.ltv.value / Math.max(1, metrics.cac.value)) * 7)))}% | Target: prove repeatable conversion before scaling spend | Status: Validation required`,
   ].join("\n");
 }
 
@@ -895,7 +963,7 @@ function buildFounderDecisionEngine(context: AiFinancialModelContext) {
     `- If I were the founder: I would focus first on ${context.investmentScore.nextCriticalAction.toLowerCase()}.`,
     `- Do first: validate willingness to pay and acquisition cost before expanding scope.`,
     `- Postpone: broad hiring, multi-channel GTM, and non-core product expansion until payback evidence improves.`,
-    `- Spend money on: customer discovery, conversion experiments, and the smallest proof asset that confirms ${context.metrics.som.displayValue} obtainable demand.`,
+    "- Spend money on: customer discovery, conversion experiments, and the smallest proof asset that confirms beachhead demand.",
     `- Absolutely avoid: scaling paid acquisition before CAC, retention, and payback are proven.`,
   ];
 }
@@ -914,19 +982,6 @@ function buildRiskMatrix(context: AiFinancialModelContext) {
   });
 }
 
-function buildExecutiveKpis(context: AiFinancialModelContext) {
-  const engine = context.investmentScore.decisionEngine;
-
-  return [
-    `- Market Readiness: ${scorePercent(engine.marketScore.score, engine.marketScore.maximumScore)}/100 — ${engine.marketScore.explanation}`,
-    `- Product Readiness: ${scorePercent(engine.technologyScore.score, engine.technologyScore.maximumScore)}/100 — product and technology assumptions still need proof through user behavior.`,
-    `- Go-To-Market Readiness: ${scorePercent(engine.executionScore.score, engine.executionScore.maximumScore)}/100 — execution quality depends on repeatable acquisition and sales learning velocity.`,
-    `- Investor Readiness: ${context.investmentScore.confidence}/100 — confidence reflects financial evidence quality and validation depth.`,
-    `- Scalability: ${scorePercent(engine.financialScore.score, engine.financialScore.maximumScore)}/100 — scalability depends on ${context.metrics.grossMargin.displayValue} gross margin and ${context.metrics.cacPayback.displayValue} payback.`,
-    `- AI Readiness: ${scorePercent(engine.technologyScore.score, engine.technologyScore.maximumScore)}/100 — score reflects whether technology leverage can improve differentiation or operating leverage.`,
-  ];
-}
-
 function buildCeoBrief(context: AiFinancialModelContext) {
   return [
     `- Decision posture: ${context.investmentScore.recommendation}; current confidence is ${context.investmentScore.confidence}/100.`,
@@ -936,7 +991,7 @@ function buildCeoBrief(context: AiFinancialModelContext) {
     `- Capital allocation should stay constrained by ${context.metrics.runway.displayValue} runway until repeatable conversion evidence exists.`,
     "- Avoid scaling paid acquisition before conversion, retention, and payback evidence are repeatable.",
     "- Avoid expanding product scope before the beachhead use case is validated.",
-    `- Biggest opportunity: turn the focused ${context.metrics.som.displayValue} obtainable market into validated early revenue before broad expansion.`,
+    "- Biggest opportunity: turn the focused beachhead into validated early revenue before broad expansion.",
     `- Biggest hidden risk: ${context.investmentScore.topRisks[0] || "the model may appear investable before demand and payback evidence are proven."}`,
     `- Executive conclusion: ${context.investmentScore.recommendation} is justified only if the highest-risk assumption is proven before scaling capital.`,
   ];
@@ -959,8 +1014,8 @@ function buildCanonicalSwot(context: AiFinancialModelContext, parsed: Record<str
     "Weaknesses:",
     ...score.weaknesses.slice(0, 3).map((item) => `- ${item}`),
     "Opportunities:",
-    `- ${opportunity || `Market opportunity is sized from ${context.benchmark.label} benchmarks and depends on validating obtainable demand.`}`,
-    `- ${context.metrics.som.displayValue} SOM provides a focused near-term capture target if the beachhead ICP converts.`,
+    `- ${opportunity || "Market opportunity depends on validating reachable demand before expansion."}`,
+    "- The beachhead ICP provides a focused near-term capture target if conversion evidence is proven.",
     "Threats:",
     `- ${threat || score.topRisks[0] || "Execution and validation risk remain the primary threats."}`,
     `- ${score.topRisks[1] || "Capital efficiency can deteriorate if CAC or payback misses the model."}`,
@@ -973,7 +1028,7 @@ function buildCanonicalFinancialAssumptions(context: AiFinancialModelContext) {
     `- Business context: ${context.normalizedBusinessIdea}`,
     "Market-derived estimates:",
     `- Benchmark basis: ${context.benchmark.basis}`,
-    `- TAM/SAM/SOM: ${context.metrics.tam.displayValue} / ${context.metrics.sam.displayValue} / ${context.metrics.som.displayValue}`,
+    "- TAM/SAM/SOM values are owned by the dedicated market sizing section.",
     "AI assumptions:",
     `- Pricing model: ${context.inputs.pricingModel}`,
     `- Business model: ${context.inputs.businessModel}`,
@@ -1005,7 +1060,10 @@ function normalizeFullPlanReport(
     return normalized;
   }
 
-  normalized.tamSamSom = buildCanonicalTamSamSom(context);
+  normalized.tamSamSom = buildCanonicalTamSamSomSection(
+    context,
+    typeof parsed.tamSamSom === "string" ? parsed.tamSamSom : normalized.tamSamSom
+  );
   normalized.unitEconomics = buildCanonicalUnitEconomics(context);
   normalized.financialDashboard = buildCanonicalFinancialDashboard(context);
   normalized.scenarioAnalysis = buildCanonicalScenarioAnalysis(context);
@@ -1014,6 +1072,8 @@ function normalizeFullPlanReport(
   normalized.founderScore = buildCanonicalFounderScore(context);
   normalized.swotAnalysis = buildCanonicalSwot(context, parsed);
   normalized.financialAssumptions = buildCanonicalFinancialAssumptions(context);
+  normalized.marketOpportunity = removeTamSamSomOwnershipText(normalized.marketOpportunity);
+  normalized.executiveRecommendation = removeTamSamSomOwnershipText(normalized.executiveRecommendation);
   normalized.marketOpportunity = appendIntelligenceBlock(
     normalized.marketOpportunity,
     "Market Opportunity Score",
@@ -1023,11 +1083,6 @@ function normalizeFullPlanReport(
     normalized.competitorLandscape,
     "AI Executive Insight",
     [buildExecutiveInsight(context, "Competitive positioning")]
-  );
-  normalized.tamSamSom = appendIntelligenceBlock(
-    normalized.tamSamSom,
-    "AI Executive Insight",
-    [buildExecutiveInsight(context, "Market sizing")]
   );
   normalized.risks = appendIntelligenceBlock(
     normalized.risks,
@@ -1043,11 +1098,6 @@ function normalizeFullPlanReport(
     normalized.executiveRecommendation,
     "Founder Decision Engine",
     buildFounderDecisionEngine(context)
-  );
-  normalized.kpiDashboard = appendIntelligenceBlock(
-    normalized.kpiDashboard,
-    "Executive KPIs",
-    buildExecutiveKpis(context)
   );
   normalized.roadmap306090 = appendIntelligenceBlock(
     normalized.roadmap306090,

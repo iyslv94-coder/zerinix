@@ -1343,6 +1343,7 @@ type CitationData = {
   publicationYear?: string;
   confidence?: "High" | "Medium" | "Low";
   url?: string;
+  sourceType?: "Verified source" | "Company reference" | "Industry reference" | "Planning assumption";
 };
 
 function normalizeCitationKey(value: string) {
@@ -1388,6 +1389,36 @@ function normalizeCitationConfidence(value: string): CitationData["confidence"] 
   return undefined;
 }
 
+function normalizeSourceType(value: string): CitationData["sourceType"] {
+  if (/\b(assumption|planning input|estimate|ai assumption|market-derived|model-derived|needs validation)\b/i.test(value)) {
+    return "Planning assumption";
+  }
+
+  if (/\b(company|official website|website|pricing page|annual report|investor relations|press release|case study|customer story)\b/i.test(value)) {
+    return "Company reference";
+  }
+
+  if (/\b(industry|market report|research|benchmark|government|statistics|statista|euromonitor|gartner|forrester|mckinsey|bcg|deloitte|pwc|oecd|world bank|imf|eurostat|tüik|tuik|association)\b/i.test(value)) {
+    return "Industry reference";
+  }
+
+  return "Verified source";
+}
+
+function normalizeCitationUrl(value = "") {
+  const normalized = sanitizeAiResponseText(value).trim();
+
+  if (
+    !normalized ||
+    /^[-–—]+$/.test(normalized) ||
+    /^(?:not verified|url doğrulanmadı|n\/?a|not available|none|null|undefined)$/i.test(normalized)
+  ) {
+    return "";
+  }
+
+  return /^https?:\/\//i.test(normalized) ? normalized : "";
+}
+
 function parseCitations(content: string): CitationData[] {
   if (/\bsource\s+unavailable\b/i.test(content)) {
     return [];
@@ -1400,9 +1431,11 @@ function parseCitations(content: string): CitationData[] {
   const citations = content
     .split("\n")
     .map((rawLine) => {
-      const url =
+      const url = normalizeCitationUrl(
         rawLine.match(/\]\((https?:\/\/[^)]+)\)/i)?.[1]?.trim() ||
-        rawLine.match(/\bhttps?:\/\/[^\s)]+/i)?.[0]?.trim();
+          rawLine.match(/\bhttps?:\/\/[^\s)]+/i)?.[0]?.trim() ||
+          ""
+      );
       const line = rawLine
         .replace(/^[-*•]\s*/, "")
         .replace(/\*\*/g, "")
@@ -1437,24 +1470,24 @@ function parseCitations(content: string): CitationData[] {
         ...(publicationYear ? { publicationYear } : {}),
         ...(fallbackConfidence ? { confidence: fallbackConfidence } : {}),
         ...(url ? { url } : {}),
+        sourceType: normalizeSourceType(line),
       };
     })
     .filter((citation): citation is CitationData => Boolean(citation));
   const unique = new Map<string, CitationData>();
 
   citations.forEach((citation) => {
-    const normalizedUrl = citation.url?.trim().toLowerCase().replace(/\/+$/, "");
     const domain = getCitationDomain(citation.url, citation.organization);
     const titleKey = normalizeCitationKey(citation.sourceTitle);
+    const publisherKey = normalizeCitationKey(citation.organization);
     const key = domain && titleKey
-      ? `domain-title:${domain}|${titleKey}`
-      : normalizedUrl
-        ? `url:${normalizedUrl}`
-        : [
-            "source",
-            normalizeCitationKey(citation.organization),
-            titleKey,
-          ].join("|");
+      ? `domain-title-publisher:${domain}|${titleKey}|${publisherKey}`
+      : [
+          "source",
+          domain || "no-domain",
+          publisherKey,
+          titleKey,
+        ].join("|");
     const existing = unique.get(key);
 
     unique.set(key, {
@@ -1462,6 +1495,7 @@ function parseCitations(content: string): CitationData[] {
       ...citation,
       ...(existing?.url && !citation.url ? { url: existing.url } : {}),
       ...(existing?.confidence && !citation.confidence ? { confidence: existing.confidence } : {}),
+      ...(existing?.sourceType && !citation.sourceType ? { sourceType: existing.sourceType } : {}),
     });
   });
 
@@ -1497,6 +1531,12 @@ function CitationCard({ citation }: { citation: CitationData }) {
             <span className="ml-2 text-zinc-200">{citation.confidence}</span>
           </p>
         ) : null}
+        {citation.sourceType ? (
+          <p>
+            <span className="text-zinc-500">Type</span>
+            <span className="ml-2 text-zinc-200">{citation.sourceType}</span>
+          </p>
+        ) : null}
       </div>
       {citation.url ? (
         <a
@@ -1507,7 +1547,11 @@ function CitationCard({ citation }: { citation: CitationData }) {
         >
           {citation.url}
         </a>
-      ) : null}
+      ) : (
+        <p className="mt-3 rounded-xl border border-white/10 bg-white/[0.025] px-3 py-2 text-xs text-zinc-500">
+          Not verified
+        </p>
+      )}
     </div>
   );
 }
