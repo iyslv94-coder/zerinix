@@ -49,7 +49,6 @@ import {
   TrendingUp,
   User,
   Users,
-  X,
 } from "lucide-react";
 import Link from "next/link";
 import { MobileBottomNavigation } from "@/components/MobileNavigation";
@@ -329,6 +328,20 @@ const modeCards: Array<{
     icon: Bot,
   },
 ];
+
+function inferRecommendedAnalysisMode(promptText: string): ChatMode {
+  const prompt = promptText.toLowerCase();
+
+  if (/\b(market|pazar|sector|sektör|industry|competitor|competition|rakip|rakipler|opportunity|fırsat|expansion|genişleme|country|ülke|region|bölge)\b/i.test(prompt)) {
+    return "market";
+  }
+
+  if (/\b(strategy|strateji|decision|karar|pricing|fiyat|growth|büyüme|positioning|konumlandırma|go-to-market|gtm)\b/i.test(prompt)) {
+    return "chat";
+  }
+
+  return "plan";
+}
 
 const executiveDecisionExamples: Record<ChatMode, string[]> = {
   plan: [
@@ -784,18 +797,6 @@ function isCompleteReportSectionPayload(
     sections.every((section) => section.title.trim() && section.content.trim()) &&
     !containsReportGenerationFailure(sections)
   );
-}
-
-function formatFileSize(size: number) {
-  if (size < 1024) {
-    return `${size} B`;
-  }
-
-  if (size < 1024 * 1024) {
-    return `${Math.round(size / 1024)} KB`;
-  }
-
-  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function needsClarification(value: string) {
@@ -5877,6 +5878,8 @@ export default function Planner({
       initialMode ||
       "chat"
   );
+  const [selectedDesktopAnalysisMode, setSelectedDesktopAnalysisMode] =
+    useState<ChatMode | null>(null);
   const [mobileWizardActive, setMobileWizardActive] = useState(
     Boolean(regenerationContext) || !restoredReportMode
   );
@@ -6466,10 +6469,6 @@ export default function Planner({
     event.preventDefault();
     setIsDraggingFiles(false);
     void handleFiles(event.dataTransfer.files);
-  }
-
-  function removeAttachment(id: string) {
-    setAttachments((current) => current.filter((attachment) => attachment.id !== id));
   }
 
   function updateExecutiveBriefField(field: ExecutiveBriefField, value: string) {
@@ -7573,6 +7572,18 @@ export default function Planner({
   const shouldHideDesktopCreationOnMobile = mobileWizardActive;
   const shouldShowToolbarRegenerate = true;
   const hasConversationMessages = messages.length > 0;
+  const hasStartedConversation =
+    hasConversationMessages ||
+    chatLoading ||
+    Boolean(activeConversation?.messages?.length);
+  const latestUserIntentPrompt =
+    lastRequest?.prompt ||
+    [...(activeConversation?.messages || [])]
+      .reverse()
+      .find((message) => message.role === "user")
+      ?.content ||
+    "";
+  const recommendedAnalysisMode = inferRecommendedAnalysisMode(latestUserIntentPrompt);
   const hasWorkspaceActivity =
     hasConversationMessages ||
     isReportWorking ||
@@ -8015,20 +8026,11 @@ export default function Planner({
                 </div>
               ) : null}
 
-                    <div className="px-1">
-                      <p className="text-xs font-semibold tracking-[0.32em] text-teal-300/70">
-                        ZERINIX AI
-                      </p>
-                      <p className="mt-1 max-w-2xl text-sm leading-6 text-zinc-400">
-                        AI-powered business decision intelligence for founders and teams.
-                      </p>
-                    </div>
-
 						            <section className="rounded-[1.75rem] border border-teal-200/15 bg-white/[0.055] p-3.5 shadow-2xl shadow-black/35 ring-1 ring-teal-200/[0.035] backdrop-blur-2xl sm:p-4">
 		                  <div className="mb-2">
-				                <p className="text-base font-semibold text-white">Ask ZERINIX</p>
+				                <p className="text-base font-semibold text-white">ZERINIX AI</p>
 		                <p className="mt-0.5 text-xs text-zinc-400">
-		                  Discuss your idea with ZERINIX, then turn your conversation into a strategic report.
+		                  Tell ZERINIX what you want to accomplish.
 		                </p>
 		              </div>
 				              <div className="rounded-[1.35rem] border border-white/10 bg-black/35 p-2.5 shadow-inner shadow-black/25 transition duration-200 ease-out focus-within:border-teal-300/50 focus-within:shadow-teal-950/25 focus-within:ring-2 focus-within:ring-teal-200/15">
@@ -8036,7 +8038,7 @@ export default function Planner({
 		                  value={chatPrompt}
 		                  onChange={(event) => setChatPrompt(event.target.value)}
 					              className="min-h-12 w-full resize-none border-0 bg-transparent p-1 text-sm leading-5 text-white outline-none transition placeholder:text-zinc-500/80 sm:min-h-14"
-		                  placeholder="Ask ZERINIX about your business, market or strategy..."
+		                  placeholder="Describe a business decision, opportunity or challenge..."
 		                />
 		                <div className="mt-1.5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
 		                  <div className="flex flex-wrap gap-1.5">
@@ -8057,7 +8059,7 @@ export default function Planner({
 		                    disabled={!chatPrompt.trim() || isWorking}
 					            className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-2xl bg-teal-300 px-4 py-2 text-sm font-semibold text-black shadow-lg shadow-teal-950/30 transition duration-200 ease-out hover:-translate-y-0.5 hover:bg-teal-200 hover:shadow-xl hover:shadow-teal-950/45 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-lg"
 		                  >
-			                    {chatLoading ? "ZERINIX is thinking..." : "Ask ZERINIX"}
+			                    {chatLoading ? "ZERINIX is thinking..." : "Send"}
 			                    <Send className="h-4 w-4" />
 		                  </button>
 		                </div>
@@ -8080,53 +8082,20 @@ export default function Planner({
 		              </section>
 		            ) : null}
 
-		              <section className="space-y-4 transition-all duration-200 ease-out">
-		                <details
-		                  open={!hasConversationMessages}
-		                  className="group"
-		                >
-		                  {hasConversationMessages ? (
-			                    <summary className="flex cursor-pointer list-none items-center justify-between gap-4 rounded-[1.5rem] border border-white/10 bg-white/[0.04] p-3.5 shadow-xl shadow-black/20 transition hover:bg-white/[0.06] [&::-webkit-details-marker]:hidden">
-		                      <div>
-		                        <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-teal-200/70">
-		                          Decision Intelligence
-		                        </p>
-		                        <h2 className="mt-1 text-base font-semibold tracking-tight text-white">
-		                          Create an analysis
-		                        </h2>
-			                        <p className="mt-1 text-xs leading-5 text-zinc-500">
-			                          Expand report generation tools when you need a structured output.
-			                        </p>
-		                      </div>
-		                      <span className="rounded-full border border-white/10 bg-black/25 px-3 py-1 text-xs font-medium text-zinc-400 transition group-open:border-teal-200/25 group-open:text-teal-100">
-		                        Expand
-		                      </span>
-		                    </summary>
-		                  ) : (
-		                    <div>
-		                      <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-teal-200/70">
-		                        Decision Intelligence
-		                      </p>
-			                      <h2 className="mt-1.5 text-2xl font-semibold tracking-tight text-white">
-			                        Create an analysis
-			                      </h2>
-			                      <p className="mt-1.5 max-w-2xl text-sm leading-6 text-zinc-500">
-			                        Choose an analysis type and describe the decision you want ZERINIX to evaluate.
-			                      </p>
-		                    </div>
-		                  )}
-
-					                <div className={`${hasConversationMessages ? "mt-3" : "mt-3"} overflow-hidden rounded-[1.75rem] border border-white/10 bg-white/[0.045] p-3.5 shadow-2xl shadow-black/35 ring-1 ring-white/[0.035] backdrop-blur-2xl`}>
+		              <section className="transition-all duration-200 ease-out">
+					                <div className="overflow-hidden rounded-[1.75rem] border border-white/10 bg-white/[0.045] p-3.5 shadow-2xl shadow-black/35 ring-1 ring-white/[0.035] backdrop-blur-2xl">
 	                  <div className="grid gap-3 md:grid-cols-3">
                     {modeCards.map((modeCard) => {
                       const Icon = modeCard.icon;
-                      const selected = activeMode === modeCard.mode;
+                      const selected = selectedDesktopAnalysisMode === modeCard.mode;
+                      const recommended =
+                        !selectedDesktopAnalysisMode && recommendedAnalysisMode === modeCard.mode;
 
                       return (
                         <button
 	                          key={modeCard.mode}
 	                          type="button"
-	                          onClick={() => setActiveMode(modeCard.mode)}
+	                          onClick={() => setSelectedDesktopAnalysisMode(modeCard.mode)}
 				                          className={`flex min-h-36 flex-col rounded-[1.25rem] border p-3.5 text-left shadow-lg shadow-black/10 transition duration-200 ease-out hover:-translate-y-0.5 hover:shadow-xl md:shadow-sm ${
 			                            selected
 				                              ? "border-teal-200/35 bg-teal-200/[0.12] shadow-xl shadow-teal-950/30 ring-1 ring-teal-200/20"
@@ -8147,10 +8116,12 @@ export default function Planner({
                               className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] ${
                                 selected
 		                                  ? "bg-teal-200 text-black"
+                                  : recommended
+                                    ? "border border-teal-200/25 bg-teal-200/10 text-teal-100"
 		                                  : "border border-white/10 text-zinc-500"
                               }`}
                             >
-                              {selected ? "Recommended" : "Select"}
+                              {selected ? "Selected" : recommended ? "Recommended" : "Option"}
                             </span>
                           </div>
 			                          <p className="mt-3 text-sm font-semibold text-white">
@@ -8169,66 +8140,7 @@ export default function Planner({
                     })}
                   </div>
 
-				                  <div className="mt-3 rounded-[1.45rem] border border-white/10 bg-black/30 p-3.5 shadow-inner shadow-black/20">
-			                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-		                      <div className="flex flex-wrap items-center gap-2">
-					                        <label className="inline-flex cursor-pointer items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-3.5 py-2 text-sm font-medium text-zinc-200 shadow-sm shadow-black/10 transition duration-200 ease-out hover:-translate-y-0.5 hover:border-teal-300/25 hover:bg-white/10 hover:shadow-lg hover:shadow-black/25 active:translate-y-0">
-				                          <Paperclip className="h-4 w-4 text-teal-200" />
-		                          Upload files
-		                          <input
-		                            type="file"
-		                            multiple
-		                            className="hidden"
-		                            onChange={(event) => void handleFiles(event.target.files)}
-		                          />
-		                        </label>
-		                        {attachments.map((attachment) => (
-		                          <span
-		                            key={attachment.id}
-				                            className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-zinc-950 px-3 py-1.5 text-xs text-zinc-300"
-		                          >
-		                            <Paperclip className="h-3.5 w-3.5 text-teal-200" />
-		                            {attachment.name}
-		                            <span className="text-zinc-600">{formatFileSize(attachment.size)}</span>
-		                            <button
-		                              type="button"
-		                              onClick={() => removeAttachment(attachment.id)}
-		                              className="rounded-full p-0.5 transition hover:bg-white/10"
-		                              aria-label="Remove attachment"
-		                            >
-		                              <X className="h-3.5 w-3.5" />
-		                            </button>
-		                          </span>
-		                        ))}
-		                      </div>
-		                      <div className="flex flex-col items-stretch gap-2 sm:items-end">
-					                        <p className="text-xs text-zinc-500">
-			                          Turn this analysis into a structured decision report.
-			                        </p>
-		                        <button
-		                          type="button"
-		                          disabled={!chatPrompt.trim() || isWorking}
-		                          onClick={() => {
-		                            const sharedPrompt = chatPrompt.trim();
-
-		                            if (!sharedPrompt || isWorking) {
-		                              return;
-		                            }
-
-		                            void (activeMode === "market"
-		                              ? analyzeMarket(sharedPrompt)
-		                              : generatePlan(sharedPrompt));
-		                          }}
-					                          className="inline-flex items-center justify-center gap-2 rounded-2xl border border-teal-200/20 bg-teal-300 px-4.5 py-2.5 text-sm font-semibold text-black shadow-lg shadow-teal-950/35 transition duration-200 ease-out hover:-translate-y-0.5 hover:border-teal-100/40 hover:bg-teal-200 hover:shadow-xl hover:shadow-teal-950/45 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-lg"
-		                        >
-		                          {isWorking ? "Generating..." : "Generate Strategic Report"}
-		                          <Send className="h-4 w-4" />
-		                        </button>
-		                      </div>
-		                    </div>
-		                  </div>
 	                </div>
-	                </details>
 	              </section>
 
               {hasWorkspaceActivity ? (
