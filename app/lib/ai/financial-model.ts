@@ -91,13 +91,13 @@ export function inferIndustryKey(value: string): IndustryKey {
 
   return firstMatching(
     [
+      [/\b(kahve|kahveci|kafe|cafe|coffee|espresso|roastery|specialty coffee|speciality coffee|tea|beverage|içecek|icecek)\b/, "luxuryCoffee"],
       [/\b(ev charging|charging station|charge point|charger network|electric charging)\b/, "evCharging"],
       [/\b(scooter|scooters|scooter rental|micromobility|micro mobility|bike sharing|bikeshare|ride sharing|urban mobility|shared mobility)\b/, "mobility"],
       [/\b(fintech|payments|banking|lending|wallet|neobank|insurance|insurtech)\b/, "fintech"],
-      [/\b(ecommerce|e-commerce|online store|shopify|retail marketplace|dtc|direct to consumer)\b/, "ecommerce"],
+      [/\b(ecommerce|e-commerce|online store|shopify|retail marketplace|dtc|d2c|direct to consumer|direct-to-consumer|online satış|e-ticaret)\b/, "ecommerce"],
       [/\b(marketplace|two-sided|two sided|platform marketplace)\b/, "marketplace"],
-      [/\b(coffee|cafe|espresso|roastery|tea|beverage)\b/, "luxuryCoffee"],
-      [/\b(restaurant|food service|foodservice|fast casual|fine dining|qsr)\b/, "restaurant"],
+      [/\b(restaurant|food service|foodservice|fast casual|fine dining|qsr|restoran|lokanta|yemek)\b/, "restaurant"],
       [/\b(drone|drones|uav|autonomous aerial|aerial robotics)\b/, "drone"],
       [/\b(cybersecurity|security|soc|compliance|threat|fraud)\b/, "cybersecurity"],
       [/\b(ai|artificial intelligence|automation|agent|assistant|llm)\b/, "ai"],
@@ -126,14 +126,16 @@ export function inferFinancialModelingInputs(prompt: string): FinancialModelingI
     industryKey,
     businessModel: firstMatching(
       [
+        [/\b(kahve|coffee|espresso|roastery|specialty coffee|speciality coffee|premium kahve)\b/, "D2C Brand + Subscription + B2B"],
         [/\b(saas|subscription|platform|software|crm|cybersecurity)\b/, "subscription software"],
+        [/\b(dtc|d2c|direct to consumer|direct-to-consumer|consumer brand|ecommerce|e-commerce|online store|e-ticaret|online satış)\b/, "D2C Brand / E-commerce"],
         [/\b(marketplace|two-sided|two sided)\b/, "marketplace"],
         [/\b(scooter|scooters|micromobility|micro mobility|bike sharing|bikeshare|shared mobility)\b/, "asset-heavy rental / utilization model"],
         [/\b(franchise|chain)\b/, "multi-location / franchise"],
-        [/\b(restaurant|food service|foodservice|fast casual|fine dining|qsr)\b/, "location-based food service"],
+        [/\b(restaurant|food service|foodservice|fast casual|fine dining|qsr|restoran|lokanta|yemek)\b/, "location-based food service"],
         [/\b(drone|drones|uav|autonomous aerial|aerial robotics)\b/, "hardware plus service contracts"],
         [/\b(manufacturer|manufacturing|factory|battery|yacht)\b/, "asset-heavy manufacturing"],
-        [/\b(hotel|hospital|clinic|gym|restaurant|coffee|cafe)\b/, "asset-heavy operating company"],
+        [/\b(hotel|hospital|clinic|gym)\b/, "asset-heavy operating company"],
         [/\b(consulting|agency|service|studio)\b/, "services"],
       ],
       benchmark.label,
@@ -141,6 +143,7 @@ export function inferFinancialModelingInputs(prompt: string): FinancialModelingI
     ),
     targetCustomer: firstMatching(
       [
+        [/\b(kahve|coffee|espresso|roastery|specialty coffee|speciality coffee|premium kahve)\b/, "premium coffee consumers, office buyers, boutique HoReCa accounts"],
         [/\b(hospital|clinic|doctor|patient|healthcare)\b/, "healthcare buyers / operators"],
         [/\b(enterprise|b2b|company|companies|business)\b/, "B2B / enterprise customers"],
         [/\b(luxury|premium|affluent|private|yacht|hotel)\b/, "premium consumer / high-net-worth customers"],
@@ -165,7 +168,9 @@ export function inferFinancialModelingInputs(prompt: string): FinancialModelingI
     ),
     pricingModel: firstMatching(
       [
+        [/\b(kahve|coffee|espresso|roastery|specialty coffee|speciality coffee|premium kahve)\b/, "D2C unit sales, recurring subscriptions, and B2B wholesale accounts"],
         [/\b(subscription|monthly|annual|saas|software|cybersecurity)\b/, "subscription"],
+        [/\b(dtc|d2c|direct to consumer|direct-to-consumer|consumer brand|ecommerce|e-commerce|e-ticaret|online satış)\b/, "online unit sales plus repeat purchase frequency"],
         [/\b(usage|per use|consumption)\b/, "usage-based"],
         [/\b(scooter|scooters|micromobility|bike sharing|bikeshare|ride sharing|rental)\b/, "per-ride rental plus passes"],
         [/\b(take rate|commission|marketplace)\b/, "take-rate / commission"],
@@ -209,6 +214,54 @@ function ideaScopeMultiplier(prompt: string) {
   return multiplier;
 }
 
+function isD2cFoodOrFmcg(input: FinancialModelingInputs) {
+  return (
+    input.industryKey === "luxuryCoffee" ||
+    input.businessModel.toLowerCase().includes("d2c") ||
+    input.pricingModel.toLowerCase().includes("repeat purchase")
+  );
+}
+
+function hasValidationEvidence(prompt: string) {
+  const normalized = normalizePrompt(prompt);
+
+  return /\b(revenue|sales|customers?|subscribers?|pre[-\s]?orders?|waitlist|loi|pilot|retention|repeat purchase|churn|conversion|cohort|traction|mrr|arr|gelir|satış|satis|müşteri|musteri|abon[eelik]*|ön sipariş|on siparis|bekleme listesi)\b/.test(
+    normalized
+  );
+}
+
+function customerRampMultiplier(input: FinancialModelingInputs, prompt: string) {
+  if (!isD2cFoodOrFmcg(input)) {
+    return 1;
+  }
+
+  return hasValidationEvidence(prompt) ? 0.72 : 0.38;
+}
+
+function acquisitionCostMultiplier(input: FinancialModelingInputs, prompt: string) {
+  if (!isD2cFoodOrFmcg(input)) {
+    return 1;
+  }
+
+  return hasValidationEvidence(prompt) ? 1.15 : 1.45;
+}
+
+function growthCurveMultiplier(input: FinancialModelingInputs, year: number, baseGrowthRate: number) {
+  if (!isD2cFoodOrFmcg(input)) {
+    return Math.pow(1 + baseGrowthRate, year - 1);
+  }
+
+  if (year === 1) {
+    return 1;
+  }
+
+  const postLaunchGrowthRates = [baseGrowthRate * 0.55, baseGrowthRate * 0.7];
+
+  return postLaunchGrowthRates
+    .slice(0, year - 1)
+    .reduce((multiplier, growthRate) => multiplier * (1 + growthRate), 1);
+}
+
 function confidenceFor(input: {
   base: BenchmarkConfidence;
   prompt: string;
@@ -226,11 +279,33 @@ function confidenceFor(input: {
     input.industryKey === "luxuryGoods" ||
     input.industryKey === "evCharging" ||
     input.industryKey === "drone" ||
-    input.industryKey === "mobility" ||
-    input.industryKey === "fintech" ||
-    input.industryKey === "agriculture";
+	    input.industryKey === "mobility" ||
+	    input.industryKey === "fintech" ||
+	    input.industryKey === "agriculture";
+  const evidenceSensitive =
+    input.industryKey === "luxuryCoffee" || input.industryKey === "ecommerce";
+  const hasEvidence = hasValidationEvidence(input.prompt);
+  const validationSensitiveMetrics = [
+    "TAM",
+    "SAM",
+    "SOM",
+    "ARPA",
+    "CAC",
+    "LTV",
+    "CAC Payback",
+    "Revenue Growth",
+    "MRR",
+    "ARR",
+    "EBITDA",
+    "Break-even Month",
+    "ROI",
+  ];
 
   if (hardToEstimate && ["TAM", "SAM", "SOM", "EBITDA", "Break-even Month"].includes(input.metric)) {
+    return "Low";
+  }
+
+  if (evidenceSensitive && !hasEvidence && validationSensitiveMetrics.includes(input.metric)) {
     return "Low";
   }
 
@@ -310,14 +385,16 @@ export function createFinancialModel(input: FinancialModelInput): FinancialModel
   const modeling = benchmark.modeling;
   const geoMultiplier = geographyMultiplier(inputs.geography);
   const scopeMultiplier = ideaScopeMultiplier(input.prompt);
+  const rampMultiplier = customerRampMultiplier(inputs, input.prompt);
+  const cacMultiplier = acquisitionCostMultiplier(inputs, input.prompt);
   const tam = modeling.tamUsd * geoMultiplier * scopeMultiplier;
   const sam = tam * modeling.samRate;
   const som = sam * modeling.somRate;
   const arpa = modeling.arpaMonthly * scopeMultiplier;
-  const month12Customers = Math.max(1, Math.round(modeling.month12Customers * scopeMultiplier));
+  const month12Customers = Math.max(1, Math.round(modeling.month12Customers * scopeMultiplier * rampMultiplier));
   const mrr = month12Customers * arpa;
   const arr = mrr * 12;
-  const cac = modeling.cacUsd * (scopeMultiplier > 1 ? 1.18 : 1);
+  const cac = modeling.cacUsd * (scopeMultiplier > 1 ? 1.18 : 1) * cacMultiplier;
   const grossMargin = modeling.grossMarginRate;
   const ltv = arpa * grossMargin * modeling.lifetimeMonths;
   const cacPayback = cac / Math.max(1, arpa * grossMargin);
@@ -335,7 +412,9 @@ export function createFinancialModel(input: FinancialModelInput): FinancialModel
   const year3Ebitda = year3Revenue * grossMargin - annualOpex * 1.35;
   const roi = (year3Ebitda - investmentNeeded) / Math.max(1, investmentNeeded);
   const revenueForecast: RevenueForecastYear[] = [1, 2, 3].map((year) => {
-    const customers = Math.round(month12Customers * Math.pow(1 + modeling.customerGrowthRate, year - 1));
+    const customers = Math.round(
+      month12Customers * growthCurveMultiplier(inputs, year, modeling.customerGrowthRate)
+    );
     const yearMrr = customers * arpa;
     const yearArr = yearMrr * 12;
 
@@ -375,6 +454,8 @@ export function createFinancialModel(input: FinancialModelInput): FinancialModel
     `Target customer: ${inputs.targetCustomer}`,
     `Geography: ${inputs.geography}`,
     `Pricing model: ${inputs.pricingModel}`,
+    `Validation evidence: ${hasValidationEvidence(input.prompt) ? "present in prompt" : "not provided; planning assumptions require validation"}`,
+    `Customer ramp multiplier: ${rampMultiplier}`,
   ];
 
   return {
@@ -428,10 +509,10 @@ export function createFinancialModel(input: FinancialModelInput): FinancialModel
         label: arpaLabel,
         value: arpa,
         unit: "usd",
-        displayValue: `${formatUsd(arpa)}/month`,
-        confidence: confidence(arpaLabel),
-        formula: arpaFormula,
-        assumptions: [...sharedAssumptions, `Month-12 ${customerUnit}: ${month12Customers}`],
+	        displayValue: `${formatUsd(arpa)}/month`,
+	        confidence: confidence(arpaLabel),
+	        formula: arpaFormula,
+	        assumptions: [...sharedAssumptions, `Month-12 ${customerUnit}: ${month12Customers}`],
         benchmarkComparison: isMobility
           ? "Uses mobility revenue-per-active-rider benchmark as the base case."
           : "Uses industry benchmark ARPA as the base case.",
@@ -439,10 +520,10 @@ export function createFinancialModel(input: FinancialModelInput): FinancialModel
       cac: metric({
         label: cacLabel,
         value: cac,
-        unit: "usd",
-        confidence: confidence(cacLabel),
-        formula: "benchmark CAC x complexity multiplier",
-        assumptions: [...sharedAssumptions, `Complexity multiplier: ${scopeMultiplier > 1 ? 1.18 : 1}`],
+	        unit: "usd",
+	        confidence: confidence(cacLabel),
+	        formula: "benchmark CAC x complexity multiplier",
+	        assumptions: [...sharedAssumptions, `Complexity multiplier: ${scopeMultiplier > 1 ? 1.18 : 1}`, `Acquisition uncertainty multiplier: ${cacMultiplier}`],
         benchmarkComparison: compareToBenchmark(cac, benchmark.ranges.cac),
       }),
       ltv: metric({

@@ -21,6 +21,8 @@ import {
   repairPdfLineFragments,
 } from "@/app/lib/pdf-normalization.mjs";
 
+type PdfReportSection = DashboardReport["sections"][number];
+
 let pdfFontPromise: Promise<string> | null = null;
 
 function isFailedReport(report: DashboardReport) {
@@ -461,7 +463,18 @@ function formatPdfCitationContent(content: string) {
   ].join("\n");
 
   if (citations.length === 0) {
-    return methodologyBlock;
+    return [
+      "• Market Comparisons",
+      "  Type: Industry benchmark",
+      "• Financial Comparisons",
+      "  Type: Financial benchmark / planning assumption",
+      "• Planning Assumptions",
+      "  Type: Model assumption",
+      "• Validation Required",
+      "  Type: Primary research required",
+      "",
+      methodologyBlock,
+    ].join("\n");
   }
 
   const finalDedupeSources = getFinalDedupePdfSources(citations);
@@ -509,41 +522,95 @@ const competitorFieldLabels = [
 ];
 
 const founderScoreMetrics = [
-  "Overall Score",
-  "Innovation",
-  "Execution",
-  "Competition",
-  "Capital",
-  "Revenue",
-  "Risk",
+  { label: "Overall Score", aliases: ["Overall Score", "Genel Skor"] },
+  { label: "Idea Quality", aliases: ["Idea Quality", "Fikir Kalitesi"] },
+  { label: "Market Attractiveness", aliases: ["Market Attractiveness", "Pazar Çekiciliği"] },
+  { label: "Business Model Quality", aliases: ["Business Model Quality", "İş Modeli Kalitesi"] },
+  { label: "Validation Confidence", aliases: ["Validation Confidence", "Doğrulama Güveni"] },
+  { label: "Execution Complexity", aliases: ["Execution Complexity", "executionComplexity", "Execution Difficulty", "executionDifficulty", "Execution", "Uygulama Karmaşıklığı", "Yürütme Karmaşıklığı", "Uygulama Zorluğu"] },
+  { label: "Evidence Confidence", aliases: ["Evidence Confidence", "Kanıt Güveni"] },
+  { label: "Founder Evidence", aliases: ["Founder Evidence", "Kurucu Kanıtı"] },
+];
+
+const kpiDashboardMetrics = [
+  { label: "Acquisition", aliases: ["Acquisition", "acquisition", "Edinim"] },
+  { label: "Activation", aliases: ["Activation", "activation", "Aktivasyon"] },
+  { label: "Retention", aliases: ["Retention", "retention", "Elde Tutma"] },
+  { label: "Revenue", aliases: ["Revenue", "revenue", "Gelir"] },
+  { label: "CAC", aliases: ["CAC"] },
+  { label: "WTP", aliases: ["WTP", "Ödeme İsteği"] },
+  { label: "Sales cycle", aliases: ["Sales cycle", "Satış Döngüsü"] },
+  { label: "Conversion", aliases: ["Conversion", "Dönüşüm"] },
+];
+
+const unitEconomicsMetrics = [
+  { label: "ARPA", aliases: ["ARPA", "ACV", "Average Revenue Per Account", "Ortalama Gelir"] },
+  { label: "CAC", aliases: ["CAC", "Customer Acquisition Cost", "Müşteri Edinme Maliyeti"] },
+  { label: "LTV", aliases: ["LTV", "Lifetime Value", "Yaşam Boyu Değer"] },
+  { label: "Payback", aliases: ["Payback", "Payback Period", "Geri Ödeme"] },
+  { label: "Gross Margin", aliases: ["Gross Margin", "grossMargin", "Brüt Marj"] },
 ];
 
 const financialDashboardMetrics = [
   { label: "ARR", aliases: ["ARR", "Annual Recurring Revenue", "Revenue"] },
   { label: "MRR", aliases: ["MRR", "Monthly Recurring Revenue"] },
-  { label: "Gross Margin", aliases: ["Gross Margin", "Margin"] },
+  { label: "Gross Margin", aliases: ["Gross Margin", "grossMargin", "Brüt Marj"] },
   { label: "CAC", aliases: ["CAC", "Customer Acquisition Cost"] },
   { label: "LTV", aliases: ["LTV", "Lifetime Value"] },
-  { label: "Burn Rate", aliases: ["Burn Rate", "Burn"] },
-  { label: "Runway", aliases: ["Runway"] },
-  { label: "Payback", aliases: ["Payback", "Payback Period"] },
-  { label: "Break-even", aliases: ["Break-even Month", "Break even Month", "Breakeven"] },
+  { label: "Burn Rate", aliases: ["Burn Rate", "Aylık Nakit Yakımı", "Nakit Yakımı", "Burn"] },
+  { label: "Runway", aliases: ["Runway", "Finansal Pist"] },
+  { label: "Payback", aliases: ["Payback", "Geri Ödeme", "Payback Period"] },
+  { label: "Break-even", aliases: ["Break-even Month", "Başabaş Ayı", "Başabaş", "Break even Month", "Breakeven"] },
 ];
 
 const mobilityFinancialDashboardMetrics = [
   { label: "Yearly Revenue", aliases: ["Yearly Revenue", "Annual Revenue", "ARR", "Revenue"] },
   { label: "Monthly Revenue", aliases: ["Monthly Revenue", "MRR"] },
-  { label: "Gross Margin", aliases: ["Gross Margin", "Margin"] },
+  { label: "Gross Margin", aliases: ["Gross Margin", "grossMargin", "Brüt Marj"] },
   { label: "Rider CAC", aliases: ["Rider CAC", "CAC", "Customer Acquisition Cost"] },
   { label: "Rider LTV", aliases: ["Rider LTV", "LTV", "Lifetime Value"] },
-  { label: "Burn Rate", aliases: ["Burn Rate", "Monthly Burn", "Burn"] },
-  { label: "Runway", aliases: ["Runway"] },
-  { label: "Payback", aliases: ["Payback", "Payback Period", "CAC Payback"] },
-  { label: "Break-even", aliases: ["Break-even Month", "Break even Month", "Breakeven"] },
+  { label: "Burn Rate", aliases: ["Burn Rate", "Aylık Nakit Yakımı", "Nakit Yakımı", "Monthly Burn", "Burn"] },
+  { label: "Runway", aliases: ["Runway", "Finansal Pist"] },
+  { label: "Payback", aliases: ["Payback", "Geri Ödeme", "Payback Period", "CAC Payback"] },
+  { label: "Break-even", aliases: ["Break-even Month", "Başabaş Ayı", "Başabaş", "Break even Month", "Breakeven"] },
 ];
 
 function extractMetricValue(content: string, label: string) {
   const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const normalizedContent = normalizePdfText(content);
+  const lineMatch = normalizedContent
+    .split("\n")
+    .map((line) => line.trim())
+    .find((line) =>
+      new RegExp(`^(?:[-*•]\\s*)?(?:\\*\\*)?${escapedLabel}(?:\\*\\*)?\\s*[:\\-–—]`, "i").test(line)
+    );
+
+  if (lineMatch) {
+    return lineMatch
+      .replace(new RegExp(`^(?:[-*•]\\s*)?(?:\\*\\*)?${escapedLabel}(?:\\*\\*)?\\s*[:\\-–—]\\s*`, "i"), "")
+      .trim()
+      .replace(/\*\*/g, "");
+  }
+
+  const tableMatch = normalizedContent.match(
+    new RegExp(`\\|\\s*(?:\\*\\*)?${escapedLabel}(?:\\*\\*)?\\s*\\|\\s*([^|\\n]+)`, "i")
+  );
+
+  if (tableMatch?.[1]?.trim()) {
+    return tableMatch[1].trim().replace(/\*\*/g, "");
+  }
+
+  const inlineMatch = normalizedContent.match(
+    new RegExp(
+      `(?:^|[|\\n])\\s*(?:\\*\\*)?${escapedLabel}(?:\\*\\*)?\\s*[:\\-–—]\\s*([\\s\\S]*?)(?=\\s*(?:\\||\\n|[A-ZÇĞİÖŞÜ][A-Za-zÇĞİÖŞÜçğıöşü /-]{1,32}\\s*[:\\-–—]|$))`,
+      "i"
+    )
+  );
+
+  if (inlineMatch?.[1]?.trim()) {
+    return inlineMatch[1].trim().replace(/\*\*/g, "");
+  }
+
   const match = content.match(
     new RegExp(
       `${escapedLabel}\\s*[:\\-–—]\\s*([\\s\\S]*?)(?=\\s*(?:\\||[,;]\\s*[A-Z][A-Za-z /-]{1,32}\\s*[:\\-–—]|\\bformula\\b|\\bplanning input\\b|\\bevidence\\b|\\breference\\b|\\bconfidence\\b|\\n\\s*[A-Z][A-Za-z /-]{1,32}\\s*[:\\-–—]|$))`,
@@ -567,6 +634,89 @@ function extractMetricValueFromAliases(
   }
 
   return "";
+}
+
+function extractStrictMetricValueFromAliases(
+  content: string,
+  aliases: string[] | readonly string[]
+) {
+  const normalizedContent = normalizePdfText(content);
+  const lines = normalizedContent
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  for (const alias of aliases) {
+    const escapedAlias = escapeRegExp(alias);
+    const lineMatch = lines.find((line) =>
+      new RegExp(`^(?:[-*•]\\s*)?(?:\\*\\*)?${escapedAlias}(?:\\*\\*)?\\s*[:=\\-–—]`, "i").test(line)
+    );
+
+    if (lineMatch) {
+      return lineMatch
+        .replace(new RegExp(`^(?:[-*•]\\s*)?(?:\\*\\*)?${escapedAlias}(?:\\*\\*)?\\s*[:=\\-–—]\\s*`, "i"), "")
+        .replace(/\*\*/g, "")
+        .trim();
+    }
+
+    const tableMatch = normalizedContent.match(
+      new RegExp(`\\|\\s*(?:\\*\\*)?${escapedAlias}(?:\\*\\*)?\\s*\\|\\s*([^|\\n]+)`, "i")
+    );
+
+    if (tableMatch?.[1]?.trim()) {
+      return tableMatch[1].trim().replace(/\*\*/g, "");
+    }
+
+    const objectMatch = normalizedContent.match(
+      new RegExp(`["']?${escapedAlias}["']?\\s*[:=]\\s*["']?([^"',}\\n|]+)`, "i")
+    );
+
+    if (objectMatch?.[1]?.trim()) {
+      return objectMatch[1].trim().replace(/\*\*/g, "");
+    }
+  }
+
+  return "";
+}
+
+function normalizePdfFinancialMetrics(content: string) {
+  const metricContent = normalizePdfText(content);
+
+  return getFinancialDashboardMetrics(metricContent)
+    .map((metric) => {
+      const value = extractCanonicalFinancialMetricValue(metricContent, metric.label, metric.aliases);
+      const compactValue = compactPdfMetricValue(value);
+
+      return {
+        label: metric.label,
+        aliases: metric.aliases,
+        value,
+        compactValue,
+      };
+    })
+    .filter((metric) => metric.compactValue);
+}
+
+function extractCanonicalFinancialMetricValue(
+  content: string,
+  label: string,
+  aliases: string[] | readonly string[]
+) {
+  if (label === "Gross Margin") {
+    const grossMarginValue = formatMetricCardValue(
+      extractStrictMetricValueFromAliases(content, ["grossMargin", "Gross Margin", "Brüt Marj"])
+    );
+
+    return grossMarginValue.match(/\d+(?:[.,]\d+)?\s*%/)?.[0] || "";
+  }
+
+  const rawValue = formatMetricCardValue(extractMetricValueFromAliases(content, aliases));
+
+  if (/\bmargin\b/i.test(label)) {
+    return rawValue.match(/\d+(?:[.,]\d+)?\s*%/)?.[0] || "";
+  }
+
+  return compactPdfMetricValue(rawValue);
 }
 
 function formatMetricCardValue(value: string) {
@@ -650,16 +800,31 @@ function extractMetricDetail(content: string, aliases: string[] | readonly strin
 function extractScore(content: string, label: string) {
   const value = extractMetricValue(content, label);
   const scoreMatch = value.match(/\b(\d{1,3})\b/);
+  const tableScoreMatch = normalizePdfText(content).match(
+    new RegExp(`\\|\\s*(?:\\*\\*)?${label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:\\*\\*)?\\s*\\|\\s*(\\d{1,3})(?:\\s*%|\\s*\\/\\s*100)?`, "i")
+  );
   const fallbackMatch = content.match(
     new RegExp(`${label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}[^\\d]{0,30}(\\d{1,3})`, "i")
   );
-  const rawScore = Number(scoreMatch?.[1] || fallbackMatch?.[1] || NaN);
+  const rawScore = Number(scoreMatch?.[1] || tableScoreMatch?.[1] || fallbackMatch?.[1] || NaN);
 
   if (!Number.isFinite(rawScore)) {
     return null;
   }
 
   return Math.max(0, Math.min(100, rawScore));
+}
+
+function extractScoreFromAliases(content: string, aliases: string[] | readonly string[]) {
+  for (const alias of aliases) {
+    const score = extractScore(content, alias);
+
+    if (score !== null) {
+      return score;
+    }
+  }
+
+  return null;
 }
 
 function detectRecommendation(content: string) {
@@ -1098,30 +1263,185 @@ function extractRoadmapAction(content: string, step: string) {
   return cleanPdfExecutiveText(bullet || "Validation required", 92);
 }
 
-function extractKpiValue(content: string, label: string) {
-  return (
-    compactPdfMetricValue(extractMetricValue(content, label)) ||
-    compactPdfMetricValue(extractKeywordInsight(content, [label])) ||
-    ""
+function extractCanonicalKpiSnippet(content: string, aliases: string[] | readonly string[]) {
+  const normalizedContent = normalizePdfText(content);
+  const lines = normalizedContent
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  for (const alias of aliases) {
+    const escapedAlias = escapeRegExp(alias);
+    const labeledLine = lines.find((line) =>
+      new RegExp(`^(?:[-*•]\\s*)?(?:\\*\\*)?${escapedAlias}(?:\\*\\*)?\\s*[:\\-–—]`, "i").test(line)
+    );
+
+    if (labeledLine) {
+      return labeledLine
+        .replace(new RegExp(`^(?:[-*•]\\s*)?(?:\\*\\*)?${escapedAlias}(?:\\*\\*)?\\s*[:\\-–—]\\s*`, "i"), "")
+        .replace(/\*\*/g, "")
+        .trim();
+    }
+
+    const tableLine = lines.find((line) =>
+      new RegExp(`^\\|\\s*(?:\\*\\*)?${escapedAlias}(?:\\*\\*)?\\s*\\|`, "i").test(line)
+    );
+
+    if (tableLine) {
+      return tableLine.replace(/\*\*/g, "").trim();
+    }
+
+    const objectLine = lines.find((line) =>
+      new RegExp(`["']?(?:metric|kpi|name|label)["']?\\s*[:=]\\s*["']?${escapedAlias}["']?`, "i").test(line)
+    );
+
+    if (objectLine) {
+      return objectLine.replace(/\*\*/g, "").trim();
+    }
+  }
+
+  return "";
+}
+
+function extractKpiValueFromSnippet(snippet: string, aliases: string[] | readonly string[]) {
+  const explicitValue = extractKpiObjectField(snippet, ["value", "değer", "current", "mevcut", "baseline", "metric"]);
+  const targetValue = extractKpiObjectField(snippet, ["target", "hedef"]);
+  const quantityValue = extractKpiQuantityValue(snippet);
+  const score = extractScoreFromAliases(snippet, aliases);
+  const value = explicitValue ||
+    targetValue ||
+    quantityValue ||
+    (score === null ? "" : `${score}%`) ||
+    "";
+
+  return isPlaceholderKpiText(value) ? "Validation Required" : value;
+}
+
+function extractKpiValueFromAliases(content: string, aliases: string[] | readonly string[]) {
+  return extractKpiValueFromSnippet(extractKpiSnippet(content, aliases), aliases);
+}
+
+function isPlaceholderKpiText(value: string) {
+  return /^1$/.test(value.trim()) ||
+    /\b1\s*(?:[-–—]\s*)?\/\s*(?:target\s*[:\-–—]?\s*)?1\b/i.test(value) ||
+    /\b(?:value|metric|current|baseline|threshold|target)\s*[:\-–—]?\s*1\b/i.test(value.trim());
+}
+
+function extractKpiSnippet(content: string, aliases: string[] | readonly string[]) {
+  return extractCanonicalKpiSnippet(content, aliases);
+}
+
+function extractKpiObjectField(snippet: string, fieldLabels: string[]) {
+  if (!snippet) {
+    return "";
+  }
+
+  const fieldPattern = fieldLabels.map(escapeRegExp).join("|");
+  const stopPattern = [
+    "owner",
+    "sahip",
+    "target",
+    "hedef",
+    "status",
+    "durum",
+    "trigger",
+    "tetikleyici",
+    "action",
+    "aksiyon",
+    "value",
+    "değer",
+    "current",
+    "mevcut",
+    "baseline",
+    "metric",
+  ]
+    .filter((label) => !fieldLabels.includes(label))
+    .map(escapeRegExp)
+    .join("|");
+  const normalizedSnippet = normalizePdfText(snippet).replace(/[{}"']/g, "");
+  const match = normalizedSnippet.match(
+    new RegExp(`(?:^|[|;,\\n])\\s*(?:${fieldPattern})\\s*[:=\\-–—]\\s*([\\s\\S]*?)(?=\\s*(?:[|;,\\n]|${stopPattern}\\s*[:=\\-–—]|$))`, "i")
   );
+  const value = match?.[1]?.trim().replace(/\*\*/g, "") || "";
+
+  return isPlaceholderKpiText(value) ? "Validation Required" : value;
 }
 
-function extractKpiTarget(content: string, label: string) {
-  const snippet = extractSectionSnippet(content, label) || extractKeywordInsight(content, [label]);
-  const target = snippet.match(/\btarget\s*[:\-–—]\s*([^.;\n|]+)/i)?.[1]?.trim();
+function extractKpiQuantityValue(snippet: string) {
+  const matches = normalizePdfText(snippet).match(
+    /\d+(?:[.,]\d+)*(?:\.\d+)?\s*(?:customers?|users?|reports?|leads?|conversations?|accounts?|orders?|sales|revenue|activation|retention|conversion|%)/gi
+  );
 
-  return target ? compactPdfMetricValue(target) || target : "";
+  return matches?.at(-1)?.trim() || "";
 }
 
-function extractKpiStatus(content: string, label: string) {
-  const snippet = extractSectionSnippet(content, label) || extractKeywordInsight(content, [label]);
-  const status = snippet.match(/\bstatus\s*[:\-–—]\s*([^.;\n|]+)/i)?.[1]?.trim();
+function extractKpiTargetFromSnippet(snippet: string) {
+  const target = extractKpiObjectField(snippet, ["target", "hedef"]);
+  const cleanTarget = target ? compactPdfMetricValue(target) || target : "";
+
+  return isPlaceholderKpiText(cleanTarget) ? "Validation Required" : cleanTarget;
+}
+
+function extractKpiTargetFromAliases(content: string, aliases: string[] | readonly string[]) {
+  return extractKpiTargetFromSnippet(extractKpiSnippet(content, aliases));
+}
+
+function extractKpiStatusFromSnippet(snippet: string, aliases: string[] | readonly string[]) {
+  const status = extractKpiObjectField(snippet, ["status", "durum"]);
 
   if (status) {
     return status;
   }
 
-  return (extractScore(content, label) ?? 0) >= 70 ? "On track" : "Watch";
+  return (extractScoreFromAliases(snippet, aliases) ?? 0) >= 70 ? "On track" : "Watch";
+}
+
+function extractKpiStatusFromAliases(content: string, aliases: string[] | readonly string[]) {
+  return extractKpiStatusFromSnippet(extractKpiSnippet(content, aliases), aliases);
+}
+
+function extractKpiOwnerFromAliases(content: string, aliases: string[] | readonly string[]) {
+  return extractKpiObjectField(extractKpiSnippet(content, aliases), ["owner", "sahip"]);
+}
+
+function extractKpiTriggerFromAliases(content: string, aliases: string[] | readonly string[]) {
+  return extractKpiObjectField(extractKpiSnippet(content, aliases), ["trigger", "tetikleyici"]);
+}
+
+function extractKpiActionFromAliases(content: string, aliases: string[] | readonly string[]) {
+  return extractKpiObjectField(extractKpiSnippet(content, aliases), ["action", "aksiyon"]);
+}
+
+function normalizePdfKpiMetrics(content: string) {
+  return kpiDashboardMetrics.map((metric) => {
+    const value = extractKpiValueFromAliases(content, metric.aliases);
+    const target = extractKpiTargetFromAliases(content, metric.aliases);
+    const status = extractKpiStatusFromAliases(content, metric.aliases);
+    const owner = extractKpiOwnerFromAliases(content, metric.aliases);
+    const trigger = extractKpiTriggerFromAliases(content, metric.aliases);
+    const action = extractKpiActionFromAliases(content, metric.aliases);
+    const score = extractScoreFromAliases(content, metric.aliases);
+
+    return {
+      label: metric.label,
+      aliases: metric.aliases,
+      value,
+      target,
+      status,
+      owner,
+      trigger,
+      action,
+      score,
+    };
+  });
+}
+
+function normalizePdfFounderScoreMetrics(content: string) {
+  return founderScoreMetrics.map((metric) => ({
+    label: metric.label,
+    aliases: metric.aliases,
+    score: extractScoreFromAliases(content, metric.aliases),
+  }));
 }
 
 function extractKeywordInsight(content: string, keywords: string[]) {
@@ -1461,11 +1781,12 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
       const basePdfSections = dedupeReportSections(
         dedupePdfSections(mergePdfSourceSections(normalizedSections))
       );
-      const pdfLocale = detectPdfPresentationLocale(
-        [report.title, report.type, report.prompt, ...basePdfSections.map((section) => `${section.title}\n${section.content}`)]
+      const pdfLanguageSource =
+        report.prompt?.trim() ||
+        [report.title, report.type, ...basePdfSections.map((section) => `${section.title}\n${section.content}`)]
           .filter(Boolean)
-          .join("\n\n")
-      );
+          .join("\n\n");
+      const pdfLocale = detectPdfPresentationLocale(pdfLanguageSource);
       const pdfSections = localizePdfReportSections(basePdfSections, pdfLocale);
       const localizedReportTitle = localizePdfPresentationLabel(report.title, pdfLocale);
       const businessIdea = deriveBusinessDescriptionFromSections(report, pdfSections);
@@ -2022,14 +2343,14 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
       };
 
       const getFinancialLayout = (content: string, width: number) => {
-        const metricContent = `${content}\n${fullReportContent}`;
-        const labels = getFinancialDashboardMetrics(metricContent);
+        const metricContent = content;
+        const labels = normalizePdfFinancialMetrics(metricContent);
         const columns = 3;
         const itemWidth = (width - (columns - 1) * 3) / columns;
         const items = labels
           .map((item) => {
-            const value = formatMetricCardValue(extractMetricValueFromAliases(metricContent, item.aliases));
-            const compactValue = compactPdfMetricValue(value);
+            const value = item.value;
+            const compactValue = item.compactValue;
             const labelLines = wrapPdfText(item.label, itemWidth - 4).slice(0, 2);
             const description = extractShortDescription(metricContent, item.aliases);
             const descriptionLines = description
@@ -2072,9 +2393,17 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
         };
       };
 
-      const drawSectionVisual = (title: string, content: string, sectionY: number) => {
+      const drawSectionVisual = (section: PdfReportSection, sectionY: number) => {
+        const { title, content, field } = section;
         const normalizedTitle = title.toLowerCase();
         const visualY = sectionY + 19;
+        const isTamSamSomSection = field === "tamSamSom" || normalizedTitle.includes("tam / sam / som");
+        const isFinancialDashboardSection = field === "financialDashboard" || normalizedTitle.includes("financial dashboard") || normalizedTitle.includes("finansal panel");
+        const isFounderScoreSection = field === "founderScore" || normalizedTitle.includes("founder score") || normalizedTitle.includes("kurucu skoru");
+        const isScenarioSection = field === "scenarioAnalysis" || normalizedTitle.includes("scenario") || normalizedTitle.includes("senaryo");
+        const isPorterSection = normalizedTitle.includes("porter");
+        const isKpiSection = field === "kpiDashboard" || field === "kpis" || normalizedTitle.includes("kpi");
+        const isUnitEconomicsSection = field === "unitEconomics" || normalizedTitle.includes("unit economics") || normalizedTitle.includes("birim ekonomisi");
         const drawSingleLine = (
           text: string,
           x: number,
@@ -2100,7 +2429,7 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
           pdf.text(safeText, x, lineY);
         };
 
-        if (normalizedTitle.includes("tam / sam / som")) {
+        if (isTamSamSomSection) {
           const tamVisualContent = getTamVisualContent(content);
           const rows = getTamRows(tamVisualContent);
           let rowY = visualY;
@@ -2151,14 +2480,16 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
           return swotLayout.totalHeight;
         }
 
-        if (normalizedTitle.includes("founder score")) {
-          const labels = founderScoreMetrics.slice(0, 6);
+        if (isFounderScoreSection) {
+          const labels = normalizePdfFounderScoreMetrics(content).slice(0, 6);
           const itemWidth = (bodyWidth - 10) / 3;
 
-          labels.forEach((label, index) => {
+          labels.forEach((item, index) => {
+            const label = item.label;
+            const displayLabel = localizePdfPresentationLabel(label, pdfLocale);
             const x = bodyX + (index % 3) * (itemWidth + 5);
             const itemY = visualY + Math.floor(index / 3) * 15;
-            const score = extractScore(content, label);
+            const score = item.score;
 
             pdf.setFillColor("#18181b");
             pdf.setDrawColor("#27272a");
@@ -2170,7 +2501,7 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
             pdf.text(score === null ? "—" : String(score), x + 4.2, itemY + 7.8);
             pdf.setFontSize(6.5);
             pdf.setTextColor("#e4e4e7");
-            pdf.text(label, x + 14, itemY + 5, { maxWidth: itemWidth - 17 });
+            pdf.text(displayLabel, x + 14, itemY + 5, { maxWidth: itemWidth - 17 });
             pdf.setTextColor("#71717a");
             pdf.text(localizePdfPresentationLabel("Score", pdfLocale), x + 14, itemY + 8.8);
           });
@@ -2178,7 +2509,7 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
           return 31;
         }
 
-        if (normalizedTitle.includes("executive recommendation")) {
+        if (field === "executiveRecommendation" || normalizedTitle.includes("executive recommendation") || normalizedTitle.includes("yönetici tavsiyesi")) {
           const selected = detectRecommendation(content) || "REVIEW";
           const decisionLabel = formatDecisionLabel(selected);
           const confidence =
@@ -2234,7 +2565,7 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
             pdf.roundedRect(itemX, itemY, itemWidth, 15, 2.5, 2.5, "FD");
             pdf.setFontSize(6);
             pdf.setTextColor("#71717a");
-            pdf.text(label.toUpperCase(), itemX + 2, itemY + 3.2);
+            pdf.text(localizePdfPresentationLabel(label, pdfLocale).toUpperCase(), itemX + 2, itemY + 3.2);
             pdf.setTextColor("#e4e4e7");
             pdf.setFontSize(6);
             drawSingleLine(value, itemX + 2, itemY + 7.8, itemWidth - 4, 6);
@@ -2317,7 +2648,7 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
           return 31;
         }
 
-        if (normalizedTitle.includes("porter")) {
+        if (isPorterSection) {
           const forces = ["Rivalry", "Entrants", "Buyer", "Supplier", "Substitutes"];
           const centerX = bodyX + bodyWidth * 0.32;
           const centerY = visualY + 22;
@@ -2347,7 +2678,7 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
             pdf.roundedRect(cardX, cardY, bodyWidth * 0.38, 6, 2, 2, "FD");
             pdf.setFontSize(5.8);
             pdf.setTextColor("#e4e4e7");
-            pdf.text(force, cardX + 2, cardY + 4);
+            pdf.text(localizePdfPresentationLabel(force, pdfLocale), cardX + 2, cardY + 4);
             pdf.setFillColor("#27272a");
             pdf.roundedRect(cardX + 22, cardY + 2.2, bodyWidth * 0.24, 1.4, 0.7, 0.7, "F");
             pdf.setFillColor("#5eead4");
@@ -2358,42 +2689,55 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
         }
 
         if (
-          normalizedTitle.includes("financial dashboard") ||
-          normalizedTitle.includes("founder score") ||
-          normalizedTitle.includes("scenario") ||
-          normalizedTitle.includes("porter") ||
-          normalizedTitle.includes("kpi") ||
-          normalizedTitle.includes("unit economics")
+          isFinancialDashboardSection ||
+          isFounderScoreSection ||
+          isScenarioSection ||
+          isPorterSection ||
+          isKpiSection ||
+          isUnitEconomicsSection
         ) {
-          const financialLayout = normalizedTitle.includes("financial dashboard")
+          const financialLayout = isFinancialDashboardSection
             ? getFinancialLayout(content, bodyWidth)
             : null;
-          const labels = normalizedTitle.includes("founder score")
+          const labels = isFounderScoreSection
             ? founderScoreMetrics
-            : normalizedTitle.includes("scenario")
+            : isScenarioSection
               ? ["Worst", "Base", "Best"]
-              : normalizedTitle.includes("porter")
+              : isPorterSection
                 ? ["Rivalry", "Entrants", "Buyer", "Substitutes"]
-                : normalizedTitle.includes("kpi")
-                  ? ["Acquisition", "Activation", "Retention", "Revenue", "CAC", "WTP", "Sales cycle", "Conversion"]
-                  : normalizedTitle.includes("risk")
+                : isKpiSection
+                  ? normalizePdfKpiMetrics(content)
+                  : normalizedTitle.includes("risk") || normalizedTitle.includes("riskler")
                     ? ["Market", "Product", "Pricing", "Execution"]
-                    : normalizedTitle.includes("unit economics")
-                      ? ["ARPA", "CAC", "LTV", "Payback", "Gross Margin"]
+                    : isUnitEconomicsSection
+                      ? unitEconomicsMetrics
                       : financialLayout?.items ?? [];
-          const isFinancialDashboard = normalizedTitle.includes("financial dashboard");
-          const isKpiDashboard = normalizedTitle.includes("kpi");
-          const isScenario = normalizedTitle.includes("scenario");
-          const isUnitEconomics = normalizedTitle.includes("unit economics");
-          const metricContent = `${content}\n${fullReportContent}`;
+          const isFinancialDashboard = isFinancialDashboardSection;
+          const isKpiDashboard = isKpiSection;
+          const isScenario = isScenarioSection;
+          const isUnitEconomics = isUnitEconomicsSection;
+          const metricContent = isFinancialDashboard ? content : `${content}\n${fullReportContent}`;
           const columns = isFinancialDashboard ? 3 : labels.length > 6 ? 4 : labels.length;
           const itemWidth = isFinancialDashboard && financialLayout
             ? financialLayout.itemWidth
             : (bodyWidth - (columns - 1) * 3) / columns;
 
           labels.forEach((item, index) => {
-            const label = typeof item === "string" ? item : item.label;
-            const aliases = typeof item === "string" ? [item] : item.aliases;
+            const typedItem = item as string | {
+              label: string;
+              aliases: string[] | readonly string[];
+              value?: string;
+              labelLines?: string[];
+              target?: string;
+              status?: string;
+              owner?: string;
+              trigger?: string;
+              action?: string;
+              score?: number | null;
+            };
+            const label = typeof typedItem === "string" ? typedItem : typedItem.label;
+            const displayLabel = localizePdfPresentationLabel(label, pdfLocale);
+            const aliases = typeof typedItem === "string" ? [typedItem] : typedItem.aliases;
             const x = bodyX + (index % columns) * (itemWidth + 3);
             const rowIndex = Math.floor(index / columns);
             const priorRowHeight = isFinancialDashboard && financialLayout
@@ -2405,15 +2749,17 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
             const itemY = isFinancialDashboard && financialLayout
               ? visualY + priorRowHeight + rowIndex * 3
               : visualY + rowIndex * (itemHeight + 3);
-            const score = extractScore(metricContent, label);
-            const value = typeof item !== "string" && "value" in item
-              ? item.value
-              : formatMetricCardValue(extractMetricValueFromAliases(metricContent, aliases));
+            const score = typeof typedItem !== "string" && "score" in typedItem ? typedItem.score ?? null : extractScoreFromAliases(metricContent, aliases);
+            const value = typeof typedItem !== "string" && typedItem.value
+              ? typedItem.value
+              : isUnitEconomics && label === "Gross Margin"
+                ? formatMetricCardValue(extractStrictMetricValueFromAliases(content, ["grossMargin", "Gross Margin", "Brüt Marj"]))
+                : formatMetricCardValue(extractMetricValueFromAliases(metricContent, aliases));
             const compactValue = compactPdfMetricValue(value);
             const labelLines =
-              typeof item !== "string" && "labelLines" in item
-                ? item.labelLines
-                : wrapPdfText(label, itemWidth - 4).slice(0, 2);
+              typeof typedItem !== "string" && typedItem.labelLines
+                ? typedItem.labelLines
+                : wrapPdfText(displayLabel, itemWidth - 4).slice(0, 2);
             const labelBottomY = itemY + 3.2 + Math.max(0, labelLines.length - 1) * 3.2;
             const primaryValueY = labelBottomY + 5.4;
 
@@ -2436,15 +2782,17 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
               return;
             }
             if (isKpiDashboard) {
-              const kpiValue = extractKpiValue(content, label) || (score === null ? "—" : `${score}%`);
-              const target = extractKpiTarget(content, label);
-              const status = extractKpiStatus(content, label);
+              const kpiValue = typeof typedItem !== "string" && typedItem.value
+                ? typedItem.value
+                : (score === null ? "—" : `${score}%`);
+              const target = typeof typedItem !== "string" ? typedItem.target || "" : "";
+              const status = typeof typedItem !== "string" ? typedItem.status || "Watch" : "Watch";
               pdf.setTextColor("#f4f4f5");
               drawSingleLine(kpiValue, x + 2, primaryValueY, itemWidth - 4, 7.5, 4.2, false);
               pdf.setFontSize(5.3);
               pdf.setTextColor("#a1a1aa");
-              pdf.text(`Target: ${target || kpiValue || "—"}`, x + 2, primaryValueY + 3.7, { maxWidth: itemWidth - 4 });
-              pdf.text(`Status: ${status}`, x + 2, primaryValueY + 7.1, { maxWidth: itemWidth - 4 });
+              pdf.text(`${localizePdfPresentationLabel("Target", pdfLocale)}: ${localizePdfPresentationLabel(target || kpiValue || "—", pdfLocale)}`, x + 2, primaryValueY + 3.7, { maxWidth: itemWidth - 4 });
+              pdf.text(`${localizePdfPresentationLabel("Status", pdfLocale)}: ${localizePdfPresentationLabel(status, pdfLocale)}`, x + 2, primaryValueY + 7.1, { maxWidth: itemWidth - 4 });
               pdf.setFillColor("#27272a");
               pdf.roundedRect(x + 2, itemY + itemHeight - 4.2, itemWidth - 4, 1.5, 0.7, 0.7, "F");
               pdf.setFillColor("#5eead4");
@@ -2491,10 +2839,15 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
               pdf.text(localizePdfPresentationLabel("METRIC DETAILS", pdfLocale), bodyX + 3, detailsY);
               pdf.setFontSize(5.5);
               pdf.setTextColor("#a1a1aa");
-              pdf.text(financialLayout.detailLines, bodyX + 3, detailsY + 4, {
+              pdf.text(
+                financialLayout.detailLines.map((line) => localizePdfPresentationText(line, pdfLocale)),
+                bodyX + 3,
+                detailsY + 4,
+                {
                 lineHeightFactor: 1.1,
                 maxWidth: bodyWidth - 6,
-              });
+                }
+              );
             }
 
             return financialLayout?.totalHeight ?? 0;
@@ -2611,10 +2964,10 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
         const isTamSamSomPdfSection = section.field === "tamSamSom" || isTamSamSomTitle(section.title);
         const sectionBodyContent =
           isTamSamSomPdfSection
-            ? normalizePdfTamSamSomBodyContent(section.content)
+            ? localizePdfPresentationText(normalizePdfTamSamSomBodyContent(section.content), pdfLocale)
             : isSourceSectionTitle(section.title)
-              ? formatPdfCitationContent(section.content)
-              : removeDuplicateVisualText(section.title, section.content);
+              ? localizePdfPresentationText(formatPdfCitationContent(section.content), pdfLocale)
+              : localizePdfPresentationText(removeDuplicateVisualText(section.title, section.content), pdfLocale);
         const bodyLines = splitPdfReadableLines(sectionBodyContent, bodyWidth);
         const hasBodyText = sectionBodyContent.trim().length > 0;
 
@@ -2655,7 +3008,7 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
             maxWidth: bodyWidth,
           });
 
-          drawSectionVisual(section.title, section.content, y);
+          drawSectionVisual(section, y);
           y += cardHeight + 4;
 
           if (hasBodyText) {
@@ -2749,7 +3102,7 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
 
           const drawnVisualHeight =
             activeVisualHeight > 0 && !isContinued && !isTamSamSomPdfSection
-              ? drawSectionVisual(section.title, section.content, y)
+              ? drawSectionVisual(section, y)
               : 0;
 
           if (hasBodyText) {

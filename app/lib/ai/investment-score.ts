@@ -120,6 +120,22 @@ function promptSpecificityScore(prompt: string) {
   return clamp(0.35 + matchedSignals * 0.13, 0.35, 1);
 }
 
+function hasValidationEvidence(prompt: string) {
+  const normalized = normalizePrompt(prompt);
+
+  return /\b(revenue|sales|customers?|subscribers?|pre[-\s]?orders?|waitlist|loi|pilot|retention|repeat purchase|churn|conversion|cohort|traction|mrr|arr|gelir|satış|satis|müşteri|musteri|abone|abonelik|ön sipariş|on siparis|bekleme listesi)\b/.test(
+    normalized
+  );
+}
+
+function isD2cFoodOrFmcg(model: FinancialModel) {
+  return (
+    model.inputs.industryKey === "luxuryCoffee" ||
+    model.inputs.businessModel.toLowerCase().includes("d2c") ||
+    model.inputs.pricingModel.toLowerCase().includes("repeat purchase")
+  );
+}
+
 function makeCategory(input: {
   key: InvestmentScoreCategoryKey;
   label: string;
@@ -182,8 +198,14 @@ function createWeaknesses(categories: InvestmentScoreCategory[], model: Financia
 
 function createRecommendation(totalScore: number, confidence: number) {
   if (totalScore >= 72 && confidence >= 60) return "GO";
-  if (totalScore < 48 || confidence < 42) return "PASS";
+  if (totalScore < 35 && confidence < 35) return "PASS";
   return "WAIT";
+}
+
+function createVisibleRecommendation(recommendation: "GO" | "WAIT" | "PASS", confidence: number) {
+  if (recommendation === "GO") return "VALIDATE";
+  if (recommendation === "PASS" && confidence < 35) return "PASS";
+  return "HOLD";
 }
 
 function createFundingStage(model: FinancialModel) {
@@ -256,6 +278,10 @@ export function createInvestmentScore(input: InvestmentScoreInput): InvestmentSc
   const capitalHeavy = hasAny(normalizedPrompt, [
     /\b(manufacturing|factory|hospital|hotel|yacht|ev charging|battery|clinic|franchise|drone|uav)\b/,
   ]);
+  const d2cFoodOrFmcg = isD2cFoodOrFmcg(model);
+  const validationEvidence = hasValidationEvidence(input.prompt);
+  const evidenceAdjustment = validationEvidence ? 0.08 : d2cFoodOrFmcg ? -0.18 : -0.08;
+  const executionComplexityAdjustment = d2cFoodOrFmcg ? -0.1 : 0;
   const defensibilitySignals = hasAny(normalizedPrompt, [
     /\b(proprietary|patent|data moat|network effect|regulated|compliance|brand|luxury|enterprise)\b/,
   ]);
@@ -266,6 +292,24 @@ export function createInvestmentScore(input: InvestmentScoreInput): InvestmentSc
     model.inputs.businessModel.includes("subscription") ||
     model.inputs.pricingModel.includes("subscription") ||
     model.inputs.pricingModel.includes("membership");
+  const metricConfidenceScore = normalizeHigherBetter(
+    average(Object.values(metrics).map((metric) => confidenceValue(metric.confidence))),
+    45,
+    85
+  );
+  const ideaQualityScore = clamp(
+    average([
+      normalizeHigherBetter(metrics.sam.value, 50_000_000, 2_500_000_000),
+      normalizeHigherBetter(metrics.grossMargin.value, ranges.grossMargin.low, ranges.grossMargin.high),
+      recurringRevenue ? (d2cFoodOrFmcg ? 0.66 : 0.78) : 0.6,
+      normalizeHigherBetter(ranges.revenueMultiple.high, 3, 16),
+    ]),
+    d2cFoodOrFmcg ? 0.7 : 0.66,
+    0.88
+  );
+  const validationLevelScore = validationEvidence ? 0.68 : d2cFoodOrFmcg ? 0.42 : 0.45;
+  const founderEvidenceScore = founderSignals ? 0.72 : 0.34;
+  const executionComplexityScore = capitalHeavy ? 0.42 : d2cFoodOrFmcg ? 0.5 : 0.66;
 
   const marketOpportunity = makeCategory({
     key: "marketOpportunity",
@@ -274,9 +318,9 @@ export function createInvestmentScore(input: InvestmentScoreInput): InvestmentSc
       normalizeHigherBetter(metrics.sam.value, 50_000_000, 2_500_000_000),
       normalizeHigherBetter(metrics.som.value, 1_000_000, 80_000_000),
       normalizeHigherBetter(metrics.revenueGrowth.value, ranges.arrGrowth.low, ranges.arrGrowth.high),
-      specificity,
+      recurringRevenue ? 0.68 : 0.58,
     ]),
-    explanation: `${model.inputs.industry} opportunity is scored from SAM (${metrics.sam.displayValue}), SOM (${metrics.som.displayValue}), and benchmark growth (${metrics.revenueGrowth.displayValue}).`,
+    explanation: `${model.inputs.industry} opportunity is supported by reachable demand, obtainable market wedge, and benchmark growth potential.`,
     reasoning: [
       `SAM: ${metrics.sam.displayValue}`,
       `SOM: ${metrics.som.displayValue}`,
@@ -292,11 +336,12 @@ export function createInvestmentScore(input: InvestmentScoreInput): InvestmentSc
       defensibilitySignals ? 0.78 : 0.48,
       normalizeHigherBetter(metrics.grossMargin.value, ranges.grossMargin.low, ranges.grossMargin.high),
       normalizeHigherBetter(ranges.revenueMultiple.high, 3, 16),
-      capitalHeavy ? 0.58 : 0.66,
+      capitalHeavy ? 0.58 : d2cFoodOrFmcg ? 0.5 : 0.66,
+      clamp(0.58 + evidenceAdjustment, 0.3, 0.8),
     ]),
     explanation: defensibilitySignals
-      ? "The prompt includes defensibility signals, but the score still depends on margin quality and benchmark valuation potential."
-      : "Defensibility is only partially evidenced; the score relies mostly on benchmark economics until moat proof exists.",
+      ? "The idea includes defensibility signals, but the advantage still depends on margin quality and proof of a durable wedge."
+      : "Defensibility is only partially evidenced; competitive advantage needs stronger moat proof.",
     reasoning: [
       `Defensibility signals detected: ${defensibilitySignals ? "yes" : "no"}`,
       `Gross margin: ${metrics.grossMargin.displayValue}`,
@@ -309,12 +354,13 @@ export function createInvestmentScore(input: InvestmentScoreInput): InvestmentSc
     key: "businessModel",
     label: "Business Model",
     normalizedScore: average([
-      recurringRevenue ? 0.8 : 0.58,
+      recurringRevenue ? (d2cFoodOrFmcg ? 0.64 : 0.8) : 0.58,
       normalizeHigherBetter(metrics.grossMargin.value, ranges.grossMargin.low, ranges.grossMargin.high),
       normalizeLowerBetter(metrics.cacPayback.value, ranges.cacPayback.low, ranges.cacPayback.high),
       normalizeHigherBetter(metrics.ltv.value / Math.max(1, metrics.cac.value), 2, 6),
+      clamp(0.58 + evidenceAdjustment, 0.3, 0.82),
     ]),
-    explanation: `Business-model quality is calculated from pricing model (${model.inputs.pricingModel}), gross margin, payback, and LTV/CAC.`,
+    explanation: `Business-model quality reflects the pricing model, gross margin discipline, payback path, and repeat purchase or retention potential.`,
     reasoning: [
       `Pricing model: ${model.inputs.pricingModel}`,
       `Gross margin: ${metrics.grossMargin.displayValue}`,
@@ -331,6 +377,7 @@ export function createInvestmentScore(input: InvestmentScoreInput): InvestmentSc
       normalizeHigherBetter(metrics.ebitda.value / Math.max(1, metrics.arr.value), ranges.ebitdaMargin.low, ranges.ebitdaMargin.high),
       normalizeHigherBetter(metrics.runway.value, 9, 24),
       normalizeLowerBetter(metrics.breakEvenMonth.value, 12, 48),
+      clamp(0.55 + evidenceAdjustment, 0.28, 0.78),
     ]),
     explanation: `Financial health is based on margin, EBITDA profile, runway (${metrics.runway.displayValue}), and break-even timing (${metrics.breakEvenMonth.displayValue}).`,
     reasoning: [
@@ -348,9 +395,10 @@ export function createInvestmentScore(input: InvestmentScoreInput): InvestmentSc
       normalizeHigherBetter(metrics.revenueGrowth.value, ranges.arrGrowth.low, ranges.arrGrowth.high),
       normalizeHigherBetter(metrics.grossMargin.value, ranges.grossMargin.low, ranges.grossMargin.high),
       normalizeHigherBetter(metrics.arr.value, 500_000, 15_000_000),
-      capitalHeavy ? 0.46 : 0.72,
+      capitalHeavy ? 0.46 : d2cFoodOrFmcg ? 0.52 : 0.72,
+      clamp(0.55 + evidenceAdjustment + executionComplexityAdjustment, 0.25, 0.78),
     ]),
-    explanation: `Scalability is derived from growth rate, gross margin, Year-1 ARR (${metrics.arr.displayValue}), and capital intensity.`,
+    explanation: `Scalability reflects growth potential, margin structure, Year-1 revenue potential, and capital intensity.`,
     reasoning: [
       `Revenue growth: ${metrics.revenueGrowth.displayValue}`,
       `Year-1 ARR: ${metrics.arr.displayValue}`,
@@ -363,17 +411,24 @@ export function createInvestmentScore(input: InvestmentScoreInput): InvestmentSc
     key: "teamFounder",
     label: "Team / Founder",
     normalizedScore: average([
-      founderSignals ? 0.74 : 0.45,
-      specificity,
-      model.benchmark.label === "Services" ? 0.58 : 0.62,
+      ideaQualityScore,
+      ideaQualityScore,
+      validationLevelScore,
+      founderEvidenceScore,
+      executionComplexityScore,
+      Math.max(metricConfidenceScore, 0.55),
     ]),
-    explanation: founderSignals
-      ? "Founder/team evidence is present in the prompt and is adjusted by input specificity."
-      : "Founder/team quality cannot be strongly scored without operator background, domain proof, or hiring plan.",
+    explanation:
+      "Founder readiness separates the quality of the opportunity from the current level of validation and founder-specific evidence.",
     reasoning: [
+      `Market attractiveness: ${Math.round(ideaQualityScore * 100)}%`,
+      `Business model quality: ${Math.round((businessModel.score / businessModel.maximumScore) * 100)}%`,
+      `Validation confidence: ${Math.round(validationLevelScore * 100)}%`,
+      `Execution complexity: ${Math.round(executionComplexityScore * 100)}%`,
+      `Evidence confidence: ${Math.round(founderEvidenceScore * 100)}%`,
+      `Founder evidence: ${Math.round(founderEvidenceScore * 100)}%`,
       `Founder or domain signals detected: ${founderSignals ? "yes" : "no"}`,
-      `Input specificity: ${Math.round(specificity * 100)}%`,
-      `Industry execution context: ${model.inputs.industry}`,
+      `Validation evidence detected: ${validationEvidence ? "yes" : "no"}`,
     ],
   });
 
@@ -384,9 +439,10 @@ export function createInvestmentScore(input: InvestmentScoreInput): InvestmentSc
       normalizeLowerBetter(metrics.investmentNeeded.value / Math.max(1, metrics.arr.value), 1, 8),
       normalizeLowerBetter(metrics.cacPayback.value, ranges.cacPayback.low, ranges.cacPayback.high),
       normalizeHigherBetter(metrics.roi.value, -0.5, 2),
-      capitalHeavy ? 0.42 : 0.72,
+      capitalHeavy ? 0.42 : d2cFoodOrFmcg ? 0.5 : 0.72,
+      clamp(0.54 + evidenceAdjustment, 0.26, 0.78),
     ]),
-    explanation: `Capital efficiency is calculated from investment-to-ARR, payback, Year-3 ROI, and capital intensity.`,
+    explanation: `Capital efficiency reflects investment need, payback discipline, three-year return potential, and capital intensity.`,
     reasoning: [
       `Investment needed: ${metrics.investmentNeeded.displayValue}`,
       `ARR: ${metrics.arr.displayValue}`,
@@ -402,14 +458,16 @@ export function createInvestmentScore(input: InvestmentScoreInput): InvestmentSc
       normalizeLowerBetter(metrics.cacPayback.value, ranges.cacPayback.low, ranges.cacPayback.high),
       normalizeLowerBetter(metrics.breakEvenMonth.value, 12, 48),
       normalizeHigherBetter(average(Object.values(metrics).map((metric) => confidenceValue(metric.confidence))), 45, 85),
-      capitalHeavy ? 0.38 : 0.7,
+      capitalHeavy ? 0.38 : d2cFoodOrFmcg ? 0.46 : 0.7,
+      validationEvidence ? 0.62 : 0.34,
     ]),
-    explanation: `Execution risk score improves when payback and break-even are faster, confidence is higher, and the model is less asset-heavy.`,
+    explanation: `Execution risk is healthier when payback and break-even timing are realistic, confidence is stronger, validation evidence exists, and the model is less operationally complex.`,
     reasoning: [
       `CAC payback: ${metrics.cacPayback.displayValue}`,
       `Break-even: ${metrics.breakEvenMonth.displayValue}`,
       `Average metric confidence: ${Math.round(average(Object.values(metrics).map((metric) => confidenceValue(metric.confidence))))}%`,
-      `Asset-heavy risk: ${capitalHeavy ? "elevated" : "moderate"}`,
+      `Validation evidence detected: ${validationEvidence ? "yes" : "no"}`,
+      `Operating complexity: ${capitalHeavy || d2cFoodOrFmcg ? "elevated" : "moderate"}`,
     ],
   });
 
@@ -429,9 +487,10 @@ export function createInvestmentScore(input: InvestmentScoreInput): InvestmentSc
   const confidence = roundScore(
     average([
       average(Object.values(metrics).map((metric) => confidenceValue(metric.confidence))),
-      specificity * 100,
+      clamp(specificity + evidenceAdjustment, 0.28, 1) * 100,
       founderSignals ? 72 : 58,
       defensibilitySignals ? 72 : 58,
+      validationEvidence ? 70 : d2cFoodOrFmcg ? 38 : 48,
     ])
   );
   const recommendation = createRecommendation(totalScore, confidence);
@@ -445,7 +504,7 @@ export function createInvestmentScore(input: InvestmentScoreInput): InvestmentSc
       defensibilitySignals ? 0.74 : 0.5,
       normalizeHigherBetter(metrics.grossMargin.value, ranges.grossMargin.low, ranges.grossMargin.high),
     ]),
-    explanation: "Technology score is calculated from technical intensity, defensibility signals, and margin leverage.",
+    explanation: "Technology leverage reflects technical intensity, defensibility signals, and margin expansion potential.",
     reasoning: [
       `Technical signals detected: ${
         hasAny(normalizedPrompt, [/\b(ai|software|automation|cybersecurity|drone|uav|ev|battery|platform)\b/])
@@ -544,7 +603,7 @@ export function formatInvestmentScore(score: InvestmentScore) {
   const categoryRows = Object.values(score.categories)
     .map(
       (category) =>
-        `- ${category.label}: ${category.score}/${category.maximumScore} | explanation=${category.explanation} | reasoning=${category.reasoning.join("; ")}`
+        `- ${category.label}: ${roundScore((category.score / category.maximumScore) * 100)}/100. ${category.explanation}`
     )
     .join("\n");
   const strengths = score.strengths.map((strength) => `- ${strength}`).join("\n");
@@ -553,22 +612,22 @@ export function formatInvestmentScore(score: InvestmentScore) {
   const decisionRows = Object.values(score.decisionEngine)
     .map(
       (category) =>
-        `- ${category.label}: ${category.score}/${category.maximumScore} | explanation=${category.explanation} | reasoning=${category.reasoning.join("; ")}`
+        `- ${category.label}: ${roundScore((category.score / category.maximumScore) * 100)}/100. ${category.explanation}`
     )
     .join("\n");
 
-  return `Investment Scoring Engine (${score.version}, ${score.fingerprint})
+  return `Investment Decision Inputs
 Total Investment Score: ${score.totalScore}/100
-Confidence: ${score.confidence}%
-Recommendation: ${score.recommendation}
+Decision Confidence: ${score.confidence}%
+Recommendation: ${createVisibleRecommendation(score.recommendation, score.confidence)}
 Estimated Valuation: ${score.estimatedValuation}
 Funding Stage: ${score.fundingStage}
 Next Critical Action: ${score.nextCriticalAction}
 
-Category scores:
+Score dimensions:
 ${categoryRows}
 
-Decision Engine:
+Decision factors:
 ${decisionRows}
 
 Strengths:
