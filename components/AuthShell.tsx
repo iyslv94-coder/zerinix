@@ -2,7 +2,6 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import type { AppDictionary } from "@/app/lib/i18n/dictionaries";
 import type { AppLocale } from "@/app/lib/i18n/config";
-import LanguageSelector from "./LanguageSelector";
 
 type AuthShellProps = {
   eyebrow: string;
@@ -20,7 +19,6 @@ export default function AuthShell({
   eyebrow,
   title,
   subtitle,
-  locale,
   dictionary,
   children,
   footerText,
@@ -39,11 +37,6 @@ export default function AuthShell({
           </Link>
 
           <div className="flex items-center gap-3">
-            <LanguageSelector
-              locale={locale}
-              labels={dictionary.language}
-              compact
-            />
             <Link
               href="/plan?new=1&mode=plan"
               className="rounded-full border border-white/10 px-4 py-2 text-sm text-gray-300 transition hover:border-white/30 hover:text-white"

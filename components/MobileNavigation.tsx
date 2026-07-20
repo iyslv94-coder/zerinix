@@ -10,9 +10,7 @@ import {
   LayoutDashboard,
   UserRound,
 } from "lucide-react";
-import type { AppLocale } from "@/app/lib/i18n/config";
 import { dictionaries, type AppDictionary } from "@/app/lib/i18n/dictionaries";
-import LanguageSelector from "./LanguageSelector";
 
 function getMobileNavigationItems(labels: AppDictionary["nav"]) {
   return [
@@ -101,10 +99,8 @@ function getMobileTitle(pathname: string, labels: AppDictionary["nav"]) {
 }
 
 export function MobileHeader({
-  locale,
   labels,
 }: {
-  locale?: AppLocale;
   labels?: AppDictionary;
 }) {
   const pathname = usePathname();
@@ -131,11 +127,6 @@ export function MobileHeader({
           </span>
         </Link>
         <div className="flex items-center gap-2">
-          <LanguageSelector
-            locale={locale || "en"}
-            labels={activeLabels.language}
-            compact
-          />
           <Link
             href="/dashboard"
             aria-label="Go to dashboard home"

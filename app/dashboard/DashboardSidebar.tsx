@@ -21,7 +21,7 @@ import {
 import { getRequestDictionary } from "@/app/lib/i18n/server";
 
 export default async function DashboardSidebar() {
-  const { locale, dictionary } = await getRequestDictionary();
+  const { dictionary } = await getRequestDictionary();
   const navigationGroups = [
     {
       label: dictionary.nav.commandCenter,
@@ -55,7 +55,6 @@ export default async function DashboardSidebar() {
   return (
     <>
       <MobileHeader
-        locale={locale}
         labels={dictionary}
       />
       <MobileBottomNavigation labels={dictionary.nav} />

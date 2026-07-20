@@ -318,16 +318,33 @@ function removeTamSamSomOwnershipText(content: string) {
 
 function detectLanguage(value: string): ResponseLanguage {
   const normalized = value.toLowerCase();
-  const turkishSignals = [
-    /[çğıöşü]/i,
-    /\b(ve|bir|için|ile|ama|fakat|iş|hedef|müşteri|pazar|gelir|strateji|istiyorum|yap|kurmak|deneme|merhaba|selam|evet|hayır|lutfen|lütfen)\b/i,
-  ];
+  const hasTurkishCharacters = /[çğıöşü]/i.test(normalized);
+  const hasTurkishSentencePattern =
+    /\b(nasıl|nedir|hangi|neden|nerede|kim|kaç|mı|mi|mu|mü|olur|olabilir|öner|analiz et)\b/i.test(
+      normalized
+    );
+  const hasEnglishStructure =
+    /\b(analyze|analyse|analysis|market|business|startup|company|idea|report|strategy|pricing|competitors?|customers?|growth|create|generate|validate|in|for|with|and|the)\b/i.test(
+      normalized
+    );
+  const hasTurkishWords =
+    /\b(ve|bir|için|ile|ama|fakat|iş|hedef|müşteri|pazar|gelir|strateji|istiyorum|yap|kurmak|deneme|merhaba|selam|evet|hayır|lutfen|lütfen)\b/i.test(
+      normalized
+    );
 
-  return turkishSignals.some((signal) => signal.test(normalized)) ? "Turkish" : "English";
+  if (hasTurkishCharacters || hasTurkishSentencePattern) {
+    return "Turkish";
+  }
+
+  if (hasEnglishStructure) {
+    return "English";
+  }
+
+  return hasTurkishWords ? "Turkish" : "English";
 }
 
-function normalizeLanguage(value: unknown, prompt: string): ResponseLanguage {
-  return value === "Turkish" || value === "English" ? value : detectLanguage(prompt);
+function normalizeLanguage(_value: unknown, prompt: string): ResponseLanguage {
+  return detectLanguage(prompt);
 }
 
 function isMarketReportField(value: string | undefined): value is MarketReportField {
@@ -916,6 +933,7 @@ function buildLanguageInstructions(language: ResponseLanguage) {
   return [
     "You are the ZERINIX Market Intelligence Report Engine.",
     "Write like a McKinsey / BCG / Bain strategy partner and Sequoia-style market diligence analyst.",
+    `The user's latest message language is ${language}. This overrides saved profile language, persistent memory language, browser locale, and previous conversation language.`,
     `Respond entirely in ${language}.`,
     `Every heading, paragraph, bullet point, table label, markdown label, source note, and sentence must be in ${language}.`,
     `If source material is in another language, summarize it only in ${language}.`,
@@ -1129,7 +1147,10 @@ export async function POST(req: Request) {
     const userMemoryInstruction = userMemoryContext
       ? `Persistent user memories for stable context. Use them only as durable user facts/preferences and never expose this block as report text:\n${userMemoryContext}`
       : "";
-    const input = `Business idea: ${promptText}
+    const input = `Latest user request language: ${responseLanguage}
+Output language hard requirement: ${responseLanguage}. Ignore saved profile language, persistent memory language, browser locale, and previous conversation language.
+
+Business idea: ${promptText}
 
 ${financialAssumptionsContext}
 ${userMemoryInstruction ? `\n${userMemoryInstruction}\n` : ""}
@@ -1217,7 +1238,8 @@ Do not generate business-plan sections here. Do not suggest website URLs, domain
 
       if (
         cachedFullReport &&
-        !isReportGenerationFailureText(cachedFullReport.responseText)
+        !isReportGenerationFailureText(cachedFullReport.responseText) &&
+        detectLanguage(cachedFullReport.responseText) === responseLanguage
       ) {
         logAiExecution({
           endpoint: "/api/market-analysis",
@@ -1343,7 +1365,10 @@ Do not generate business-plan sections here. Do not suggest website URLs, domain
         );
       }
 
-      const fullReportInput = `Business idea: ${promptText}
+      const fullReportInput = `Latest user request language: ${responseLanguage}
+Output language hard requirement: ${responseLanguage}. Ignore saved profile language, persistent memory language, browser locale, and previous conversation language.
+
+Business idea: ${promptText}
 
 ${financialAssumptionsContext}
 ${userMemoryInstruction ? `\n${userMemoryInstruction}\n` : ""}
@@ -1616,7 +1641,11 @@ Do not include markdown code fences, braces inside string values, or commentary 
     const cachedResponse = await getCachedAiResponse(supabase, user.id, cacheKey);
     const encoder = new TextEncoder();
 
-    if (cachedResponse && !isReportGenerationFailureText(cachedResponse.responseText)) {
+    if (
+      cachedResponse &&
+      !isReportGenerationFailureText(cachedResponse.responseText) &&
+      detectLanguage(cachedResponse.responseText) === responseLanguage
+    ) {
       logAiExecution({
         endpoint: "/api/market-analysis",
         source: "cache",

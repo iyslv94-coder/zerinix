@@ -332,6 +332,7 @@ export function buildUserMemoryContext(memories: UserMemory[]) {
   }
 
   return memories
+    .filter((memory) => memory.type !== "language")
     .map((memory) => `- ${memoryTypeLabels[memory.type]}: ${memory.content}`)
     .join("\n");
 }

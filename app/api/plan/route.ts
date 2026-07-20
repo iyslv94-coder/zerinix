@@ -237,16 +237,33 @@ const planFieldLabels: Record<
 
 function detectLanguage(value: string): ResponseLanguage {
   const normalized = value.toLowerCase();
-  const turkishSignals = [
-    /[çğıöşü]/i,
-    /\b(ve|bir|için|ile|ama|fakat|iş|hedef|müşteri|pazar|gelir|strateji|istiyorum|yap|kurmak|deneme|merhaba|selam|evet|hayır|lutfen|lütfen)\b/i,
-  ];
+  const hasTurkishCharacters = /[çğıöşü]/i.test(normalized);
+  const hasTurkishSentencePattern =
+    /\b(nasıl|nedir|hangi|neden|nerede|kim|kaç|mı|mi|mu|mü|olur|olabilir|öner|analiz et)\b/i.test(
+      normalized
+    );
+  const hasEnglishStructure =
+    /\b(analyze|analyse|analysis|market|business|startup|company|idea|report|strategy|pricing|competitors?|customers?|growth|create|generate|validate|in|for|with|and|the)\b/i.test(
+      normalized
+    );
+  const hasTurkishWords =
+    /\b(ve|bir|için|ile|ama|fakat|iş|hedef|müşteri|pazar|gelir|strateji|istiyorum|yap|kurmak|deneme|merhaba|selam|evet|hayır|lutfen|lütfen)\b/i.test(
+      normalized
+    );
 
-  return turkishSignals.some((signal) => signal.test(normalized)) ? "Turkish" : "English";
+  if (hasTurkishCharacters || hasTurkishSentencePattern) {
+    return "Turkish";
+  }
+
+  if (hasEnglishStructure) {
+    return "English";
+  }
+
+  return hasTurkishWords ? "Turkish" : "English";
 }
 
-function normalizeLanguage(value: unknown, prompt: string): ResponseLanguage {
-  return value === "Turkish" || value === "English" ? value : detectLanguage(prompt);
+function normalizeLanguage(_value: unknown, prompt: string): ResponseLanguage {
+  return detectLanguage(prompt);
 }
 
 function isPlanReportField(value: string | undefined): value is PlanReportField {
@@ -1231,6 +1248,7 @@ function buildLanguageInstructions(language: ResponseLanguage) {
   return [
     "You are the ZERINIX Business Intelligence Report Engine.",
     "Write like a McKinsey / BCG / Bain partner and Sequoia-style investment analyst preparing a founder diligence memo.",
+    `The user's latest message language is ${language}. This overrides saved profile language, persistent memory language, browser locale, and previous conversation language.`,
     `Respond entirely in ${language}.`,
     `Every heading, paragraph, bullet point, table label, markdown label, and sentence must be in ${language}.`,
     `If the user prompt includes another language, still write the final answer only in ${language}.`,
@@ -1429,7 +1447,10 @@ export async function POST(req: Request) {
       ? `Persistent user memories for stable context. Use them only as durable user facts/preferences and never expose this block as report text:\n${userMemoryContext}`
       : "";
     const analyzedBusinessDescription = createReportBusinessDescription(promptText);
-    const input = `Submitted business context for private analysis only: ${promptText}
+    const input = `Latest user request language: ${responseLanguage}
+Output language hard requirement: ${responseLanguage}. Ignore saved profile language, persistent memory language, browser locale, and previous conversation language.
+
+Submitted business context for private analysis only: ${promptText}
 Analyzed business/company description to use in the report: ${analyzedBusinessDescription}
 
 ${financialAssumptionsContext}
@@ -1520,7 +1541,8 @@ Write only the content for this section. Do not write a JSON object, field name,
 
       if (
         cachedFullReport &&
-        !isReportGenerationFailureText(cachedFullReport.responseText)
+        !isReportGenerationFailureText(cachedFullReport.responseText) &&
+        detectLanguage(cachedFullReport.responseText) === responseLanguage
       ) {
         logAiExecution({
           endpoint: "/api/plan",
@@ -1606,7 +1628,10 @@ Write only the content for this section. Do not write a JSON object, field name,
         );
       }
 
-      const fullReportInput = `Submitted business context for private analysis only: ${promptText}
+      const fullReportInput = `Latest user request language: ${responseLanguage}
+Output language hard requirement: ${responseLanguage}. Ignore saved profile language, persistent memory language, browser locale, and previous conversation language.
+
+Submitted business context for private analysis only: ${promptText}
 Analyzed business/company description to use in the report: ${analyzedBusinessDescription}
 
 ${financialAssumptionsContext}
@@ -1839,7 +1864,11 @@ ${buildFullReportStructureDirectives("business_plan").map((directive) => `- ${di
     const cachedResponse = await getCachedAiResponse(supabase, user.id, cacheKey);
     const encoder = new TextEncoder();
 
-    if (cachedResponse && !isReportGenerationFailureText(cachedResponse.responseText)) {
+    if (
+      cachedResponse &&
+      !isReportGenerationFailureText(cachedResponse.responseText) &&
+      detectLanguage(cachedResponse.responseText) === responseLanguage
+    ) {
       logAiExecution({
         endpoint: "/api/plan",
         source: "cache",

@@ -5924,8 +5924,6 @@ export default function Planner({
       initialConversations,
     })
   );
-  const [activeReportLanguage, setActiveReportLanguage] =
-    useState<ResponseLanguage>("English");
   const chatScrollerRef = useRef<HTMLDivElement | null>(null);
   const composerRef = useRef<HTMLInputElement | null>(null);
   const isNearBottomRef = useRef(true);
@@ -7152,10 +7150,8 @@ export default function Planner({
     setLastRequest({ mode: "plan", prompt: submittedPrompt });
     setReportProgress(0);
     setCurrentReportSectionName("Preparing report engine");
-    const responseLanguage = detectResponseLanguage(submittedPrompt);
-    const copy = getLanguageCopy(responseLanguage);
+    const copy = getLanguageCopy("English");
     const outputFields = localizeReportFields(planReportFields);
-    setActiveReportLanguage(responseLanguage);
     const conversationId = activeConversationId;
     const reportRequestId = createMessageId();
     const shouldUpdateTitle = shouldAutoTitleConversation(
@@ -7233,7 +7229,6 @@ export default function Planner({
         body: JSON.stringify({
           prompt: submittedPrompt,
           field: "fullReport",
-          language: responseLanguage,
           reportRequestId,
         }),
       });
@@ -7341,10 +7336,8 @@ export default function Planner({
     setLastRequest({ mode: "market", prompt: submittedPrompt });
     setReportProgress(0);
     setCurrentReportSectionName("Preparing report engine");
-    const responseLanguage = detectResponseLanguage(submittedPrompt);
-    const copy = getLanguageCopy(responseLanguage);
+    const copy = getLanguageCopy("English");
     const outputFields = localizeReportFields(reportFields);
-    setActiveReportLanguage(responseLanguage);
     const conversationId = activeConversationId;
     const reportRequestId = createMessageId();
     const shouldUpdateTitle = shouldAutoTitleConversation(
@@ -7422,7 +7415,6 @@ export default function Planner({
         body: JSON.stringify({
           prompt: submittedPrompt,
           field: "fullReport",
-          language: responseLanguage,
           reportRequestId,
         }),
       });
@@ -7537,11 +7529,7 @@ export default function Planner({
     }
   }
 
-  const currentResponseLanguage = activeReportLanguage;
-  const currentLanguageCopy = useMemo(
-    () => getLanguageCopy(currentResponseLanguage),
-    [currentResponseLanguage]
-  );
+  const currentLanguageCopy = getLanguageCopy("English");
   const activeReportMode = planReport
     ? "plan"
     : marketReport || activeMode === "market"
@@ -7577,11 +7565,11 @@ export default function Planner({
     chatLoading ||
     Boolean(activeConversation?.messages?.length);
   const latestUserIntentPrompt =
-    lastRequest?.prompt ||
     [...(activeConversation?.messages || [])]
       .reverse()
       .find((message) => message.role === "user")
       ?.content ||
+    lastRequest?.prompt ||
     "";
   const recommendedAnalysisMode = inferRecommendedAnalysisMode(latestUserIntentPrompt);
   const hasWorkspaceActivity =

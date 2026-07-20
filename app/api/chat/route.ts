@@ -517,8 +517,21 @@ function shouldAttachUserMemoryContext(input: {
 }
 
 function detectResponseLanguage(value: string) {
-  return /[çğıöşü]/i.test(value) ||
-    /\b(ülke|bütçe|risk|yatırım|iş|fikir|pazar|hedef|deneyim|zaman|para|öneri|startup|girişim)\b/i.test(value)
+  const normalized = value.toLowerCase();
+  const hasEnglishStructure =
+    /\b(analyze|analyse|analysis|market|business|startup|company|idea|report|strategy|pricing|competitors?|customers?|growth|create|generate|validate|in|for|with|and|the|hello|hi)\b/i.test(
+      normalized
+    );
+  const hasTurkishWords =
+    /\b(ülke|bütçe|risk|yatırım|iş|fikir|pazar|hedef|deneyim|zaman|para|öneri|girişim|ben kimim|adim ne|adım ne|ismim ne|ismin ne|beni taniyor musun|beni tanıyor musun)\b/i.test(
+      normalized
+    );
+
+  if (hasEnglishStructure && !hasTurkishWords) {
+    return "English";
+  }
+
+  return /[çğıöşü]/i.test(normalized) || hasTurkishWords
     ? "Turkish"
     : "English";
 }
@@ -667,7 +680,7 @@ function isBusinessAdvisorRequest(prompt: string) {
 }
 
 function isUserIdentityQuestion(prompt: string) {
-  return /^(?:who am i|what is my name|do you know my name|who do you know me as)\??$/i.test(
+  return /^(?:who am i|what is my name|do you know my name|who do you know me as|ben kimim|ad[ıi]m ne|[İIıi]smim ne|beni tan[ıi]yor musun)\??$/i.test(
     prompt.trim()
   );
 }
@@ -675,7 +688,7 @@ function isUserIdentityQuestion(prompt: string) {
 function getMemoryRecallType(prompt: string): UserMemoryType | null {
   const normalized = prompt.trim().toLowerCase();
 
-  if (/^(?:who am i|what is my name|do you know my name|who do you know me as)\??$/.test(normalized)) {
+  if (/^(?:who am i|what is my name|do you know my name|who do you know me as|ben kimim|ad[ıi]m ne|ismim ne|beni tan[ıi]yor musun)\??$/.test(normalized)) {
     return "name";
   }
 
@@ -744,7 +757,7 @@ function formatMemoryRecallResponse(
   if (responseLanguage === "Turkish") {
     switch (type) {
       case "name":
-        return `Merhaba ${content}. Bugün nasıl yardımcı olabilirim?`;
+        return `Senin adın ${content}. Nasıl yardımcı olabilirim?`;
       case "company":
         return `${content} için nasıl yardımcı olabilirim?`;
       case "language":
@@ -1536,7 +1549,7 @@ export async function POST(req: Request) {
     const maxOutputTokens = getChatMaxOutputTokens(requestKind);
     const instructionsText = [
       "You are ZERINIX AI, a premium business operating assistant.",
-      "Always reply in the same language as the user's latest message.",
+      "Always reply in the same language as the user's latest message. This overrides saved profile language, persistent memory language, browser locale, and previous conversation language.",
       `Classified user intent: ${selectedIntent}.`,
       `Selected expert: ${selectedExpert}.`,
       expertInstructions[selectedExpert],

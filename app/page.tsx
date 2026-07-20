@@ -24,7 +24,6 @@ import {
   Zap,
 } from "lucide-react";
 import WaitlistForm from "@/components/WaitlistForm";
-import LanguageSelector from "@/components/LanguageSelector";
 import { getRequestDictionary } from "@/app/lib/i18n/server";
 
 export const metadata: Metadata = {
@@ -48,7 +47,7 @@ const trustSignalIcons = [Building2, ShieldCheck, CircleDollarSign];
 const highlightedPricingIndex = 1;
 
 export default async function Home() {
-  const { locale, dictionary } = await getRequestDictionary();
+  const { dictionary } = await getRequestDictionary();
   const pageWorkflowSteps = dictionary.landing.workflowSteps;
   const pageChatMessages = [
     {
@@ -121,7 +120,6 @@ export default async function Home() {
           </div>
 
           <div className="flex items-center gap-3">
-            <LanguageSelector locale={locale} labels={dictionary.language} compact />
             <Link
               href="/login?next=/plan"
               prefetch={false}
