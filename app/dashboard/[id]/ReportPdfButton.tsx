@@ -1139,7 +1139,7 @@ function extractScenarioSnippet(content: string, scenario: string) {
 }
 
 function extractShortDescription(content: string, aliases: string[] | readonly string[]) {
-  const detail = extractMetricDetail(content, aliases)
+  const detail = cleanPdfEvidenceMetadataText(extractMetricDetail(content, aliases))
     .replace(/\b(?:formula|assumptions?|benchmark|source|confidence)\s*[:=]\s*/gi, "")
     .replace(/\s*\|\s*/g, " ")
     .trim();
@@ -1150,7 +1150,7 @@ function extractShortDescription(content: string, aliases: string[] | readonly s
 
   const raw = normalizePdfText(extractMetricValueFromAliases(content, aliases));
 
-  return raw
+  return cleanPdfEvidenceMetadataText(raw)
     .split(/\b(?:formula|assumptions?|confidence|benchmark(?: source| comparison)?|explanation|justification|source)\b\s*[:\-–—]/i)
     .slice(1)
     .join(" ")
@@ -1482,6 +1482,26 @@ function removeDuplicateVisualText(title: string, content: string) {
   return removeDuplicatePdfExecutiveInsightText(
     normalizePdfTamSamSomOwnershipContent(financialContent, { title })
   );
+}
+
+function cleanPdfEvidenceMetadataText(value: string) {
+  return normalizePdfText(value)
+    .split("\n")
+    .filter((line) => {
+      const trimmed = line.trim();
+
+      return !/^(?:[-*•]\s*)?(?:formula|assumptions?|varsayımlar|confidence|güven|evidence|validation evidence|validation needed|metadata|referans|raw evidence metadata|raw validation text|raw validation context|raw benchmark context|internal evidence keys?|benchmark(?:source| source| comparison)?)\s*[:=]/i.test(trimmed);
+    })
+    .map((line) =>
+      line
+        .replace(/\s*\|\s*(?:formula|assumptions?|varsayımlar|confidence|güven|evidence|validation evidence|validation needed|metadata|referans|raw evidence metadata|raw validation text|raw validation context|raw benchmark context|internal evidence keys?|benchmark(?:source| source| comparison)?)\s*[:=][^|\n]+/gi, "")
+        .replace(/\b(?:formula|assumptions?|varsayımlar|confidence|güven|evidence|validation evidence|validation needed|metadata|referans|raw evidence metadata|raw validation text|raw validation context|raw benchmark context|internal evidence keys?|benchmarkSource|benchmark)\s*=\s*[^|;\n]+/gi, "")
+        .replace(/\bplanning assumptions require validation\b[.;]?/gi, "")
+        .trimEnd()
+    )
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 function isTamSamSomTitle(title: string) {
@@ -2966,10 +2986,10 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
         const isTamSamSomPdfSection = section.field === "tamSamSom" || isTamSamSomTitle(section.title);
         const sectionBodyContent =
           isTamSamSomPdfSection
-            ? localizePdfPresentationText(normalizePdfTamSamSomBodyContent(section.content), pdfLocale)
+            ? localizePdfPresentationText(cleanPdfEvidenceMetadataText(normalizePdfTamSamSomBodyContent(section.content)), pdfLocale)
             : isSourceSectionTitle(section.title)
               ? localizePdfPresentationText(formatPdfCitationContent(section.content), pdfLocale)
-              : localizePdfPresentationText(removeDuplicateVisualText(section.title, section.content), pdfLocale);
+              : localizePdfPresentationText(cleanPdfEvidenceMetadataText(removeDuplicateVisualText(section.title, section.content)), pdfLocale);
         const bodyLines = splitPdfReadableLines(sectionBodyContent, bodyWidth);
         const hasBodyText = sectionBodyContent.trim().length > 0;
 

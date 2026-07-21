@@ -1264,7 +1264,7 @@ function MarkdownRenderer({
   streaming?: boolean;
 }) {
   const deferredContent = useDeferredValue(content);
-  const renderedContent = streaming ? deferredContent : content;
+  const renderedContent = cleanEvidenceMetadataForDisplay(streaming ? deferredContent : content);
   const blocks = renderedContent.split(/```/g);
 
   return (
@@ -2076,12 +2076,32 @@ function formatMetricCardValue(value: string) {
   }
 
   return cleanValue
-    .split(/\b(?:formula|assumptions?|confidence|benchmark(?: source| comparison)?|explanation|justification|source)\b\s*[:\-–—]/i)[0]
+    .split(/\b(?:formula|assumptions?|varsayımlar|confidence|güven|evidence|validation evidence|validation needed|metadata|referans|benchmark(?: source| comparison)?|raw benchmark context|explanation|justification|source)\b\s*[:\-–—=]/i)[0]
     .split(/\s+(?:based on|using|assuming|calculated from|derived from)\s+/i)[0]
     .split(/\s*[;|]\s*/)[0]
     .replace(/^["'`]+|["'`]+$/g, "")
     .replace(/(\d)\.\s+(\d)(\s*[kKmMbB%])?/g, "$1.$2$3")
     .replace(/(\d),\s+(\d{3})/g, "$1,$2")
+    .trim();
+}
+
+function cleanEvidenceMetadataForDisplay(content: string) {
+  return content
+    .split("\n")
+    .filter((line) => {
+      const trimmed = line.trim();
+
+      return !/^(?:[-*•]\s*)?(?:formula|assumptions?|varsayımlar|confidence|güven|evidence|validation evidence|validation needed|metadata|referans|raw validation context|raw benchmark context|internal evidence keys?|benchmark(?:source| source| comparison)?)\s*[:=]/i.test(trimmed);
+    })
+    .map((line) =>
+      line
+        .replace(/\s*\|\s*(?:formula|assumptions?|varsayımlar|confidence|güven|evidence|validation evidence|validation needed|metadata|referans|raw validation context|raw benchmark context|internal evidence keys?|benchmark(?:source| source| comparison)?)\s*[:=][^|\n]+/gi, "")
+        .replace(/\b(?:formula|assumptions?|varsayımlar|confidence|güven|evidence|validation evidence|validation needed|metadata|referans|raw validation context|raw benchmark context|internal evidence keys?|benchmarkSource|benchmark)\s*=\s*[^|;\n]+/gi, "")
+        .replace(/\bplanning assumptions require validation\b[.;]?/gi, "")
+        .trimEnd()
+    )
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
 
@@ -2317,6 +2337,26 @@ function getPdfFinancialValidationNeed(badge: FinancialMetricConfidenceBadge) {
   return getEvidenceValidationNeed(badge);
 }
 
+function cleanPdfEvidenceMetadataText(value: string) {
+  return normalizePdfText(value)
+    .split("\n")
+    .filter((line) => {
+      const trimmed = line.trim();
+
+      return !/^(?:[-*•]\s*)?(?:formula|assumptions?|varsayımlar|confidence|güven|evidence|validation evidence|validation needed|metadata|referans|raw evidence metadata|raw validation text|raw validation context|raw benchmark context|internal evidence keys?|benchmark(?:source| source| comparison)?)\s*[:=]/i.test(trimmed);
+    })
+    .map((line) =>
+      line
+        .replace(/\s*\|\s*(?:formula|assumptions?|varsayımlar|confidence|güven|evidence|validation evidence|validation needed|metadata|referans|raw evidence metadata|raw validation text|raw validation context|raw benchmark context|internal evidence keys?|benchmark(?:source| source| comparison)?)\s*[:=][^|\n]+/gi, "")
+        .replace(/\b(?:formula|assumptions?|varsayımlar|confidence|güven|evidence|validation evidence|validation needed|metadata|referans|raw evidence metadata|raw validation text|raw validation context|raw benchmark context|internal evidence keys?|benchmarkSource|benchmark)\s*=\s*[^|;\n]+/gi, "")
+        .replace(/\bplanning assumptions require validation\b[.;]?/gi, "")
+        .trimEnd()
+    )
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 function buildPdfFinancialMetricDetailLine(
   label: string,
   aliases: string[] | readonly string[],
@@ -2324,10 +2364,8 @@ function buildPdfFinancialMetricDetailLine(
   value: string
 ) {
   const compactValue = dedupePdfFinancialMetricValue(value) || "—";
-  const confidenceLevel = getFinancialMetricConfidenceBadge(label, aliases, content, value);
-  const confidence = getPdfFinancialMetricConfidenceBadge(confidenceLevel);
 
-  return `${label}: ${compactValue} | Evidence: ${confidence} | Validation needed: ${getPdfFinancialValidationNeed(confidenceLevel)}`;
+  return `${label}: ${compactValue}`;
 }
 
 function getFinancialMetricConfidenceBadgeClass(badge: FinancialMetricConfidenceBadge) {
@@ -2735,7 +2773,7 @@ function extractScenarioSnippet(content: string, scenario: string) {
 }
 
 function extractShortDescription(content: string, aliases: string[] | readonly string[]) {
-  const detail = extractMetricDetail(content, aliases)
+  const detail = cleanPdfEvidenceMetadataText(extractMetricDetail(content, aliases))
     .replace(/\b(?:formula|assumptions?|benchmark|source|confidence)\s*[:=]\s*/gi, "")
     .replace(/\s*\|\s*/g, " ")
     .trim();
@@ -2746,7 +2784,7 @@ function extractShortDescription(content: string, aliases: string[] | readonly s
 
   const raw = normalizePdfText(extractMetricValueFromAliases(content, aliases));
 
-  return raw
+  return cleanPdfEvidenceMetadataText(raw)
     .split(/\b(?:formula|assumptions?|confidence|benchmark(?: source| comparison)?|explanation|justification|source)\b\s*[:\-–—]/i)
     .slice(1)
     .join(" ")
@@ -3070,11 +3108,11 @@ function formatPdfReadableContent(section: ReportSection) {
   }
 
   if (section.field === "tamSamSom" || isTamSamSomTitle(section.title)) {
-    return normalizePdfTamSamSomBodyContent(section.content);
+    return cleanPdfEvidenceMetadataText(normalizePdfTamSamSomBodyContent(section.content));
   }
 
   const content = removeDuplicateVisualText(section.title, section.content);
-  const normalized = normalizePdfText(content);
+  const normalized = cleanPdfEvidenceMetadataText(content);
 
   if (!normalized) {
     return "";

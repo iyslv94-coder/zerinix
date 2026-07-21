@@ -176,12 +176,32 @@ function formatMetricCardValue(value: string) {
   }
 
   return cleanValue
-    .split(/\b(?:formula|assumptions?|confidence|benchmark(?: source| comparison)?|explanation|justification|source)\b\s*[:\-–—]/i)[0]
+    .split(/\b(?:formula|assumptions?|varsayımlar|confidence|güven|evidence|validation evidence|validation needed|metadata|referans|benchmark(?: source| comparison)?|raw benchmark context|explanation|justification|source)\b\s*[:\-–—=]/i)[0]
     .split(/\s+(?:based on|using|assuming|calculated from|derived from)\s+/i)[0]
     .split(/\s*[;|]\s*/)[0]
     .replace(/^["'`]+|["'`]+$/g, "")
     .replace(/(\d)\.\s+(\d)(\s*[kKmMbB%])?/g, "$1.$2$3")
     .replace(/(\d),\s+(\d{3})/g, "$1,$2")
+    .trim();
+}
+
+function cleanEvidenceMetadataForDisplay(content: string) {
+  return content
+    .split("\n")
+    .filter((line) => {
+      const trimmed = line.trim();
+
+      return !/^(?:[-*•]\s*)?(?:formula|assumptions?|varsayımlar|confidence|güven|evidence|validation evidence|validation needed|metadata|referans|raw validation context|raw benchmark context|internal evidence keys?|benchmark(?:source| source| comparison)?)\s*[:=]/i.test(trimmed);
+    })
+    .map((line) =>
+      line
+        .replace(/\s*\|\s*(?:formula|assumptions?|varsayımlar|confidence|güven|evidence|validation evidence|validation needed|metadata|referans|raw validation context|raw benchmark context|internal evidence keys?|benchmark(?:source| source| comparison)?)\s*[:=][^|\n]+/gi, "")
+        .replace(/\b(?:formula|assumptions?|varsayımlar|confidence|güven|evidence|validation evidence|validation needed|metadata|referans|raw validation context|raw benchmark context|internal evidence keys?|benchmarkSource|benchmark)\s*=\s*[^|;\n]+/gi, "")
+        .replace(/\bplanning assumptions require validation\b[.;]?/gi, "")
+        .trimEnd()
+    )
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
 
@@ -1655,7 +1675,7 @@ function CitationList({ content }: { content: string }) {
 }
 
 function ReportText({ content }: { content: string }) {
-  const blocks = sanitizeAiResponseText(content)
+  const blocks = cleanEvidenceMetadataForDisplay(sanitizeAiResponseText(content))
     .split(/\n{2,}/)
     .map((block) => block.trim())
     .filter(Boolean);
