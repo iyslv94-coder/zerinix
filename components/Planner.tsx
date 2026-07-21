@@ -8342,6 +8342,11 @@ export default function Planner({
   );
   const showDesktopAnalysisCards =
     !initialReportConversationIsActive && !activeConversationHasReportOutput;
+  const showDesktopAdvisorPanels =
+    hasWorkspaceActivity &&
+    !initialReport &&
+    !restoredReportMode &&
+    !activeConversationHasReportOutput;
   const advisorSuggestions = [
     "Validate my business idea",
     "Find my strongest competitors",
@@ -8910,7 +8915,7 @@ export default function Planner({
 		              </section>
 	              ) : null}
 
-	              {hasWorkspaceActivity ? (
+		              {showDesktopAdvisorPanels ? (
                 <>
                   <section className="rounded-[1.55rem] border border-white/10 bg-white/[0.045] p-3.5 shadow-xl shadow-black/20 ring-1 ring-white/[0.025] backdrop-blur-2xl">
                     <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-teal-200/70">
