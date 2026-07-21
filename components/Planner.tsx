@@ -7339,7 +7339,35 @@ export default function Planner({
   }
 
   async function regenerateResponse() {
-    const request = lastRequest?.prompt.trim() ? lastRequest : null;
+    const activeReportMode = [...messages]
+      .reverse()
+      .find((message) => message.mode === "plan" || message.mode === "market")
+      ?.mode;
+    const reportMode =
+      activeReportMode ||
+      (restoredReportMode && activeReportId === initialReport?.id
+        ? restoredReportMode
+        : null);
+    const reportPrompt =
+      reportMode
+        ? [...messages]
+            .reverse()
+            .find(
+              (message) =>
+                message.role === "user" &&
+                message.mode === reportMode &&
+                message.content.trim()
+            )
+            ?.content.trim() ||
+          initialReport?.prompt.trim() ||
+          (lastRequest?.mode === reportMode ? lastRequest.prompt.trim() : "")
+        : "";
+    const request =
+      reportMode && reportPrompt
+        ? { mode: reportMode, prompt: reportPrompt }
+        : lastRequest?.prompt.trim()
+          ? lastRequest
+          : null;
 
     if (!request || isWorking) {
       return;
@@ -8333,7 +8361,7 @@ export default function Planner({
     isReportWorking ||
     Boolean(planReport || marketReport || result || reportGenerationError);
   const initialReportConversationIsActive = Boolean(
-    restoredReportMode && initialReport?.id && activeConversation?.id === initialReport.id
+    restoredReportMode && initialReport?.id && activeReportId === initialReport.id
   );
   const activeConversationHasReportOutput = Boolean(
     activeConversation?.messages?.some(
@@ -8344,8 +8372,7 @@ export default function Planner({
     !initialReportConversationIsActive && !activeConversationHasReportOutput;
   const showDesktopAdvisorPanels =
     hasWorkspaceActivity &&
-    !initialReport &&
-    !restoredReportMode &&
+    !initialReportConversationIsActive &&
     !activeConversationHasReportOutput;
   const advisorSuggestions = [
     "Validate my business idea",
