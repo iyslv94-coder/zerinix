@@ -6677,6 +6677,8 @@ export default function Planner({
       initialConversations,
     })
   );
+  const [regeneratingReportMode, setRegeneratingReportMode] =
+    useState<ChatMode | null>(null);
   const chatScrollerRef = useRef<HTMLDivElement | null>(null);
   const composerRef = useRef<HTMLInputElement | null>(null);
   const isNearBottomRef = useRef(true);
@@ -7373,6 +7375,10 @@ export default function Planner({
       return;
     }
 
+    setRegeneratingReportMode(
+      request.mode === "plan" || request.mode === "market" ? request.mode : null
+    );
+
     const previousAssistantMessage = [...messages]
       .reverse()
       .find((message) => message.role === "assistant");
@@ -7395,6 +7401,7 @@ export default function Planner({
     } else if (request.mode === "market") {
       void analyzeMarket(request.prompt, false);
     } else {
+      setRegeneratingReportMode(null);
       void sendChatMessage(request.prompt, false, previousAssistantMessage?.id);
     }
   }
@@ -8102,6 +8109,7 @@ export default function Planner({
       );
     } finally {
       setLoading(false);
+      setRegeneratingReportMode(null);
     }
   }
 
@@ -8309,6 +8317,7 @@ export default function Planner({
       );
     } finally {
       setAnalyzing(false);
+      setRegeneratingReportMode(null);
     }
   }
 
@@ -8368,12 +8377,16 @@ export default function Planner({
       (message) => message.mode === "plan" || message.mode === "market"
     )
   );
+  const isReportModeActive =
+    activeConversationHasReportOutput ||
+    Boolean(regeneratingReportMode) ||
+    (isReportWorking && (activeMode === "plan" || activeMode === "market"));
   const showDesktopAnalysisCards =
-    !initialReportConversationIsActive && !activeConversationHasReportOutput;
+    !initialReportConversationIsActive && !isReportModeActive;
   const showDesktopAdvisorPanels =
     hasWorkspaceActivity &&
     !initialReportConversationIsActive &&
-    !activeConversationHasReportOutput;
+    !isReportModeActive;
   const advisorSuggestions = [
     "Validate my business idea",
     "Find my strongest competitors",
