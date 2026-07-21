@@ -8332,6 +8332,16 @@ export default function Planner({
     hasConversationMessages ||
     isReportWorking ||
     Boolean(planReport || marketReport || result || reportGenerationError);
+  const initialReportConversationIsActive = Boolean(
+    restoredReportMode && initialReport?.id && activeConversation?.id === initialReport.id
+  );
+  const activeConversationHasReportOutput = Boolean(
+    activeConversation?.messages?.some(
+      (message) => message.mode === "plan" || message.mode === "market"
+    )
+  );
+  const showDesktopAnalysisCards =
+    !initialReportConversationIsActive && !activeConversationHasReportOutput;
   const advisorSuggestions = [
     "Validate my business idea",
     "Find my strongest competitors",
@@ -8826,13 +8836,14 @@ export default function Planner({
 		              </section>
 		            ) : null}
 
+	              {showDesktopAnalysisCards ? (
 		              <section className="transition-all duration-200 ease-out">
-					                <div className="overflow-hidden rounded-[1.75rem] border border-white/10 bg-white/[0.045] p-3.5 shadow-2xl shadow-black/35 ring-1 ring-white/[0.035] backdrop-blur-2xl">
-	                  <div className="grid gap-3 md:grid-cols-3">
-                    {modeCards.map((modeCard) => {
-                      const Icon = modeCard.icon;
-                      const selected = selectedDesktopAnalysisMode === modeCard.mode;
-                      const recommended =
+						                <div className="overflow-hidden rounded-[1.75rem] border border-white/10 bg-white/[0.045] p-3.5 shadow-2xl shadow-black/35 ring-1 ring-white/[0.035] backdrop-blur-2xl">
+		                  <div className="grid gap-3 md:grid-cols-3">
+	                    {modeCards.map((modeCard) => {
+	                      const Icon = modeCard.icon;
+	                      const selected = selectedDesktopAnalysisMode === modeCard.mode;
+	                      const recommended =
                         !selectedDesktopAnalysisMode && recommendedAnalysisMode === modeCard.mode;
 
                       return (
@@ -8895,10 +8906,11 @@ export default function Planner({
 	                    })}
 	                  </div>
 
-	                </div>
-	              </section>
+		                </div>
+		              </section>
+	              ) : null}
 
-              {hasWorkspaceActivity ? (
+	              {hasWorkspaceActivity ? (
                 <>
                   <section className="rounded-[1.55rem] border border-white/10 bg-white/[0.045] p-3.5 shadow-xl shadow-black/20 ring-1 ring-white/[0.025] backdrop-blur-2xl">
                     <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-teal-200/70">
