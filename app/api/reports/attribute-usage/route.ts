@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { createServiceRoleClient } from "@/app/lib/supabase/admin";
 import { createClient } from "@/app/lib/supabase/server";
 import { noStoreJson } from "@/app/lib/security/api-response";
+import { checkRateLimit, getClientIpFromRequest } from "@/app/lib/security/rate-limit";
 import { validateApiRequest } from "@/app/lib/security/request-validation";
 
 function readBodyString(value: unknown) {
@@ -27,6 +28,18 @@ export async function POST(request: NextRequest) {
 
   if (!user) {
     return noStoreJson({ error: "Authentication required." }, { status: 401 });
+  }
+
+  const rateLimit = checkRateLimit(
+    `reports:attribute-usage:${user.id}:${getClientIpFromRequest(request)}`,
+    {
+      limit: 30,
+      windowMs: 10 * 60 * 1000,
+    }
+  );
+
+  if (!rateLimit.allowed) {
+    return noStoreJson({ error: "Too many attribution attempts." }, { status: 429 });
   }
 
   const body = await request.json().catch(() => null) as Record<string, unknown> | null;

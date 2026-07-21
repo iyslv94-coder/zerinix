@@ -52,15 +52,7 @@ export async function POST(req: NextRequest) {
   const supabase = await createClient();
   const user = await getAuthenticatedUser(supabase);
 
-  console.log("[api:stripe:checkout] request received", {
-    authenticated: Boolean(user),
-    userId: user?.id || null,
-    userEmail: user?.email || null,
-  });
-
   if (!user) {
-    console.log("[api:stripe:checkout] unauthenticated request");
-
     return noStoreJson({ error: "Authentication required." }, { status: 401 });
   }
 
@@ -71,12 +63,6 @@ export async function POST(req: NextRequest) {
   });
 
   if (!rateLimit.allowed) {
-    console.log("[api:stripe:checkout] rate limited", {
-      userId: user.id,
-      ip,
-      resetAt: rateLimit.resetAt,
-    });
-
     return noStoreJson(
       { error: "Too many billing attempts. Please wait before trying again." },
       { status: 429, headers: getRateLimitHeaders(rateLimit) }
@@ -85,25 +71,13 @@ export async function POST(req: NextRequest) {
 
   const plan = await readPlan(req);
 
-  console.log("[api:stripe:checkout] selected plan", {
-    userId: user.id,
-    plan: plan || null,
-  });
-
   if (!plan) {
-    console.log("[api:stripe:checkout] invalid plan");
-
     return noStoreJson({ error: "Invalid billing plan." }, { status: 400 });
   }
 
   const planConfig = billingPlans.find((item) => item.id === plan);
 
   if (!planConfig?.databaseTier) {
-    console.log("[api:stripe:checkout] plan has no database tier", {
-      plan,
-      planConfig,
-    });
-
     return noStoreJson(
       { error: "This plan is not configured for subscriptions yet." },
       { status: 400 }
@@ -113,23 +87,7 @@ export async function POST(req: NextRequest) {
   const priceState = getPlanPriceState(plan);
   const checkoutConfig = getStripeCheckoutConfiguration(plan);
 
-  console.log("[api:stripe:checkout] readiness", {
-    userId: user.id,
-    plan,
-    priceId: checkoutConfig.priceId,
-    checkoutConfigured: checkoutConfig.configured,
-    checkoutMissing: checkoutConfig.missing,
-    priceConfigured: priceState.configured,
-    priceLabel: priceState.label,
-  });
-
   if (!checkoutConfig.configured || !priceState.configured) {
-    console.log("[api:stripe:checkout] checkout not configured", {
-      userId: user.id,
-      plan,
-      missing: checkoutConfig.missing,
-    });
-
     return noStoreJson(
       {
         error: "Billing is not configured yet. Your current plan was not changed.",
@@ -141,26 +99,10 @@ export async function POST(req: NextRequest) {
 
   const billingProfile = await getUserBillingProfile(supabase, user.id);
 
-  console.log("[api:stripe:checkout] billing profile", {
-    userId: user.id,
-    plan,
-    hasBillingProfile: Boolean(billingProfile),
-    stripeCustomerId: billingProfile?.stripe_customer_id || null,
-    stripeSubscriptionId: billingProfile?.stripe_subscription_id || null,
-    stripeSubscriptionStatus: billingProfile?.stripe_subscription_status || null,
-  });
-
   let checkout: Awaited<ReturnType<typeof createStripeCheckoutSession>>;
   const idempotencyKey = `checkout:${user.id}:${plan}:${randomUUID()}`;
 
   try {
-    console.log("[api:stripe:checkout] createCheckoutSession call", {
-      userId: user.id,
-      plan,
-      priceId: checkoutConfig.priceId,
-      idempotencyKey,
-    });
-
     checkout = await createStripeCheckoutSession({
       userId: user.id,
       userEmail: user.email || "",
@@ -170,10 +112,8 @@ export async function POST(req: NextRequest) {
     });
   } catch (error) {
     console.error("[api:stripe:checkout] createCheckoutSession exception", {
-      userId: user.id,
       plan,
       message: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : null,
     });
 
     return noStoreJson(
@@ -189,24 +129,18 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  console.log("[api:stripe:checkout] createCheckoutSession result", {
-    userId: user.id,
-    plan,
-    ok: checkout.ok,
-    sessionId: checkout.ok ? checkout.data.id : null,
-    checkoutUrl: checkout.ok ? checkout.data.url : null,
-    errorMessage: checkout.ok ? null : checkout.message,
-  });
-
   if (!checkout.ok) {
+    console.error("[api:stripe:checkout] createCheckoutSession failed", {
+      plan,
+      message: checkout.message,
+    });
+
     return noStoreJson({ error: checkout.message }, { status: 400 });
   }
 
   if (!checkout.data.url) {
-    console.log("[api:stripe:checkout] missing checkout url", {
-      userId: user.id,
+    console.error("[api:stripe:checkout] createCheckoutSession missing url", {
       plan,
-      sessionId: checkout.data.id,
     });
 
     return noStoreJson(

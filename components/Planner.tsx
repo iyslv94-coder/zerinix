@@ -57,6 +57,14 @@ import { sanitizeAiResponseText } from "@/app/lib/ai/response-sanitization";
 import { logOperationalInfo } from "@/app/lib/security/logging";
 import { isAmbiguousBusinessRequest } from "@/app/lib/business-idea-detection";
 import {
+  buildExecutiveSnapshot,
+  compactExecutiveDecisionMemoSections,
+  getReportPresentationLabels,
+  getSectionTakeaway,
+  isExecutivePresentationSection,
+  normalizeReportPresentationText,
+} from "@/app/lib/report-presentation";
+import {
   containsReportGenerationFailure,
   isReportGenerationFailureText,
 } from "@/app/lib/report-errors";
@@ -1264,7 +1272,9 @@ function MarkdownRenderer({
   streaming?: boolean;
 }) {
   const deferredContent = useDeferredValue(content);
-  const renderedContent = cleanEvidenceMetadataForDisplay(streaming ? deferredContent : content);
+  const renderedContent = normalizeReportPresentationText(
+    cleanEvidenceMetadataForDisplay(streaming ? deferredContent : content)
+  );
   const blocks = renderedContent.split(/```/g);
 
   return (
@@ -4254,7 +4264,7 @@ function getReportArticleClass(section: ReportSection) {
 function AnalysisNotes({
   children,
   compact,
-  label = "Full analysis notes",
+  label = "Details",
 }: {
   children: ReactNode;
   compact: boolean;
@@ -4273,6 +4283,197 @@ function AnalysisNotes({
         {children}
       </div>
     </details>
+  );
+}
+
+function getRiskIndicatorClass(level: string) {
+  if (level === "High") {
+    return "border-red-300/25 bg-red-300/10 text-red-100";
+  }
+
+  if (level === "Medium") {
+    return "border-amber-300/25 bg-amber-300/10 text-amber-100";
+  }
+
+  return "border-teal-300/25 bg-teal-300/10 text-teal-100";
+}
+
+function SnapshotGauge({
+  label,
+  value,
+  display,
+}: {
+  label: string;
+  value: number | null;
+  display: string;
+}) {
+  const safeValue = value ?? 0;
+
+  return (
+    <div className="rounded-2xl border border-white/10 bg-black/25 p-3">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-500">
+        {label}
+      </p>
+      <div className="mt-3 flex items-center gap-3">
+        <div
+          className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full"
+          style={{
+            background: `conic-gradient(rgb(94 234 212) ${safeValue * 3.6}deg, rgba(255,255,255,0.08) 0deg)`,
+          }}
+        >
+          <div className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-zinc-950 text-[11px] font-semibold text-white">
+            {value === null ? "--" : value}
+          </div>
+        </div>
+        <p className="min-w-0 text-sm font-semibold text-zinc-200">{display}</p>
+      </div>
+    </div>
+  );
+}
+
+function ExecutiveSnapshotPanel({ section }: { section: ReportSection }) {
+  if (!isExecutivePresentationSection(section)) {
+    return null;
+  }
+
+  const snapshot = buildExecutiveSnapshot(section.content);
+  const labels = getReportPresentationLabels(section.content);
+  const groups = [
+    { label: labels.why, items: snapshot.why },
+    { label: labels.mainRisks, items: snapshot.risks },
+    { label: labels.nextActions, items: snapshot.actions },
+  ];
+  const metrics = [
+    { label: labels.financialQuality, value: snapshot.financialQuality },
+    { label: labels.reportQuality, value: snapshot.reportQuality },
+    { label: labels.mainRisk, value: snapshot.mainRisk },
+    { label: labels.nextAction, value: snapshot.nextAction },
+  ];
+
+  return (
+    <div className="mb-5 rounded-[1.75rem] border border-teal-200/15 bg-[linear-gradient(135deg,rgba(94,234,212,0.09),rgba(255,255,255,0.025))] p-4 shadow-inner shadow-teal-950/10">
+      <div className="flex flex-col gap-3 border-b border-white/10 pb-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.26em] text-teal-200/75">
+            {labels.executiveSnapshot}
+          </p>
+          <h4 className="mt-2 text-xl font-semibold tracking-tight text-white">
+            {labels.decision}: {snapshot.decision}
+          </h4>
+        </div>
+        <span className="w-fit rounded-full border border-white/10 bg-black/30 px-3 py-1.5 text-xs font-semibold text-zinc-200">
+          {labels.confidence}: {snapshot.confidence}
+        </span>
+      </div>
+      <div className="mt-4 grid gap-3 md:grid-cols-3">
+        <SnapshotGauge
+          label={labels.confidenceGauge}
+          value={snapshot.confidenceScore}
+          display={snapshot.confidence}
+        />
+        <SnapshotGauge
+          label={labels.founderScoreGauge}
+          value={snapshot.founderScoreValue}
+          display={snapshot.founderScore}
+        />
+        <div className="rounded-2xl border border-white/10 bg-black/25 p-3">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-500">
+            {labels.riskLevel}
+          </p>
+          <div className="mt-3 flex items-center gap-3">
+            <span className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${getRiskIndicatorClass(snapshot.riskLevel)}`}>
+              {snapshot.riskLevel}
+            </span>
+            <p className="line-clamp-2 text-sm leading-5 text-zinc-300">{snapshot.mainRisk}</p>
+          </div>
+        </div>
+      </div>
+      <div className="mt-3 grid gap-3 lg:grid-cols-4">
+        {metrics.map((metric) => (
+          <div key={metric.label} className="rounded-2xl border border-white/10 bg-white/[0.025] p-3">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
+              {metric.label}
+            </p>
+            <p className="mt-2 line-clamp-2 text-sm font-medium leading-5 text-zinc-200">
+              {metric.value}
+            </p>
+          </div>
+        ))}
+      </div>
+      <div className="mt-3 grid gap-3 lg:grid-cols-2">
+        <div className="rounded-2xl border border-white/10 bg-black/25 p-3">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-teal-200/70">
+            {labels.riskHeatmap}
+          </p>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            {snapshot.riskHeatmap.map((risk) => (
+              <div key={risk.label} className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.025] px-3 py-2">
+                <span className="text-xs text-zinc-300">{risk.label}</span>
+                <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${getRiskIndicatorClass(risk.level)}`}>
+                  {risk.level}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="rounded-2xl border border-white/10 bg-black/25 p-3">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-teal-200/70">
+            {labels.confidenceRadar}
+          </p>
+          <div className="mt-3 space-y-2">
+            {snapshot.confidenceRadar.map((dimension) => (
+              <div key={dimension.label} className="grid grid-cols-[5.75rem_minmax(0,1fr)_2.5rem] items-center gap-2">
+                <span className="text-xs text-zinc-400">{dimension.label}</span>
+                <span className="h-2 overflow-hidden rounded-full bg-white/10">
+                  <span
+                    className="block h-full rounded-full bg-teal-200"
+                    style={{ width: `${dimension.score ?? 0}%` }}
+                  />
+                </span>
+                <span className="text-right text-xs font-semibold text-zinc-300">
+                  {dimension.score === null ? "--" : dimension.score}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+      <div className="mt-4 grid gap-3 lg:grid-cols-3">
+        {groups.map((group) => (
+          <div key={group.label} className="rounded-2xl border border-white/10 bg-black/25 p-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500">
+              {group.label}
+            </p>
+            <ul className="mt-3 space-y-2 text-sm leading-6 text-zinc-300">
+              {group.items.map((item) => (
+                <li key={item} className="flex gap-2">
+                  <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-teal-200/80" />
+                  <span className="line-clamp-3">{item}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SectionTakeaway({ content }: { content: string }) {
+  const takeaway = getSectionTakeaway(content);
+  const labels = getReportPresentationLabels(content);
+
+  if (!takeaway) {
+    return null;
+  }
+
+  return (
+    <div className="mb-4 rounded-2xl border border-white/10 bg-white/[0.035] p-4">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-teal-200/70">
+        {labels.keyTakeaway}
+      </p>
+      <p className="mt-2 text-sm leading-6 text-zinc-300">{takeaway}</p>
+    </div>
   );
 }
 
@@ -5007,7 +5208,9 @@ const ReportPanel = memo(function ReportPanel({
       const bodyLineHeight = 5.85;
       const cardHeaderHeight = 25;
       const cardBottomPadding = 11;
-      const basePdfSections = dedupePdfSections(mergePdfSourceSections(sections));
+      const basePdfSections = compactExecutiveDecisionMemoSections(
+        dedupePdfSections(mergePdfSourceSections(sections))
+      );
       const pdfLanguageSource =
         sourcePrompt?.trim() ||
         [reportTitle, ...basePdfSections.map((section) => `${section.title}\n${section.content}`)]
@@ -5124,6 +5327,33 @@ const ReportPanel = memo(function ReportPanel({
           isOrphanBulletText
         );
 
+      const executiveSnapshot = buildExecutiveSnapshot(fullReportContent);
+
+      const drawDecisionGauge = (
+        label: string,
+        score: number | null,
+        display: string,
+        x: number,
+        gaugeY: number,
+        width: number
+      ) => {
+        const safeScore = Math.max(0, Math.min(100, score ?? 0));
+
+        pdf.setFillColor("#09090b");
+        pdf.setDrawColor("#27272a");
+        pdf.roundedRect(x, gaugeY, width, 28, 4, 4, "FD");
+        pdf.setFontSize(6.8);
+        pdf.setTextColor("#71717a");
+        pdf.text(localizePdfPresentationLabel(label, pdfLocale).toUpperCase(), x + 5, gaugeY + 7);
+        pdf.setFontSize(15);
+        pdf.setTextColor("#ffffff");
+        pdf.text(display, x + 5, gaugeY + 17);
+        pdf.setFillColor("#27272a");
+        pdf.roundedRect(x + 5, gaugeY + 21, width - 10, 2.4, 1.2, 1.2, "F");
+        pdf.setFillColor("#5eead4");
+        pdf.roundedRect(x + 5, gaugeY + 21, ((width - 10) * safeScore) / 100, 2.4, 1.2, 1.2, "F");
+      };
+
       const drawCoverPage = () => {
         paintPage();
         pdf.setFillColor("#020617");
@@ -5135,62 +5365,92 @@ const ReportPanel = memo(function ReportPanel({
         drawLogoMark(margin + 12, 32, 14);
         pdf.setFontSize(10);
         pdf.setTextColor("#5eead4");
-        pdf.text(localizePdfPresentationLabel("ZERINIX REPORT", pdfLocale), margin + 31, 41);
+        pdf.text("ZERINIX EXECUTIVE DECISION CENTER", margin + 31, 41);
 
-        pdf.setFontSize(32);
+        pdf.setFontSize(24);
         pdf.setTextColor("#ffffff");
         pdf.text(localizedReportTitle, margin + 12, 60, { maxWidth: contentWidth - 24 });
 
-        pdf.setFontSize(11);
+        pdf.setFontSize(8.5);
         pdf.setTextColor("#a1a1aa");
-        pdf.text(localizePdfPresentationText("Premium AI business intelligence report for founder and investor decisions.", pdfLocale), margin + 12, 78, {
+        pdf.text(localizePdfPresentationText("Investor-grade decision snapshot generated from the current ZERINIX intelligence layers.", pdfLocale), margin + 12, 75, {
           maxWidth: contentWidth - 24,
         });
 
-        drawTag(localizePdfPresentationLabel("AI Ready", pdfLocale), margin + 12, 94, 28);
-        drawTag(localizePdfPresentationLabel("Investor Ready", pdfLocale), margin + 44, 94, 38);
-
-        const coverMeta = [
-          [localizePdfPresentationLabel("Report Type", pdfLocale), localizedReportTitle],
-          ["Business Idea", businessIdea],
-          ["Date", new Date().toLocaleDateString("tr-TR")],
-          ["Theme", "Strategic analysis, financial dashboard, and executive recommendation"],
+        const metricCards = [
+          [localizePdfPresentationLabel("Decision", pdfLocale), executiveSnapshot.decision],
+          [localizePdfPresentationLabel("Confidence Score", pdfLocale), executiveSnapshot.confidence],
+          [localizePdfPresentationLabel("AI Founder Score", pdfLocale), executiveSnapshot.founderScore],
+          [localizePdfPresentationLabel("Financial Quality", pdfLocale), executiveSnapshot.financialQuality],
+          [localizePdfPresentationLabel("Report Quality", pdfLocale), executiveSnapshot.reportQuality],
+          [localizePdfPresentationLabel("Main Risk", pdfLocale), executiveSnapshot.mainRisk],
+          [localizePdfPresentationLabel("Next Action", pdfLocale), executiveSnapshot.nextAction],
         ];
 
-        let metaY = 122;
-        coverMeta.forEach(([label, value]) => {
+        const metricColumns = 3;
+        const metricGap = 5;
+        const metricCardWidth = (contentWidth - 24 - metricGap * (metricColumns - 1)) / metricColumns;
+        metricCards.forEach(([label, value], index) => {
+          const cardX = margin + 12 + (index % metricColumns) * (metricCardWidth + metricGap);
+          const cardY = 91 + Math.floor(index / metricColumns) * 20;
+
           pdf.setFillColor("#09090b");
           pdf.setDrawColor("#27272a");
-          pdf.roundedRect(margin + 12, metaY, contentWidth - 24, 17, 4, 4, "FD");
+          pdf.roundedRect(cardX, cardY, metricCardWidth, 17, 4, 4, "FD");
           pdf.setFontSize(7.5);
           pdf.setTextColor("#71717a");
-          pdf.text(label.toUpperCase(), margin + 18, metaY + 6);
-          pdf.setFontSize(9.5);
+          pdf.text(label.toUpperCase(), cardX + 5, cardY + 6);
+          pdf.setFontSize(index > 4 ? 7.7 : 10);
           pdf.setTextColor("#f4f4f5");
-          pdf.text(value, margin + 18, metaY + 12, { maxWidth: contentWidth - 36 });
-          metaY += 22;
+          pdf.text((pdf.splitTextToSize(value, metricCardWidth - 10) as string[]).slice(0, 2), cardX + 5, cardY + 12, {
+            lineHeightFactor: 1.05,
+            maxWidth: metricCardWidth - 10,
+          });
         });
 
-        const coverCards = [
-          "TAM / SAM / SOM",
-          "Unit Economics",
-          "Scenario Analysis",
-          "Founder Roadmap",
-        ];
+        const gaugeWidth = (contentWidth - 33) / 2;
+        drawDecisionGauge("Confidence Gauge", executiveSnapshot.confidenceScore, executiveSnapshot.confidence, margin + 12, 156, gaugeWidth);
+        drawDecisionGauge("Founder Score Gauge", executiveSnapshot.founderScoreValue, executiveSnapshot.founderScore, margin + 21 + gaugeWidth, 156, gaugeWidth);
 
-        coverCards.forEach((label, index) => {
-          const cardWidth = (contentWidth - 33) / 2;
-          const cardX = margin + 12 + (index % 2) * (cardWidth + 9);
-          const cardY = 218 + Math.floor(index / 2) * 20;
-
-          pdf.setFillColor("#0a0a0a");
-          pdf.setDrawColor("#27272a");
-          pdf.roundedRect(cardX, cardY, cardWidth, 14, 4, 4, "FD");
-          pdf.setFillColor("#5eead4");
-          pdf.circle(cardX + 6, cardY + 7, 1.7, "F");
-          pdf.setFontSize(8);
+        const heatmapY = 195;
+        const panelWidth = (contentWidth - 33) / 2;
+        pdf.setFillColor("#09090b");
+        pdf.setDrawColor("#27272a");
+        pdf.roundedRect(margin + 12, heatmapY, panelWidth, 42, 4, 4, "FD");
+        pdf.setFontSize(7.2);
+        pdf.setTextColor("#5eead4");
+        pdf.text(localizePdfPresentationLabel("Risk Heatmap", pdfLocale).toUpperCase(), margin + 17, heatmapY + 7);
+        executiveSnapshot.riskHeatmap.forEach((risk, index) => {
+          const rowY = heatmapY + 14 + index * 5;
+          pdf.setFontSize(6.4);
           pdf.setTextColor("#d4d4d8");
-          pdf.text(label, cardX + 11, cardY + 8.5, { maxWidth: cardWidth - 15 });
+          pdf.text(localizePdfPresentationLabel(risk.label, pdfLocale), margin + 17, rowY, { maxWidth: panelWidth - 33 });
+          pdf.setFillColor(risk.level === "High" ? "#7f1d1d" : risk.level === "Medium" ? "#713f12" : "#064e3b");
+          pdf.roundedRect(margin + panelWidth - 9, rowY - 3.2, 16, 4.2, 2, 2, "F");
+          pdf.setFontSize(5.4);
+          pdf.setTextColor("#ffffff");
+          pdf.text(risk.level, margin + panelWidth - 6.5, rowY - 0.2, { maxWidth: 12 });
+        });
+
+        pdf.setFillColor("#09090b");
+        pdf.setDrawColor("#27272a");
+        pdf.roundedRect(margin + 21 + panelWidth, heatmapY, panelWidth, 42, 4, 4, "FD");
+        pdf.setFontSize(7.2);
+        pdf.setTextColor("#5eead4");
+        pdf.text(localizePdfPresentationLabel("Confidence Radar", pdfLocale).toUpperCase(), margin + 26 + panelWidth, heatmapY + 7);
+        executiveSnapshot.confidenceRadar.forEach((dimension, index) => {
+          const rowY = heatmapY + 14 + index * 5;
+          const score = Math.max(0, Math.min(100, dimension.score ?? 0));
+          pdf.setFontSize(6.4);
+          pdf.setTextColor("#d4d4d8");
+          pdf.text(localizePdfPresentationLabel(dimension.label, pdfLocale), margin + 26 + panelWidth, rowY, { maxWidth: 34 });
+          pdf.setFillColor("#27272a");
+          pdf.roundedRect(margin + 58 + panelWidth, rowY - 2.8, panelWidth - 50, 2, 1, 1, "F");
+          pdf.setFillColor("#5eead4");
+          pdf.roundedRect(margin + 58 + panelWidth, rowY - 2.8, ((panelWidth - 50) * score) / 100, 2, 1, 1, "F");
+          pdf.setFontSize(5.8);
+          pdf.setTextColor("#a1a1aa");
+          pdf.text(dimension.score === null ? "--" : String(dimension.score), margin + contentWidth - 11, rowY - 0.8);
         });
 
         drawFooter();
@@ -6100,7 +6360,8 @@ const ReportPanel = memo(function ReportPanel({
           const isFinancialDashboard = section.field === "financialDashboard";
           const detailsContent = isFinancialDashboard
             ? ""
-            : section.content;
+            : normalizeReportPresentationText(section.content);
+          const presentationLabels = getReportPresentationLabels(section.content);
           const hasVisibleDetailsContent = detailsContent.replace(/[#*_`>\-[\]\s()]/g, "").trim().length > 0;
 
           return (
@@ -6130,6 +6391,7 @@ const ReportPanel = memo(function ReportPanel({
                     {section.field === "executiveSummary" ? (
                       <ExecutiveSummaryVisual section={section} />
                     ) : null}
+                    <ExecutiveSnapshotPanel section={section} />
                     {hasPremiumSectionVisual(section) &&
                     section.field !== "executiveSummary" &&
                     section.field !== "financialDashboard" &&
@@ -6138,12 +6400,15 @@ const ReportPanel = memo(function ReportPanel({
                     ) : null}
                     <PremiumSectionVisual section={section} />
                     {hasVisibleDetailsContent && section.field !== "tamSamSom" ? (
+                      <>
+                        <SectionTakeaway content={detailsContent} />
                       <AnalysisNotes
-                        compact={hasPremiumSectionVisual(section)}
-                        label={isFinancialDashboard ? "Metric Details" : "Full analysis notes"}
+                          compact
+                          label={isFinancialDashboard ? "Metric Details" : presentationLabels.details}
                       >
                         <MarkdownRenderer content={detailsContent} />
                       </AnalysisNotes>
+                      </>
                     ) : null}
                   </div>
                 </div>

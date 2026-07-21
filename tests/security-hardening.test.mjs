@@ -40,6 +40,8 @@ test("production security headers are configured with development-safe exception
     "Content-Security-Policy",
     "X-Frame-Options",
     "X-Content-Type-Options",
+    "X-DNS-Prefetch-Control",
+    "X-Permitted-Cross-Domain-Policies",
     "Referrer-Policy",
     "Cross-Origin-Opener-Policy",
     "Cross-Origin-Resource-Policy",
@@ -88,6 +90,7 @@ test("operational API routes validate requests and disable response caching", ()
   const routes = [
     "app/api/admin/health/route.ts",
     "app/api/reports/[id]/notify/route.ts",
+    "app/api/reports/attribute-usage/route.ts",
     "app/api/workspace-invitations/route.ts",
   ];
   const responseHelper = read("app/lib/security/api-response.ts");
@@ -107,6 +110,30 @@ test("operational API routes validate requests and disable response caching", ()
 
   assert.match(stripeWebhook, /noStoreJson/);
   assert.match(stripeWebhook, /handleStripeWebhookPayload/);
+});
+
+test("report attribution API verifies ownership and rate limits writes", () => {
+  const route = read("app/api/reports/attribute-usage/route.ts");
+
+  assert.match(route, /validateApiRequest/);
+  assert.match(route, /maxBodyBytes:\s*2048/);
+  assert.match(route, /supabase\.auth\.getUser/);
+  assert.match(route, /checkRateLimit/);
+  assert.match(route, /Too many attribution attempts/);
+  assert.match(route, /\.from\("reports"\)/);
+  assert.match(route, /\.eq\("user_id", user\.id\)/);
+  assert.match(route, /\.from\("ai_usage_events"\)/);
+});
+
+test("workspace server actions scope mutations and bound user-controlled names", () => {
+  const actions = read("app/dashboard/actions.ts");
+
+  assert.match(actions, /MAX_WORKSPACE_NAME_LENGTH\s*=\s*80/);
+  assert.match(actions, /normalizeWorkspaceName/);
+  assert.match(actions, /checkRateLimit/);
+  assert.match(actions, /workspace:mutation/);
+  assert.match(actions, /\.eq\("user_id", context\.user\.id\)/);
+  assert.match(actions, /\.slice\(0, MAX_WORKSPACE_NAME_LENGTH\)/);
 });
 
 test("chat file attachments are bounded and sanitized on the server", () => {

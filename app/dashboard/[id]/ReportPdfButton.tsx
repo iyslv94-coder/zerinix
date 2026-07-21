@@ -7,6 +7,10 @@ import type { DashboardReport } from "../report-utils";
 import { isReportGenerationFailureText } from "@/app/lib/report-errors";
 import { dedupeReportSections } from "@/app/lib/report-section-normalization";
 import {
+  buildExecutiveSnapshot,
+  compactExecutiveDecisionMemoSections,
+} from "@/app/lib/report-presentation";
+import {
   detectPdfPresentationLocale,
   localizePdfPresentationLabel,
   localizePdfPresentationText,
@@ -1800,8 +1804,10 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
       const normalizedSections = dedupeReportSections(
         normalizeSavedPdfSectionsBeforeRender(report.sections)
       );
-      const basePdfSections = dedupeReportSections(
-        dedupePdfSections(mergePdfSourceSections(normalizedSections))
+      const basePdfSections = compactExecutiveDecisionMemoSections(
+        dedupeReportSections(
+          dedupePdfSections(mergePdfSourceSections(normalizedSections))
+        )
       );
       const pdfLanguageSource =
         report.prompt?.trim() ||
@@ -1989,37 +1995,7 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
           extractScore(fullReportContent, "Investment Score") ??
           extractScore(fullReportContent, "AI Investment Score") ??
           extractScore(fullReportContent, "Overall Score");
-        const confidence = extractConfidence(fullReportContent);
         const recommendation = detectRecommendation(fullReportContent) || "WAIT";
-        const valuation = extractFirstMetric(fullReportContent, [
-          "Estimated Valuation",
-          "Valuation",
-          "Enterprise Value",
-        ]);
-        const fundingStage = extractFirstMetric(fullReportContent, [
-          "Funding Stage",
-          "Stage",
-        ]);
-        const nextAction =
-          extractFirstMetric(fullReportContent, ["Next Critical Action", "Next Action"]) ||
-          "Use the detailed recommendation section.";
-        const strengths = extractDashboardList(
-          fullReportContent,
-          ["Top 3 Strengths", "Strengths"],
-          3
-        );
-        const risks = extractDashboardList(
-          fullReportContent,
-          ["Top 3 Risks", "Top Risks", "Risks"],
-          3
-        );
-        const executiveSummaryContent =
-          pdfSections.find((section) => section.title.toLowerCase().includes("executive summary"))
-            ?.content || fullReportContent;
-        const executiveSummaryPreview = getExecutiveSummaryPreview(
-          executiveSummaryContent,
-          recommendation
-        );
         const recommendationFill =
           recommendation === "GO"
             ? "#064e3b"
@@ -2032,6 +2008,8 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
             : recommendation === "PASS"
               ? "#fecaca"
               : "#fde68a";
+        const executiveSnapshot = buildExecutiveSnapshot(fullReportContent);
+        const founderScore = executiveSnapshot.founderScoreValue ?? investmentScore;
 
         paintPage();
         pdf.setFillColor("#020617");
@@ -2043,7 +2021,7 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
         drawLogoMark(margin + 12, 28, 14);
         pdf.setFontSize(10);
         pdf.setTextColor("#5eead4");
-        pdf.text(localizePdfPresentationLabel("ZERINIX INVESTOR INTELLIGENCE", pdfLocale), margin + 31, 37);
+        pdf.text("ZERINIX EXECUTIVE DECISION CENTER", margin + 31, 37);
 
         pdf.setFontSize(24);
         pdf.setTextColor("#ffffff");
@@ -2060,7 +2038,10 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
         });
 
         const previewY = 88;
-        const previewLines = wrapPdfText(executiveSummaryPreview, contentWidth - 38).slice(0, 2);
+        const previewLines = wrapPdfText(
+          `${localizePdfPresentationLabel("Decision", pdfLocale)}: ${executiveSnapshot.decision}. ${localizePdfPresentationLabel("Main Risk", pdfLocale)}: ${executiveSnapshot.mainRisk}`,
+          contentWidth - 38
+        ).slice(0, 2);
         const previewHeight = Math.max(21, 13 + previewLines.length * 4.1);
         pdf.setFillColor("#030712");
         pdf.setDrawColor("#115e59");
@@ -2069,7 +2050,7 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
         pdf.rect(margin + 12, previewY + 4, 1.2, previewHeight - 8, "F");
         pdf.setFontSize(6.8);
         pdf.setTextColor("#99f6e4");
-        pdf.text(localizePdfPresentationLabel("EXECUTIVE SUMMARY PREVIEW", pdfLocale), margin + 18, previewY + 7.5);
+        pdf.text("EXECUTIVE DECISION SNAPSHOT", margin + 18, previewY + 7.5);
         pdf.setFontSize(8.4);
         pdf.setTextColor("#e4e4e7");
         pdf.text(previewLines, margin + 18, previewY + 14.7, {
@@ -2095,37 +2076,39 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
         pdf.setLineWidth(0.15);
         pdf.setFontSize(24);
         pdf.setTextColor("#ffffff");
-        pdf.text(String(investmentScore ?? "--"), scoreX + 20, scoreY + 31);
+        pdf.text(String(founderScore ?? "--"), scoreX + 20, scoreY + 31);
         pdf.setFontSize(6.5);
         pdf.setTextColor("#99f6e4");
-        pdf.text(localizePdfPresentationLabel("INVESTMENT SCORE", pdfLocale), scoreX + 12, scoreY + 43);
+        pdf.text(localizePdfPresentationLabel("AI Founder Score", pdfLocale).toUpperCase(), scoreX + 12, scoreY + 43);
 
         pdf.setFillColor(recommendationFill);
         pdf.setDrawColor("#334155");
         pdf.roundedRect(scoreX + 66, scoreY, contentWidth - 102, 26, 5, 5, "FD");
         pdf.setFontSize(7);
         pdf.setTextColor(recommendationText);
-        pdf.text(localizePdfPresentationLabel("RECOMMENDATION", pdfLocale), scoreX + 72, scoreY + 8);
+        pdf.text(localizePdfPresentationLabel("Decision", pdfLocale).toUpperCase(), scoreX + 72, scoreY + 8);
         pdf.setFontSize(18);
-        pdf.text(recommendation, scoreX + 72, scoreY + 20);
+        pdf.text(executiveSnapshot.decision, scoreX + 72, scoreY + 20);
 
         const cardWidth = (contentWidth - 86) / 2;
         const kpis = [
-          ["Confidence", confidence === null ? "—" : `${confidence}%`],
-          ["Estimated Valuation", valuation || "From report model"],
-          [localizePdfPresentationLabel("Funding Stage", pdfLocale), conciseFundingStage(fundingStage || report.type)],
-          ["Status", report.status],
+          ["Confidence Score", executiveSnapshot.confidence],
+          ["Financial Quality", executiveSnapshot.financialQuality],
+          ["Report Quality", executiveSnapshot.reportQuality],
+          ["Main Risk", executiveSnapshot.mainRisk],
+          ["Next Action", executiveSnapshot.nextAction],
+          [localizePdfPresentationLabel("Report Type", pdfLocale), localizePdfPresentationLabel(report.type, pdfLocale)],
         ].map(([label, value]) => {
           const labelLines = wrapPdfText(label.toUpperCase(), cardWidth - 8).slice(0, 2);
           const valueLines = wrapPdfText(
-            label === "Funding Stage" ? value : conciseCoverText(value, 46),
+            conciseCoverText(value, 46),
             cardWidth - 8
-          ).slice(0, label === "Funding Stage" ? 1 : 2);
+          ).slice(0, 2);
           const height = Math.max(18, 7 + labelLines.length * 3.1 + valueLines.length * 4.2);
 
           return { labelLines, valueLines, height };
         });
-        const rowHeights = [0, 1].map((row) =>
+        const rowHeights = Array.from({ length: Math.ceil(kpis.length / 2) }, (_, row) =>
           Math.max(kpis[row * 2]?.height ?? 18, kpis[row * 2 + 1]?.height ?? 18)
         );
 
@@ -2156,7 +2139,7 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
             .slice(0, 3)
             .map((item) => wrapPdfText(conciseCoverText(item), panelWidth - 15).slice(0, 2));
           const height = Math.max(
-            46,
+            34,
             17 + lineBlocks.reduce((sum, lines) => sum + Math.max(4.2, lines.length * 3.55) + 2.4, 0)
           );
 
@@ -2195,12 +2178,21 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
         };
 
         const insightWidth = (contentWidth - 31) / 2;
-        const strengthsLayout = getInsightPanelLayout(strengths, insightWidth);
-        const risksLayout = getInsightPanelLayout(risks, insightWidth);
+        const strengthsLayout = getInsightPanelLayout(
+          executiveSnapshot.riskHeatmap.map((risk) => `${risk.label}: ${risk.level}`),
+          insightWidth
+        );
+        const risksLayout = getInsightPanelLayout(
+          executiveSnapshot.confidenceRadar.map((dimension) =>
+            `${dimension.label}: ${dimension.score === null ? "Validation Required" : `${dimension.score}%`}`
+          ),
+          insightWidth
+        );
         const insightHeight = Math.max(strengthsLayout.height, risksLayout.height);
-        const insightY = scoreY + 72;
+        const kpiGridHeight = rowHeights.reduce((sum, height) => sum + height, 0) + (rowHeights.length - 1) * 4;
+        const insightY = scoreY + 32 + kpiGridHeight + 8;
         drawInsightPanel(
-          localizePdfPresentationLabel("Top 3 Strengths", pdfLocale),
+          localizePdfPresentationLabel("Risk Heatmap", pdfLocale),
           strengthsLayout.lineBlocks,
           margin + 12,
           insightY,
@@ -2209,7 +2201,7 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
           "#14b8a6"
         );
         drawInsightPanel(
-          "Top 3 Risks",
+          localizePdfPresentationLabel("Confidence Radar", pdfLocale),
           risksLayout.lineBlocks,
           margin + 21 + insightWidth,
           insightY,
@@ -2217,22 +2209,6 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
           insightHeight,
           "#f97316"
         );
-
-        const nextActionY = insightY + insightHeight + 9;
-        const nextActionLines = wrapPdfText(nextAction, contentWidth - 36).slice(0, 2);
-        const nextActionHeight = Math.max(21, 14 + nextActionLines.length * 4.1);
-        pdf.setFillColor("#042f2e");
-        pdf.setDrawColor("#115e59");
-        pdf.roundedRect(margin + 12, nextActionY, contentWidth - 24, nextActionHeight, 5, 5, "FD");
-        pdf.setFontSize(7);
-        pdf.setTextColor("#99f6e4");
-        pdf.text(localizePdfPresentationLabel("NEXT CRITICAL ACTION", pdfLocale), margin + 18, nextActionY + 8);
-        pdf.setFontSize(9);
-        pdf.setTextColor("#f8fafc");
-        pdf.text(nextActionLines, margin + 18, nextActionY + 16, {
-          lineHeightFactor: 1.12,
-          maxWidth: contentWidth - 36,
-        });
 
         drawFooter();
       };

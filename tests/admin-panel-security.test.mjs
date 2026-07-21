@@ -36,6 +36,7 @@ test("admin pages are protected by a shared server-side admin guard", () => {
   assert.match(adminData, /redirect\("\/login"\)/);
   assert.match(adminData, /redirect\("\/dashboard"\)/);
   assert.match(adminData, /admin_roles/);
+  assert.match(adminData, /noStoreJson\(\{ error: "Admin access required\." \}/);
   assert.match(adminData, /app_metadata\?\.role/);
   assert.doesNotMatch(adminData, /admin@|FOUNDER_EMAILS|isFounder/i);
 });

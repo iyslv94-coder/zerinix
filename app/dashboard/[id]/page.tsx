@@ -30,6 +30,13 @@ import {
 } from "./ReportViewerEnhancements";
 import { sanitizeAiResponseText } from "@/app/lib/ai/response-sanitization";
 import {
+  buildExecutiveSnapshot,
+  getReportPresentationLabels,
+  getSectionTakeaway,
+  isExecutivePresentationSection,
+  normalizeReportPresentationText,
+} from "@/app/lib/report-presentation";
+import {
   getEvidenceBadgeClass,
   getEvidenceLabel,
   inferEvidenceLevel,
@@ -1535,7 +1542,7 @@ function getReportArticleClass(title: string) {
 function AnalysisNotes({
   children,
   compact,
-  label = "Full analysis notes",
+  label = "Details",
 }: {
   children: ReactNode;
   compact: boolean;
@@ -1557,6 +1564,201 @@ function AnalysisNotes({
         {children}
       </div>
     </details>
+  );
+}
+
+function getRiskIndicatorClass(level: string) {
+  if (level === "High") {
+    return "border-red-300/25 bg-red-300/10 text-red-100";
+  }
+
+  if (level === "Medium") {
+    return "border-amber-300/25 bg-amber-300/10 text-amber-100";
+  }
+
+  return "border-teal-300/25 bg-teal-300/10 text-teal-100";
+}
+
+function SnapshotGauge({
+  label,
+  value,
+  display,
+}: {
+  label: string;
+  value: number | null;
+  display: string;
+}) {
+  const safeValue = value ?? 0;
+
+  return (
+    <div className="rounded-2xl border border-white/10 bg-black/25 p-3">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-500">
+        {label}
+      </p>
+      <div className="mt-3 flex items-center gap-3">
+        <div
+          className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full"
+          style={{
+            background: `conic-gradient(rgb(94 234 212) ${safeValue * 3.6}deg, rgba(255,255,255,0.08) 0deg)`,
+          }}
+        >
+          <div className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-zinc-950 text-[11px] font-semibold text-white">
+            {value === null ? "--" : value}
+          </div>
+        </div>
+        <p className="min-w-0 text-sm font-semibold text-zinc-200">{display}</p>
+      </div>
+    </div>
+  );
+}
+
+function ExecutiveSnapshotPanel({
+  section,
+}: {
+  section: { field?: string; title: string; content: string };
+}) {
+  if (!isExecutivePresentationSection(section)) {
+    return null;
+  }
+
+  const snapshot = buildExecutiveSnapshot(section.content);
+  const labels = getReportPresentationLabels(section.content);
+  const groups = [
+    { label: labels.why, items: snapshot.why },
+    { label: labels.mainRisks, items: snapshot.risks },
+    { label: labels.nextActions, items: snapshot.actions },
+  ];
+  const metrics = [
+    { label: labels.financialQuality, value: snapshot.financialQuality },
+    { label: labels.reportQuality, value: snapshot.reportQuality },
+    { label: labels.mainRisk, value: snapshot.mainRisk },
+    { label: labels.nextAction, value: snapshot.nextAction },
+  ];
+
+  return (
+    <div className="mb-5 rounded-[1.75rem] border border-teal-200/15 bg-[linear-gradient(135deg,rgba(94,234,212,0.09),rgba(255,255,255,0.025))] p-4 shadow-inner shadow-teal-950/10">
+      <div className="flex flex-col gap-3 border-b border-white/10 pb-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.26em] text-teal-200/75">
+            {labels.executiveSnapshot}
+          </p>
+          <h4 className="mt-2 text-xl font-semibold tracking-tight text-white">
+            {labels.decision}: {snapshot.decision}
+          </h4>
+        </div>
+        <span className="w-fit rounded-full border border-white/10 bg-black/30 px-3 py-1.5 text-xs font-semibold text-zinc-200">
+          {labels.confidence}: {snapshot.confidence}
+        </span>
+      </div>
+      <div className="mt-4 grid gap-3 md:grid-cols-3">
+        <SnapshotGauge
+          label={labels.confidenceGauge}
+          value={snapshot.confidenceScore}
+          display={snapshot.confidence}
+        />
+        <SnapshotGauge
+          label={labels.founderScoreGauge}
+          value={snapshot.founderScoreValue}
+          display={snapshot.founderScore}
+        />
+        <div className="rounded-2xl border border-white/10 bg-black/25 p-3">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-500">
+            {labels.riskLevel}
+          </p>
+          <div className="mt-3 flex items-center gap-3">
+            <span className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${getRiskIndicatorClass(snapshot.riskLevel)}`}>
+              {snapshot.riskLevel}
+            </span>
+            <p className="line-clamp-2 text-sm leading-5 text-zinc-300">{snapshot.mainRisk}</p>
+          </div>
+        </div>
+      </div>
+      <div className="mt-3 grid gap-3 lg:grid-cols-4">
+        {metrics.map((metric) => (
+          <div key={metric.label} className="rounded-2xl border border-white/10 bg-white/[0.025] p-3">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
+              {metric.label}
+            </p>
+            <p className="mt-2 line-clamp-2 text-sm font-medium leading-5 text-zinc-200">
+              {metric.value}
+            </p>
+          </div>
+        ))}
+      </div>
+      <div className="mt-3 grid gap-3 lg:grid-cols-2">
+        <div className="rounded-2xl border border-white/10 bg-black/25 p-3">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-teal-200/70">
+            {labels.riskHeatmap}
+          </p>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            {snapshot.riskHeatmap.map((risk) => (
+              <div key={risk.label} className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.025] px-3 py-2">
+                <span className="text-xs text-zinc-300">{risk.label}</span>
+                <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${getRiskIndicatorClass(risk.level)}`}>
+                  {risk.level}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="rounded-2xl border border-white/10 bg-black/25 p-3">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-teal-200/70">
+            {labels.confidenceRadar}
+          </p>
+          <div className="mt-3 space-y-2">
+            {snapshot.confidenceRadar.map((dimension) => (
+              <div key={dimension.label} className="grid grid-cols-[5.75rem_minmax(0,1fr)_2.5rem] items-center gap-2">
+                <span className="text-xs text-zinc-400">{dimension.label}</span>
+                <span className="h-2 overflow-hidden rounded-full bg-white/10">
+                  <span
+                    className="block h-full rounded-full bg-teal-200"
+                    style={{ width: `${dimension.score ?? 0}%` }}
+                  />
+                </span>
+                <span className="text-right text-xs font-semibold text-zinc-300">
+                  {dimension.score === null ? "--" : dimension.score}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+      <div className="mt-4 grid gap-3 lg:grid-cols-3">
+        {groups.map((group) => (
+          <div key={group.label} className="rounded-2xl border border-white/10 bg-black/25 p-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500">
+              {group.label}
+            </p>
+            <ul className="mt-3 space-y-2 text-sm leading-6 text-zinc-300">
+              {group.items.map((item) => (
+                <li key={item} className="flex gap-2">
+                  <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-teal-200/80" />
+                  <span className="line-clamp-3">{item}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SectionTakeaway({ content }: { content: string }) {
+  const takeaway = getSectionTakeaway(content);
+  const labels = getReportPresentationLabels(content);
+
+  if (!takeaway) {
+    return null;
+  }
+
+  return (
+    <div className="mb-4 rounded-2xl border border-white/10 bg-white/[0.035] p-4">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-teal-200/70">
+        {labels.keyTakeaway}
+      </p>
+      <p className="mt-2 text-sm leading-6 text-zinc-300">{takeaway}</p>
+    </div>
   );
 }
 
@@ -1830,7 +2032,9 @@ function CitationList({ content }: { content: string }) {
 }
 
 function ReportText({ content }: { content: string }) {
-  const blocks = cleanEvidenceMetadataForDisplay(sanitizeAiResponseText(content))
+  const blocks = normalizeReportPresentationText(
+    cleanEvidenceMetadataForDisplay(sanitizeAiResponseText(content))
+  )
     .split(/\n{2,}/)
     .map((block) => block.trim())
     .filter(Boolean);
@@ -2529,7 +2733,10 @@ export default async function ReportDetailPage({
                     const isFinancialDashboard = section.title
                       .toLowerCase()
                       .includes("financial dashboard");
-                    const detailsContent = isFinancialDashboard ? "" : section.content;
+                    const detailsContent = isFinancialDashboard
+                      ? ""
+                      : normalizeReportPresentationText(section.content);
+                    const presentationLabels = getReportPresentationLabels(section.content);
 
                     return (
                       <details
@@ -2571,6 +2778,7 @@ export default async function ReportDetailPage({
                                 title={section.title}
                                 content={section.content}
                               />
+                              <ExecutiveSnapshotPanel section={section} />
                               {hasReportSectionVisual(section.title) &&
                               !section.title.toLowerCase().includes("executive summary") &&
                               !isFinancialDashboard ? (
@@ -2581,12 +2789,15 @@ export default async function ReportDetailPage({
                                 content={section.content}
                               />
                               {detailsContent.trim() ? (
-                                <AnalysisNotes
-                                  compact={hasReportSectionVisual(section.title)}
-                                  label={isFinancialDashboard ? "Metric Details" : "Full analysis notes"}
-                                >
-                                  <ReportText content={detailsContent} />
-                                </AnalysisNotes>
+                                <>
+                                  <SectionTakeaway content={detailsContent} />
+                                  <AnalysisNotes
+                                    compact
+                                    label={isFinancialDashboard ? "Metric Details" : presentationLabels.details}
+                                  >
+                                    <ReportText content={detailsContent} />
+                                  </AnalysisNotes>
+                                </>
                               ) : null}
                         </div>
                       </details>

@@ -2,7 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/app/lib/supabase/server";
+import {
+  checkRateLimit,
+  getServerActionClientIp,
+} from "@/app/lib/security/rate-limit";
 import { getAuthenticatedUser } from "./report-utils";
+
+const MAX_WORKSPACE_NAME_LENGTH = 80;
 
 async function getWorkspaceContext() {
   const supabase = await createClient();
@@ -12,11 +18,28 @@ async function getWorkspaceContext() {
     return null;
   }
 
+  const ip = await getServerActionClientIp();
+  const rateLimit = checkRateLimit(`workspace:mutation:${user.id}:${ip}`, {
+    limit: 20,
+    windowMs: 10 * 60 * 1000,
+  });
+
+  if (!rateLimit.allowed) {
+    return null;
+  }
+
   return { supabase, user };
 }
 
+function normalizeWorkspaceName(formData: FormData) {
+  return String(formData.get("name") || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, MAX_WORKSPACE_NAME_LENGTH);
+}
+
 export async function createWorkspace(formData: FormData) {
-  const name = String(formData.get("name") || "").trim();
+  const name = normalizeWorkspaceName(formData);
 
   if (!name) {
     return;
@@ -38,7 +61,7 @@ export async function createWorkspace(formData: FormData) {
 
 export async function renameWorkspace(formData: FormData) {
   const workspaceId = String(formData.get("workspace_id") || "");
-  const name = String(formData.get("name") || "").trim();
+  const name = normalizeWorkspaceName(formData);
 
   if (!workspaceId || !name) {
     return;
