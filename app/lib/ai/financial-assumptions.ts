@@ -22,6 +22,13 @@ import {
   type SourceIntelligenceType,
 } from "@/app/lib/ai/source-intelligence";
 import {
+  createValidationIntelligenceModel,
+  type ValidationExperiment,
+  type ValidationIntelligenceModel,
+  type ValidationScore,
+  type ValidationType,
+} from "@/app/lib/ai/validation-intelligence";
+import {
   createInvestmentScore,
   formatInvestmentScore,
   type InvestmentScore,
@@ -35,6 +42,7 @@ export type AiFinancialModelContext = FinancialModel & {
   decisionConfidence: DecisionConfidenceModel;
   reportIntelligence: ReportIntelligenceModel;
   sourceIntelligence: SourceIntelligenceModel;
+  validationIntelligence: ValidationIntelligenceModel;
 };
 
 export function createCanonicalFinancialAssumptions(input: {
@@ -62,9 +70,16 @@ export function createCanonicalFinancialAssumptions(input: {
       financialConsistency,
     }),
   };
+  const validationIntelligence = createValidationIntelligenceModel({
+    financialModel,
+    financialConsistency,
+    sourceIntelligence: contextWithoutReportIntelligence.sourceIntelligence,
+    decisionConfidence: contextWithoutReportIntelligence.decisionConfidence,
+  });
 
   return {
     ...contextWithoutReportIntelligence,
+    validationIntelligence,
     reportIntelligence: createReportIntelligenceModel(contextWithoutReportIntelligence),
   };
 }
@@ -480,4 +495,91 @@ export function formatSourceIntelligenceSummary(
     language === "Turkish" ? "Doğrulama Önerileri:" : "Validation Recommendations:",
     ...source.items.map((item) => formatSourceItem(item, language)),
   ].join("\n");
+}
+
+function localizeValidationType(type: ValidationType, language: "English" | "Turkish") {
+  if (language !== "Turkish") {
+    return type;
+  }
+
+  const labels: Record<ValidationType, string> = {
+    "Customer Interview": "Müşteri Görüşmesi",
+    "Pricing Test": "Fiyatlandırma Testi",
+    "Landing Page Test": "Landing Page Testi",
+    "Paid Acquisition Test": "Ücretli Edinim Testi",
+    "B2B Pilot": "B2B Pilot",
+    "Prototype Test": "Prototip Testi",
+    "Market Research": "Pazar Araştırması",
+  };
+
+  return labels[type];
+}
+
+function localizeValidationScore(score: ValidationScore, language: "English" | "Turkish") {
+  if (language !== "Turkish") {
+    return score;
+  }
+
+  if (score === "Validated") return "Doğrulandı";
+  if (score === "In Progress") return "Devam Ediyor";
+
+  return "Başlamadı";
+}
+
+function localizeValidationText(value: string, language: "English" | "Turkish") {
+  if (language !== "Turkish") {
+    return value;
+  }
+
+  const dictionary: Record<string, string> = {
+    "Customer demand exists": "Müşteri talebi var",
+    "No customer validation": "Müşteri doğrulaması yok",
+    "Run 50 customer interviews": "50 müşteri görüşmesi yap",
+    "30%+ strong purchase intent": "%30+ güçlü satın alma niyeti",
+    "CAC not validated": "CAC doğrulanmadı",
+    "Run a $500 acquisition experiment": "$500 edinim deneyi çalıştır",
+    "Willingness to pay not proven": "Ödeme isteği kanıtlanmadı",
+    "Test 3 pricing packages": "3 fiyatlandırma paketini test et",
+    "20%+ conversion intent": "%20+ dönüşüm niyeti",
+    "B2B demand exists": "B2B talep var",
+    "B2B demand not proven": "B2B talep kanıtlanmadı",
+    "Interview 20 target companies": "20 hedef şirketle görüş",
+    "5+ pilot commitments": "5+ pilot taahhüdü",
+    "Market positioning converts qualified interest": "Pazar konumlandırması nitelikli ilgiyi dönüştürür",
+    "Messaging and conversion not proven": "Mesaj ve dönüşüm kanıtlanmadı",
+    "Launch a landing page with one offer and one CTA": "Tek teklif ve tek CTA içeren landing page yayınla",
+    "10%+ qualified conversion intent": "%10+ nitelikli dönüşüm niyeti",
+    "Market assumptions require validation": "Pazar varsayımları doğrulama gerektiriyor",
+    "Market evidence is incomplete": "Pazar kanıtı eksik",
+    "Validate competitors, substitutes, and pricing from primary sources":
+      "Rakipleri, ikameleri ve fiyatlandırmayı birincil kaynaklardan doğrula",
+    "Test the smallest prototype or concierge workflow": "En küçük prototip veya concierge akışını test et",
+    "5+ verified competitor/source checks": "5+ doğrulanmış rakip/kaynak kontrolü",
+    "5+ qualified users complete the core workflow": "5+ nitelikli kullanıcı temel akışı tamamlar",
+  };
+
+  return dictionary[value] || value;
+}
+
+function formatValidationExperiment(experiment: ValidationExperiment, language: "English" | "Turkish") {
+  return [
+    `${language === "Turkish" ? "Öncelik" : "Priority"} ${experiment.priority}: ${localizeValidationText(experiment.assumption, language)}`,
+    `${language === "Turkish" ? "Risk" : "Risk"}: ${localizeValidationText(experiment.risk, language)}`,
+    `${language === "Turkish" ? "Deney" : "Experiment"}: ${localizeValidationType(experiment.type, language)} — ${localizeValidationText(experiment.action, language)}`,
+    `${language === "Turkish" ? "Başarı" : "Success"}: ${localizeValidationText(experiment.successCriteria, language)}`,
+    `${language === "Turkish" ? "Durum" : "Status"}: ${localizeValidationScore(experiment.score, language)}`,
+  ].join("\n");
+}
+
+export function formatValidationIntelligenceSummary(
+  context: AiFinancialModelContext,
+  language: "English" | "Turkish" = "English"
+) {
+  return [
+    language === "Turkish" ? "Validation Roadmap:" : "Validation Roadmap:",
+    `${language === "Turkish" ? "Doğrulama Skoru" : "Validation Score"}: ${localizeValidationScore(context.validationIntelligence.score, language)}`,
+    ...context.validationIntelligence.experiments
+      .slice(0, 5)
+      .map((experiment) => formatValidationExperiment(experiment, language)),
+  ].join("\n\n");
 }

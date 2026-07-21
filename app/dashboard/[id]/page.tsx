@@ -602,6 +602,55 @@ function getReportIntelligenceOverview(
   };
 }
 
+function extractFirstLineByPatterns(content: string, patterns: RegExp[]) {
+  return sanitizeAiResponseText(content)
+    .split("\n")
+    .map((line) => line.trim().replace(/^[-*•]\s*/, ""))
+    .find((line) => patterns.some((pattern) => pattern.test(line))) || "";
+}
+
+function stripValidationLabel(value: string) {
+  return value
+    .replace(/^(?:Priority|Öncelik)\s+\d+\s*[:\-–—]\s*/i, "")
+    .replace(/^(?:Experiment|Deney|Success|Başarı|Risk|Status|Durum)\s*[:\-–—]\s*/i, "")
+    .trim();
+}
+
+function getValidationIntelligenceOverview(
+  sections: Array<{ field?: string; title: string; content: string }>
+) {
+  const validationContent =
+    getSectionContentByFieldOrTitle(sections, [
+      "validationplan",
+      "validation plan",
+      "doğrulama planı",
+      "roadmap306090",
+      "30-60-90 day roadmap",
+      "30-60-90 günlük yol haritası",
+    ]) ||
+    sections.map((section) => `${section.title}\n${section.content}`).join("\n\n");
+  const score =
+    extractMetricValue(validationContent, "Validation Score") ||
+    extractMetricValue(validationContent, "Doğrulama Skoru") ||
+    "Not Started";
+  const topAssumption = stripValidationLabel(
+    extractFirstLineByPatterns(validationContent, [/^(?:Priority|Öncelik)\s+1\s*[:\-–—]/i])
+  );
+  const experiment = stripValidationLabel(
+    extractFirstLineByPatterns(validationContent, [/^(?:Experiment|Deney)\s*[:\-–—]/i])
+  );
+  const successCriteria = stripValidationLabel(
+    extractFirstLineByPatterns(validationContent, [/^(?:Success|Başarı)\s*[:\-–—]/i])
+  );
+
+  return {
+    score: cleanDecisionSummaryText(score, "Not Started"),
+    topAssumption: cleanDecisionSummaryText(topAssumption, "Customer demand requires validation."),
+    experiment: cleanDecisionSummaryText(experiment, "Run the highest-priority validation experiment."),
+    successCriteria: cleanDecisionSummaryText(successCriteria, "Define success criteria before scaling."),
+  };
+}
+
 function extractPercentScore(content: string, label: string) {
   const explicitScore = extractScore(content, label);
 
@@ -1945,6 +1994,7 @@ export default async function ReportDetailPage({
     decisionSummaryItems.find((item) => item.label === "Recommended Next Step") ||
     decisionSummaryItems[2];
   const reportIntelligenceOverview = getReportIntelligenceOverview(visibleSections);
+  const validationIntelligenceOverview = getValidationIntelligenceOverview(visibleSections);
   const continueAnalysisHref = `/chat?reportId=${encodeURIComponent(report.id)}`;
   const regenerateMode = report.type === "Market Analysis" ? "market" : "plan";
   const regenerateParams = new URLSearchParams({
@@ -2298,6 +2348,59 @@ export default async function ReportDetailPage({
                 </div>
                 <p className="mt-3 text-sm leading-6 text-zinc-300">
                   {reportIntelligenceOverview.risks}
+                </p>
+              </article>
+            </div>
+          </section>
+
+          <section className="mt-6 overflow-hidden rounded-[2.15rem] border border-white/10 bg-white/[0.04] shadow-2xl shadow-black/30 ring-1 ring-white/[0.025] backdrop-blur-xl">
+            <div className="flex flex-col gap-3 border-b border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.065),rgba(255,255,255,0.02))] p-5 sm:p-6">
+              <p className="text-xs font-semibold tracking-[0.35em] text-teal-300/70">
+                VALIDATION INTELLIGENCE
+              </p>
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <h2 className="text-3xl font-semibold tracking-tight text-white">
+                    {validationIntelligenceOverview.score}
+                  </h2>
+                  <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">
+                    Convert the highest-risk assumptions into experiments before scaling capital or acquisition.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="grid gap-4 p-4 sm:p-5 lg:grid-cols-3">
+              <article className="rounded-[1.55rem] border border-white/10 bg-black/30 p-5 shadow-xl shadow-black/20">
+                <div className="flex items-center gap-3">
+                  <Target className="h-5 w-5 text-teal-200" />
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-teal-200/70">
+                    Top Assumption
+                  </p>
+                </div>
+                <p className="mt-3 text-sm leading-6 text-zinc-300">
+                  {validationIntelligenceOverview.topAssumption}
+                </p>
+              </article>
+              <article className="rounded-[1.55rem] border border-white/10 bg-black/30 p-5 shadow-xl shadow-black/20">
+                <div className="flex items-center gap-3">
+                  <Gauge className="h-5 w-5 text-teal-200" />
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-teal-200/70">
+                    Experiment
+                  </p>
+                </div>
+                <p className="mt-3 text-sm leading-6 text-zinc-300">
+                  {validationIntelligenceOverview.experiment}
+                </p>
+              </article>
+              <article className="rounded-[1.55rem] border border-white/10 bg-black/30 p-5 shadow-xl shadow-black/20">
+                <div className="flex items-center gap-3">
+                  <CheckCircle2 className="h-5 w-5 text-teal-200" />
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-teal-200/70">
+                    Success Criteria
+                  </p>
+                </div>
+                <p className="mt-3 text-sm leading-6 text-zinc-300">
+                  {validationIntelligenceOverview.successCriteria}
                 </p>
               </article>
             </div>

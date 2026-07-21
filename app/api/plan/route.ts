@@ -28,6 +28,7 @@ import {
   formatFinancialConsistencyReport,
   formatReportIntelligenceSummary,
   formatSourceIntelligenceSummary,
+  formatValidationIntelligenceSummary,
   type AiFinancialModelContext,
 } from "@/app/lib/ai/financial-assumptions";
 import { isReportGenerationFailureText } from "@/app/lib/report-errors";
@@ -1532,6 +1533,11 @@ function normalizeFullPlanReport(
       reportText(language, "- Next 6 Months: confirm retention, payback, and operating cadence. Expected impact: protects capital efficiency.", "- Sonraki 6 Ay: elde tutma, geri ödeme ve operasyon ritmini doğrula. Beklenen etki: sermaye verimliliğini korur."),
       reportText(language, "- Next 12 Months: scale only if thresholds are met. Expected impact: avoids premature growth spend.", "- Sonraki 12 Ay: yalnızca eşikler karşılanırsa ölçekle. Beklenen etki: erken büyüme harcamasını önler."),
     ]
+  );
+  normalized.roadmap306090 = appendIntelligenceBlock(
+    normalized.roadmap306090,
+    reportLabel(language, "Validation Intelligence", "Validation Intelligence"),
+    [formatValidationIntelligenceSummary(context, language)]
   );
   normalized.sourcesAssumptions = appendIntelligenceBlock(
     cleanInternalSourceFallbacks(normalized.sourcesAssumptions, language),

@@ -28,6 +28,7 @@ import {
   formatFinancialConsistencyReport,
   formatReportIntelligenceSummary,
   formatSourceIntelligenceSummary,
+  formatValidationIntelligenceSummary,
   type AiFinancialModelContext,
 } from "@/app/lib/ai/financial-assumptions";
 import { isReportGenerationFailureText } from "@/app/lib/report-errors";
@@ -1029,6 +1030,11 @@ function ensureMarketReportQuality(
       marketText(language, "- Next 6 Months: confirm retention intent, payback, and operating cadence. Expected impact: protects capital efficiency.", "- Sonraki 6 Ay: elde tutma niyeti, geri ödeme ve operasyon ritmini doğrula. Beklenen etki: sermaye verimliliğini korur."),
       marketText(language, "- Next 12 Months: expand only after the entry wedge is repeatable. Expected impact: scales from evidence, not narrative.", "- Sonraki 12 Ay: yalnızca giriş kaması tekrarlanabilir olduğunda genişle. Beklenen etki: anlatıdan değil kanıttan ölçeklenir."),
     ]
+  );
+  normalized.validationPlan = appendIntelligenceBlock(
+    normalized.validationPlan,
+    marketLabel(language, "Validation Intelligence", "Validation Intelligence"),
+    [formatValidationIntelligenceSummary(context, language)]
   );
   normalized.sources = appendIntelligenceBlock(
     cleanInternalMarketSourceFallbacks(normalized.sources, language),
