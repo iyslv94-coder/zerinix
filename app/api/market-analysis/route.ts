@@ -24,6 +24,7 @@ import { createAiJobDescriptor } from "@/app/lib/ai/queue";
 import {
   createCanonicalFinancialAssumptions,
   formatCanonicalFinancialAssumptions,
+  formatFinancialConsistencyReport,
   type AiFinancialModelContext,
 } from "@/app/lib/ai/financial-assumptions";
 import { isReportGenerationFailureText } from "@/app/lib/report-errors";
@@ -993,6 +994,9 @@ function ensureMarketReportQuality(
       )
     );
   }
+  normalized.financialDashboard = sanitizeMarketReportContent(
+    `${normalized.financialDashboard}\n${formatFinancialConsistencyReport(context, language)}`
+  );
 
   normalized.executiveRecommendation = sanitizeMarketReportContent(normalized.executiveRecommendation);
   normalized.executiveRecommendation = appendIntelligenceBlock(

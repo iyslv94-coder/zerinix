@@ -32,6 +32,35 @@ export type FinancialMetricModel = {
   benchmarkComparison: string;
 };
 
+export type FinancialConsistencyWarningCode =
+  | "arr_mrr_mismatch"
+  | "ltv_below_cac"
+  | "weak_ltv_cac"
+  | "payback_mismatch"
+  | "low_gross_margin"
+  | "runway_burn_mismatch"
+  | "capital_efficiency"
+  | "break_even_timing";
+
+export type FinancialQuality = "Healthy" | "Needs Validation" | "High Risk";
+
+export type FinancialConsistencyWarning = {
+  code: FinancialConsistencyWarningCode;
+  severity: "warning" | "critical";
+  message: string;
+  evidenceType: "User Provided Data" | "Benchmark Assumption" | "AI Planning Assumption";
+};
+
+export type FinancialConsistencyCheck = {
+  quality: FinancialQuality;
+  warnings: FinancialConsistencyWarning[];
+  sources: {
+    userProvidedData: string[];
+    benchmarkAssumptions: string[];
+    aiPlanningAssumptions: string[];
+  };
+};
+
 export type RevenueForecastYear = {
   year: string;
   customers: number;
@@ -329,6 +358,96 @@ function formatUsd(value: number) {
 
 function formatPercent(value: number) {
   return `${Math.round(value * 100)}%`;
+}
+
+function approximatelyEqual(left: number, right: number, tolerance = 0.03) {
+  return Math.abs(left - right) <= Math.max(1, Math.abs(right)) * tolerance;
+}
+
+function createFinancialConsistencyCheck(input: {
+  prompt: string;
+  metrics: FinancialModel["metrics"];
+  benchmark: {
+    basis: string;
+    ranges: IndustryBenchmark["ranges"];
+  };
+  targetRunwayMonths: number;
+  startupCapexUsd: number;
+}): FinancialConsistencyCheck {
+  const { prompt, metrics, benchmark, targetRunwayMonths, startupCapexUsd } = input;
+  const warnings: FinancialConsistencyWarning[] = [];
+  const ltvCacRatio = metrics.ltv.value / Math.max(1, metrics.cac.value);
+  const expectedPayback = metrics.cac.value / Math.max(1, metrics.arpa.value * metrics.grossMargin.value);
+  const expectedRunway = metrics.investmentNeeded.value / Math.max(1, metrics.monthlyBurn.value);
+  const capitalEfficiencyRatio = metrics.investmentNeeded.value / Math.max(1, metrics.arr.value);
+
+  const addWarning = (
+    code: FinancialConsistencyWarningCode,
+    severity: FinancialConsistencyWarning["severity"],
+    message: string,
+    evidenceType: FinancialConsistencyWarning["evidenceType"] = "AI Planning Assumption"
+  ) => {
+    warnings.push({ code, severity, message, evidenceType });
+  };
+
+  if (!approximatelyEqual(metrics.arr.value, metrics.mrr.value * 12)) {
+    addWarning("arr_mrr_mismatch", "critical", "Financial assumptions are inconsistent.");
+  }
+
+  if (metrics.ltv.value < metrics.cac.value) {
+    addWarning("ltv_below_cac", "critical", "Customer acquisition economics require validation.");
+  } else if (ltvCacRatio < 2) {
+    addWarning("weak_ltv_cac", "warning", "Customer acquisition economics require validation.");
+  }
+
+  if (!approximatelyEqual(metrics.cacPayback.value, expectedPayback, 0.08)) {
+    addWarning("payback_mismatch", "warning", "CAC payback assumptions require validation.");
+  }
+
+  if (metrics.grossMargin.value < benchmark.ranges.grossMargin.low) {
+    addWarning("low_gross_margin", "warning", "Gross margin may not support the current acquisition and burn assumptions.", "Benchmark Assumption");
+  }
+
+  if (!approximatelyEqual(metrics.runway.value, expectedRunway, 0.05)) {
+    addWarning("runway_burn_mismatch", "critical", "Financial assumptions are inconsistent.");
+  }
+
+  if (capitalEfficiencyRatio > 4) {
+    addWarning("capital_efficiency", "critical", "Capital efficiency requires validation.");
+  } else if (capitalEfficiencyRatio > 2) {
+    addWarning("capital_efficiency", "warning", "Capital efficiency requires validation.");
+  }
+
+  if (metrics.breakEvenMonth.value > Math.max(48, targetRunwayMonths * 2)) {
+    addWarning("break_even_timing", "warning", "Break-even timing requires validation.");
+  }
+
+  const quality: FinancialQuality = warnings.some((warning) => warning.severity === "critical")
+    ? "High Risk"
+    : warnings.length > 0
+      ? "Needs Validation"
+      : "Healthy";
+
+  return {
+    quality,
+    warnings,
+    sources: {
+      userProvidedData: hasValidationEvidence(prompt)
+        ? ["User supplied validation evidence in the request."]
+        : ["No direct operating data was supplied by the user."],
+      benchmarkAssumptions: [
+        benchmark.basis,
+        `Gross margin benchmark range: ${formatPercent(benchmark.ranges.grossMargin.low)}-${formatPercent(benchmark.ranges.grossMargin.high)}`,
+        `CAC benchmark range: ${formatUsd(benchmark.ranges.cac.low)}-${formatUsd(benchmark.ranges.cac.high)}`,
+        `LTV benchmark range: ${formatUsd(benchmark.ranges.ltv.low)}-${formatUsd(benchmark.ranges.ltv.high)}`,
+      ],
+      aiPlanningAssumptions: [
+        `Target runway: ${targetRunwayMonths} months`,
+        `Startup capex: ${formatUsd(startupCapexUsd)}`,
+        `Funding need vs ARR ratio: ${capitalEfficiencyRatio.toFixed(1)}x`,
+      ],
+    },
+  };
 }
 
 function formatMonths(value: number) {
@@ -644,4 +763,26 @@ export function createFinancialModel(input: FinancialModelInput): FinancialModel
 
 export function formatFinancialModelValue(metric: FinancialMetricModel) {
   return metric.displayValue;
+}
+
+export function validateFinancialConsistency(model: FinancialModel): FinancialConsistencyCheck {
+  const targetRunwayAssumption = model.metrics.investmentNeeded.assumptions.find((assumption) =>
+    /target runway/i.test(assumption)
+  );
+  const startupCapexAssumption = model.metrics.breakEvenMonth.assumptions.find((assumption) =>
+    /startup capex/i.test(assumption)
+  );
+  const targetRunwayMonths = Number(targetRunwayAssumption?.match(/\d+(?:\.\d+)?/)?.[0]) || model.metrics.runway.value;
+  const startupCapexUsd =
+    Number(startupCapexAssumption?.match(/\$?([\d,.]+)\s*k/i)?.[1]?.replace(/,/g, "")) * 1_000 ||
+    Number(startupCapexAssumption?.match(/\$?([\d,.]+)\s*m/i)?.[1]?.replace(/,/g, "")) * 1_000_000 ||
+    0;
+
+  return createFinancialConsistencyCheck({
+    prompt: model.normalizedBusinessIdea,
+    metrics: model.metrics,
+    benchmark: model.benchmark,
+    targetRunwayMonths,
+    startupCapexUsd,
+  });
 }

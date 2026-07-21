@@ -24,6 +24,7 @@ import { createAiJobDescriptor } from "@/app/lib/ai/queue";
 import {
   createCanonicalFinancialAssumptions,
   formatCanonicalFinancialAssumptions,
+  formatFinancialConsistencyReport,
   type AiFinancialModelContext,
 } from "@/app/lib/ai/financial-assumptions";
 import { isReportGenerationFailureText } from "@/app/lib/report-errors";
@@ -1430,6 +1431,7 @@ function buildCanonicalSwot(
 
 function buildCanonicalFinancialAssumptions(context: AiFinancialModelContext, language: ResponseLanguage) {
   return [
+    formatFinancialConsistencyReport(context, language),
     reportLabel(language, "User-provided facts:", "Kullanıcı tarafından sağlanan bilgiler:"),
     reportText(language, `- Business context: ${context.normalizedBusinessIdea}`, `- İş bağlamı: ${context.normalizedBusinessIdea}`),
     reportLabel(language, "Market-derived estimates:", "Pazardan türetilen tahminler:"),

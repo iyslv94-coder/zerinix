@@ -1,6 +1,8 @@
 import {
   createFinancialModel,
   formatFinancialModelValue,
+  validateFinancialConsistency,
+  type FinancialConsistencyCheck,
   type FinancialMetricModel,
   type FinancialModel,
 } from "@/app/lib/ai/financial-model";
@@ -14,6 +16,7 @@ import { getEvidenceLabel, inferEvidenceLevel } from "@/app/lib/report-evidence"
 export type ReportKind = "business_plan" | "market_analysis";
 export type AiFinancialModelContext = FinancialModel & {
   investmentScore: InvestmentScore;
+  financialConsistency: FinancialConsistencyCheck;
 };
 
 export function createCanonicalFinancialAssumptions(input: {
@@ -28,6 +31,7 @@ export function createCanonicalFinancialAssumptions(input: {
       prompt: input.prompt,
       financialModel,
     }),
+    financialConsistency: validateFinancialConsistency(financialModel),
   };
 }
 
@@ -80,6 +84,10 @@ export function formatCanonicalFinancialAssumptions(
     )
     .join("\n");
   const investmentScoreContext = formatInvestmentScore(context.investmentScore);
+  const consistency = context.financialConsistency;
+  const warningRows = consistency.warnings.length > 0
+    ? consistency.warnings.map((warning) => `- ${warning.message} (${warning.evidenceType})`).join("\n")
+    : "- No contradictions detected in ARR/MRR, LTV/CAC, payback, burn/runway, funding, or break-even relationships.";
 
   return `Data-Driven Financial Analysis Engine (${context.version}, ${context.fingerprint})
 Business idea fingerprint: ${context.normalizedBusinessIdea}
@@ -96,6 +104,13 @@ ${metricRows}
 
 Revenue forecast:
 ${forecastRows}
+
+Financial Quality:
+- Status: ${consistency.quality}
+- User provided data: ${consistency.sources.userProvidedData.join("; ")}
+- Benchmark assumptions: ${consistency.sources.benchmarkAssumptions.join("; ")}
+- AI generated planning assumptions: ${consistency.sources.aiPlanningAssumptions.join("; ")}
+${warningRows}
 
 	Evidence model:
 	- Verified: user-provided facts only, including the submitted idea context (${context.normalizedBusinessIdea}) and any explicit facts stated by the user.
@@ -119,4 +134,83 @@ Financial modeling rules:
 - For revenue, CAC, LTV, Gross Margin, Burn, Runway, EBITDA, and Break-even, show value, formula, assumptions, evidence label, and benchmark source when the section is responsible for financial explanation.
 	- Financial Assumptions must be written as a Key Assumptions section that lists every calculation assumption and classifies each as Verified, Benchmark Derived, Planning Assumption, or Validation Required.
 	- Tag important claims with one concise evidence label only when useful: Verified, Benchmark Derived, Planning Assumption, or Validation Required. Do not create fake citations.`;
+}
+
+export function formatFinancialConsistencyReport(
+  context: AiFinancialModelContext,
+  language: "English" | "Turkish" = "English"
+) {
+  const qualityLabel =
+    language === "Turkish"
+      ? {
+          Healthy: "Sağlıklı",
+          "Needs Validation": "Doğrulama Gerekli",
+          "High Risk": "Yüksek Risk",
+        }
+      : {
+          Healthy: "Healthy",
+          "Needs Validation": "Needs Validation",
+          "High Risk": "High Risk",
+        };
+  const warningText = (message: string) => {
+    if (language !== "Turkish") {
+      return message;
+    }
+
+    if (message === "Customer acquisition economics require validation.") {
+      return "Müşteri edinme ekonomisi doğrulama gerektiriyor.";
+    }
+
+    if (message === "Capital efficiency requires validation.") {
+      return "Sermaye verimliliği doğrulama gerektiriyor.";
+    }
+
+    if (message === "Financial assumptions are inconsistent.") {
+      return "Finansal varsayımlar tutarsız görünüyor.";
+    }
+
+    if (message === "CAC payback assumptions require validation.") {
+      return "CAC geri ödeme varsayımları doğrulama gerektiriyor.";
+    }
+
+    if (message === "Gross margin may not support the current acquisition and burn assumptions.") {
+      return "Brüt marj mevcut edinim ve nakit yakımı varsayımlarını desteklemeyebilir.";
+    }
+
+    if (message === "Break-even timing requires validation.") {
+      return "Başabaş zamanlaması doğrulama gerektiriyor.";
+    }
+
+    return message;
+  };
+  const evidenceTypeText = (type: string) => {
+    if (language !== "Turkish") {
+      return type;
+    }
+
+    if (type === "User Provided Data") return "Kullanıcı Verisi";
+    if (type === "Benchmark Assumption") return "Benchmark Varsayımı";
+
+    return "AI Planlama Varsayımı";
+  };
+  const warnings =
+    context.financialConsistency.warnings.length > 0
+      ? context.financialConsistency.warnings.map((warning) =>
+          `- ${warningText(warning.message)} (${evidenceTypeText(warning.evidenceType)})`
+        )
+      : [
+          language === "Turkish"
+            ? "- ARR/MRR, LTV/CAC, geri ödeme, nakit yakımı/finansal pist, fonlama ve başabaş ilişkilerinde çelişki tespit edilmedi."
+            : "- No contradictions detected in ARR/MRR, LTV/CAC, payback, burn/runway, funding, or break-even relationships.",
+        ];
+
+  return [
+    language === "Turkish" ? "Finansal Kalite:" : "Financial Quality:",
+    `- ${language === "Turkish" ? "Durum" : "Status"}: ${qualityLabel[context.financialConsistency.quality]}`,
+    language === "Turkish" ? "Finansal Uyarılar:" : "Financial Warnings:",
+    ...warnings,
+    language === "Turkish"
+      ? "- Veri ayrımı: kullanıcı verisi, benchmark varsayımları ve AI planlama varsayımları ayrı değerlendirilmiştir."
+      : "- Data separation: user provided data, benchmark assumptions, and AI generated planning assumptions are evaluated separately.",
+  ].join("\n");
 }
