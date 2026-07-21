@@ -561,6 +561,47 @@ function getDecisionSummaryItems(
   ];
 }
 
+function getReportIntelligenceOverview(
+  sections: Array<{ field?: string; title: string; content: string }>
+) {
+  const fullContent = sections.map((section) => `${section.title}\n${section.content}`).join("\n\n");
+  const executiveRecommendation = getSectionContentByFieldOrTitle(sections, [
+    "executiverecommendation",
+    "executive recommendation",
+    "recommendation",
+  ]);
+  const intelligenceContent = executiveRecommendation || fullContent;
+  const quality =
+    extractMetricValue(intelligenceContent, "Report Quality") ||
+    extractMetricValue(intelligenceContent, "Rapor Kalitesi") ||
+    "Review required";
+  const qualityScore =
+    extractMetricValue(intelligenceContent, "Quality Score") ||
+    extractMetricValue(intelligenceContent, "Kalite Skoru") ||
+    "";
+  const confidenceSummary =
+    extractMetricValue(intelligenceContent, "Confidence Summary") ||
+    extractMetricValue(intelligenceContent, "Güven Özeti") ||
+    extractKeywordInsight(intelligenceContent, ["report findings", "rapor bulguları", "confidence"]);
+  const strengths = extractDecisionDriverList(intelligenceContent, ["Strengths", "Güçlü Yönler"]);
+  const risks = extractDecisionDriverList(intelligenceContent, ["Weaknesses", "Zayıf Yönler", "Risks", "Riskler"]);
+  const warnings = extractDecisionDriverList(intelligenceContent, [
+    "Consistency Warnings",
+    "Tutarlılık Uyarıları",
+  ]);
+
+  return {
+    quality: cleanDecisionSummaryText(quality, "Review required"),
+    qualityScore: cleanDecisionSummaryText(qualityScore, "Quality score requires review."),
+    strengths: cleanDecisionSummaryText(strengths, "Strengths require validation."),
+    risks: cleanDecisionSummaryText(risks || warnings, "Risks require review."),
+    confidenceSummary: cleanDecisionSummaryText(
+      confidenceSummary,
+      "Confidence summary requires review."
+    ),
+  };
+}
+
 function extractPercentScore(content: string, label: string) {
   const explicitScore = extractScore(content, label);
 
@@ -1903,6 +1944,7 @@ export default async function ReportDetailPage({
   const nextStepItem =
     decisionSummaryItems.find((item) => item.label === "Recommended Next Step") ||
     decisionSummaryItems[2];
+  const reportIntelligenceOverview = getReportIntelligenceOverview(visibleSections);
   const continueAnalysisHref = `/chat?reportId=${encodeURIComponent(report.id)}`;
   const regenerateMode = report.type === "Market Analysis" ? "market" : "plan";
   const regenerateParams = new URLSearchParams({
@@ -2210,6 +2252,56 @@ export default async function ReportDetailPage({
               </p>
             </Link>
           </div>
+
+          <section className="mt-6 overflow-hidden rounded-[2.15rem] border border-white/10 bg-white/[0.04] shadow-2xl shadow-black/30 ring-1 ring-white/[0.025] backdrop-blur-xl">
+            <div className="flex flex-col gap-3 border-b border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.065),rgba(255,255,255,0.02))] p-5 sm:p-6">
+              <p className="text-xs font-semibold tracking-[0.35em] text-teal-300/70">
+                REPORT INTELLIGENCE
+              </p>
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <h2 className="text-3xl font-semibold tracking-tight text-white">
+                    {reportIntelligenceOverview.quality}
+                  </h2>
+                  <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">
+                    {reportIntelligenceOverview.confidenceSummary}
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-teal-200/20 bg-teal-200/10 px-4 py-3 text-right">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-teal-100/70">
+                    Quality Score
+                  </p>
+                  <p className="mt-1 text-2xl font-semibold text-white">
+                    {reportIntelligenceOverview.qualityScore}
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="grid gap-4 p-4 sm:p-5 lg:grid-cols-2">
+              <article className="rounded-[1.55rem] border border-white/10 bg-black/30 p-5 shadow-xl shadow-black/20">
+                <div className="flex items-center gap-3">
+                  <CheckCircle2 className="h-5 w-5 text-teal-200" />
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-teal-200/70">
+                    Strengths
+                  </p>
+                </div>
+                <p className="mt-3 text-sm leading-6 text-zinc-300">
+                  {reportIntelligenceOverview.strengths}
+                </p>
+              </article>
+              <article className="rounded-[1.55rem] border border-white/10 bg-black/30 p-5 shadow-xl shadow-black/20">
+                <div className="flex items-center gap-3">
+                  <TriangleAlert className="h-5 w-5 text-amber-200" />
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-amber-100/75">
+                    Risks
+                  </p>
+                </div>
+                <p className="mt-3 text-sm leading-6 text-zinc-300">
+                  {reportIntelligenceOverview.risks}
+                </p>
+              </article>
+            </div>
+          </section>
 
           <section className="mt-6 overflow-hidden rounded-[2.15rem] border border-teal-200/15 bg-teal-200/[0.045] shadow-2xl shadow-black/35 ring-1 ring-teal-200/5 backdrop-blur-xl">
             <div className="flex flex-col gap-5 border-b border-white/10 bg-[radial-gradient(circle_at_top_right,rgba(94,234,212,0.14),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.065),rgba(255,255,255,0.02))] p-5 sm:p-6 lg:flex-row lg:items-end lg:justify-between">

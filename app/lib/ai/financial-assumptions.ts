@@ -11,6 +11,10 @@ import {
   type DecisionConfidenceModel,
 } from "@/app/lib/ai/decision-confidence";
 import {
+  createReportIntelligenceModel,
+  type ReportIntelligenceModel,
+} from "@/app/lib/ai/report-intelligence";
+import {
   createInvestmentScore,
   formatInvestmentScore,
   type InvestmentScore,
@@ -22,6 +26,7 @@ export type AiFinancialModelContext = FinancialModel & {
   investmentScore: InvestmentScore;
   financialConsistency: FinancialConsistencyCheck;
   decisionConfidence: DecisionConfidenceModel;
+  reportIntelligence: ReportIntelligenceModel;
 };
 
 export function createCanonicalFinancialAssumptions(input: {
@@ -35,7 +40,7 @@ export function createCanonicalFinancialAssumptions(input: {
   });
   const financialConsistency = validateFinancialConsistency(financialModel);
 
-  return {
+  const contextWithoutReportIntelligence = {
     ...financialModel,
     investmentScore,
     financialConsistency,
@@ -44,6 +49,11 @@ export function createCanonicalFinancialAssumptions(input: {
       investmentScore,
       financialConsistency,
     }),
+  };
+
+  return {
+    ...contextWithoutReportIntelligence,
+    reportIntelligence: createReportIntelligenceModel(contextWithoutReportIntelligence),
   };
 }
 
@@ -298,5 +308,71 @@ export function formatDecisionConfidenceReport(
     ...(decision.negativeFactors.length > 0
       ? decision.negativeFactors.map((factor) => `- ${translateFactor(factor)}`)
       : [language === "Turkish" ? "- Belirgin risk sinyali tespit edilmedi." : "- No material risk signal detected."]),
+  ].join("\n");
+}
+
+export function formatReportIntelligenceSummary(
+  context: AiFinancialModelContext,
+  language: "English" | "Turkish" = "English"
+) {
+  const intelligence = context.reportIntelligence;
+  const qualityLabel =
+    language === "Turkish"
+      ? {
+          "High Confidence": "Yüksek Güven",
+          "Moderate Confidence": "Orta Güven",
+          "Low Confidence": "Düşük Güven",
+        }
+      : {
+          "High Confidence": "High Confidence",
+          "Moderate Confidence": "Moderate Confidence",
+          "Low Confidence": "Low Confidence",
+        };
+  const translate = (value: string) => {
+    if (language !== "Turkish") {
+      return value;
+    }
+
+    const dictionary: Record<string, string> = {
+      "Clear business model": "Net iş modeli",
+      "Attractive margin potential": "Cazip marj potansiyeli",
+      "Meaningful market opportunity": "Anlamlı pazar fırsatı",
+      "Limited customer validation": "Sınırlı müşteri doğrulaması",
+      "Financial assumptions require testing": "Finansal varsayımlar test gerektiriyor",
+      "Execution readiness needs stronger proof": "Yürütme hazırlığı daha güçlü kanıt gerektiriyor",
+      "Decision vs Risk: aggressive recommendation conflicts with unresolved risk signals.":
+        "Karar ve risk uyumsuzluğu: agresif tavsiye çözülmemiş risk sinyalleriyle çelişiyor.",
+      "Financial vs Recommendation: high funding need and weak validation require caution.":
+        "Finansal durum ve tavsiye uyumsuzluğu: yüksek fonlama ihtiyacı ve zayıf doğrulama dikkat gerektiriyor.",
+      "Score vs Decision: low confidence does not support an aggressive recommendation.":
+        "Skor ve karar uyumsuzluğu: düşük güven agresif tavsiyeyi desteklemiyor.",
+      "Report findings are directionally reliable, with limited consistency issues.":
+        "Rapor bulguları yön olarak güvenilir ve sınırlı tutarlılık sorunu içeriyor.",
+      "Report findings are useful for decision planning, but validation gaps remain.":
+        "Rapor bulguları karar planlaması için yararlı, ancak doğrulama boşlukları devam ediyor.",
+      "Report findings should be treated as early-stage planning input until evidence improves.":
+        "Kanıt seviyesi güçlenene kadar rapor bulguları erken aşama planlama girdisi olarak ele alınmalı.",
+    };
+
+    return dictionary[value] || value;
+  };
+
+  return [
+    language === "Turkish" ? "Report Intelligence:" : "Report Intelligence:",
+    `${language === "Turkish" ? "Rapor Kalitesi" : "Report Quality"}: ${qualityLabel[intelligence.overallQuality]}`,
+    `${language === "Turkish" ? "Kalite Skoru" : "Quality Score"}: ${intelligence.qualityScore}/100`,
+    language === "Turkish" ? "Güçlü Yönler:" : "Strengths:",
+    ...(intelligence.strengths.length > 0
+      ? intelligence.strengths.map((strength) => `- ${translate(strength)}`)
+      : [language === "Turkish" ? "- Güçlü sinyaller doğrulama gerektiriyor." : "- Strengths require validation."]),
+    language === "Turkish" ? "Zayıf Yönler:" : "Weaknesses:",
+    ...(intelligence.risks.length > 0
+      ? intelligence.risks.map((risk) => `- ${translate(risk)}`)
+      : [language === "Turkish" ? "- Kritik kalite riski tespit edilmedi." : "- No critical quality risk detected."]),
+    language === "Turkish" ? "Tutarlılık Uyarıları:" : "Consistency Warnings:",
+    ...(intelligence.warnings.length > 0
+      ? intelligence.warnings.map((warning) => `- ${translate(warning)}`)
+      : [language === "Turkish" ? "- Çelişki tespit edilmedi." : "- No contradictions detected."]),
+    `${language === "Turkish" ? "Güven Özeti" : "Confidence Summary"}: ${translate(intelligence.confidenceSummary)}`,
   ].join("\n");
 }

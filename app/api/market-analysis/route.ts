@@ -26,6 +26,7 @@ import {
   formatDecisionConfidenceReport,
   formatCanonicalFinancialAssumptions,
   formatFinancialConsistencyReport,
+  formatReportIntelligenceSummary,
   type AiFinancialModelContext,
 } from "@/app/lib/ai/financial-assumptions";
 import { isReportGenerationFailureText } from "@/app/lib/report-errors";
@@ -886,6 +887,7 @@ function buildCanonicalMarketExecutiveRecommendation(
     marketText(language, `Main Risk: ${context.investmentScore.topRisks[0] || "Market demand requires validation."}`, `Ana Risk: ${context.investmentScore.topRisks[0] || "Pazar talebi doğrulama gerektiriyor."}`),
     marketText(language, `Next Action: ${context.investmentScore.nextCriticalAction}`, `Sonraki Aksiyon: ${context.investmentScore.nextCriticalAction}`),
     formatDecisionConfidenceReport(context, language),
+    formatReportIntelligenceSummary(context, language),
   ].join("\n");
 }
 

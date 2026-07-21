@@ -26,6 +26,7 @@ import {
   formatDecisionConfidenceReport,
   formatCanonicalFinancialAssumptions,
   formatFinancialConsistencyReport,
+  formatReportIntelligenceSummary,
   type AiFinancialModelContext,
 } from "@/app/lib/ai/financial-assumptions";
 import { isReportGenerationFailureText } from "@/app/lib/report-errors";
@@ -1231,6 +1232,7 @@ function buildCanonicalExecutiveRecommendation(context: AiFinancialModelContext,
       `Gerekçe: Mevcut kanıtlar ${visibleDecision.toLowerCase()} kararını destekliyor; çünkü ölçek öncesinde finansal pist, geri ödeme, doğrulama güveni ve sermaye verimliliği kanıtlanmalı.`
     ),
     formatDecisionConfidenceReport(context, language),
+    formatReportIntelligenceSummary(context, language),
   ].join("\n");
 }
 
