@@ -49,7 +49,11 @@ import {
   buildDecisionSupportDirectives,
   buildFullReportStructureDirectives,
 } from "@/app/lib/ai/report-quality-directives";
-import { normalizePdfText } from "@/app/lib/pdf-normalization.mjs";
+import {
+  localizePdfPresentationLabel,
+  localizePdfPresentationText,
+  normalizePdfText,
+} from "@/app/lib/pdf-normalization.mjs";
 
 const fieldPrompts = {
   executiveSummary: {
@@ -592,7 +596,13 @@ function marketText(language: ResponseLanguage, english: string, turkish: string
 }
 
 function marketLabel(language: ResponseLanguage, english: string, turkish: string) {
-  return marketText(language, english, turkish);
+  return language === "Turkish"
+    ? localizePdfPresentationLabel(turkish || english, "tr")
+    : localizePdfPresentationLabel(english, "en");
+}
+
+function localizeDeterministicMarketText(content: string, language: ResponseLanguage) {
+  return localizePdfPresentationText(content, language === "Turkish" ? "tr" : "en");
 }
 
 function normalizeTurkishMarketSourcePhrases(content: string) {
@@ -663,7 +673,7 @@ function enforceMarketReportLanguage(
   }
 
   if (language === "Turkish") {
-    return normalizeTurkishMarketSourcePhrases(normalized)
+    return localizeDeterministicMarketText(normalizeTurkishMarketSourcePhrases(normalized), language)
       .replace(/\bAI Executive Insight\b/g, "AI Yönetici İçgörüsü")
       .replace(/\bMarket Opportunity Score\b/g, "Pazar Fırsatı Skoru")
       .replace(/\bAI Confidence Breakdown\b/g, "AI Güven Dağılımı")
@@ -692,7 +702,7 @@ function enforceMarketReportLanguage(
       .trim();
   }
 
-  return normalized
+  return localizeDeterministicMarketText(normalized, language)
     .replace(/\bAI Yönetici İçgörüsü\b/g, "AI Executive Insight")
     .replace(/\bPazar Fırsatı Skoru\b/g, "Market Opportunity Score")
     .replace(/\bAI Güven Dağılımı\b/g, "AI Confidence Breakdown")

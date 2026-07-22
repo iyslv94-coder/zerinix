@@ -14,6 +14,9 @@ export function normalizePdfText(value) {
     .replace(/\bwithinMarket\b/g, "within Market")
     .replace(/\bconversionbefore\b/gi, "conversion before")
     .replace(/\bAI Executive Insight:\s*AI Executive Insight:\s*/gi, "AI Executive Insight: ")
+    .replace(/\bAI Yönetici İçgörüsü:\s*AI Yönetici İçgörüsü:\s*/gi, "AI Yönetici İçgörüsü: ")
+    .replace(/\bAI Yönetici İçgörüsü\s*:\s*AI Executive Insight\s*:/gi, "AI Yönetici İçgörüsü: ")
+    .replace(/\bAI Executive Insight\s*:\s*AI Yönetici İçgörüsü\s*:/gi, "AI Executive Insight: ")
     .replace(/\bsources(?:\.[a-z0-9_-]+)+\b/gi, "Source category: Planning assumption. External citation metadata was not provided.")
     .replace(/\bdeduplicated\.none\.provided\.by\.user\b/gi, "Source category: Planning assumption. External citation metadata was not provided.")
     .replace(/\bnone\.provided\.by\.user\b/gi, "Source category: Planning assumption. External citation metadata was not provided.")
@@ -74,7 +77,9 @@ const pdfPresentationLabelPairs = [
     ["Next 30 Days", "Sonraki 30 Gün"],
     ["Next 90 Days", "Sonraki 90 Gün"],
     ["Next 6 months", "Sonraki 6 Ay"],
+    ["Next 6 Months", "Sonraki 6 Ay"],
     ["Next 12 months", "Sonraki 12 Ay"],
+    ["Next 12 Months", "Sonraki 12 Ay"],
     ["Key Metrics", "Temel Metrikler"],
     ["Sources / Assumptions", "Kaynaklar / Varsayımlar"],
     ["Sources", "Kaynaklar"],
@@ -115,6 +120,17 @@ const pdfPresentationLabelPairs = [
     ["Founder Score", "AI Kurucu Skoru"],
     ["AI Executive Insight", "AI Yönetici İçgörüsü"],
     ["Investor Insight", "Yatırımcı İçgörüsü"],
+    ["AI Confidence Breakdown", "AI Güven Dağılımı"],
+    ["Founder Decision Engine", "Kurucu Karar Motoru"],
+    ["Risk Matrix", "Risk Matrisi"],
+    ["AI Action Plan", "AI Aksiyon Planı"],
+    ["Immediate Actions", "Acil Aksiyonlar"],
+    ["Expected impact", "Beklenen etki"],
+    ["Validation Intelligence", "Doğrulama Zekası"],
+    ["Validation Roadmap", "Doğrulama Yol Haritası"],
+    ["Source Intelligence", "Kaynak Zekası"],
+    ["Report Intelligence", "Rapor Zekası"],
+    ["CEO Brief", "CEO Özeti"],
     ["Key insights", "Temel İçgörüler"],
     ["Hold for validation", "Doğrulama Beklemede"],
     ["Validation required", "Doğrulama gerekli"],
@@ -138,6 +154,33 @@ const pdfPresentationLabelPairs = [
     ["Decision", "Karar"],
     ["Confidence", "Güven"],
     ["Decision Confidence", "Karar Güveni"],
+    ["AI Decision Confidence", "AI Karar Güveni"],
+    ["Validation Score", "Doğrulama Skoru"],
+    ["Financial Quality", "Finansal Kalite"],
+    ["Report Quality", "Rapor Kalitesi"],
+    ["Quality Score", "Kalite Skoru"],
+    ["Confidence Summary", "Güven Özeti"],
+    ["Positive signals", "Pozitif sinyaller"],
+    ["Risk signals", "Risk sinyalleri"],
+    ["Consistency Warnings", "Tutarlılık Uyarıları"],
+    ["High Confidence", "Yüksek Güven"],
+    ["Medium Confidence", "Orta Güven"],
+    ["Low Confidence", "Düşük Güven"],
+    ["Market Size", "Pazar Büyüklüğü"],
+    ["Competitor Insights", "Rakip İçgörüleri"],
+    ["Financial Benchmarks", "Finansal Benchmarklar"],
+    ["KPI Assumptions", "KPI Varsayımları"],
+    ["Pricing Assumptions", "Fiyatlandırma Varsayımları"],
+    ["Validation Recommendations", "Doğrulama Önerileri"],
+    ["User Provided", "Kullanıcı Sağladı"],
+    ["Industry Benchmark", "Sektör Benchmarkı"],
+    ["Market Research", "Pazar Araştırması"],
+    ["Competitor Data", "Rakip Verisi"],
+    ["AI Planning Assumption", "AI Planlama Varsayımı"],
+    ["Requires Validation", "Doğrulama Gerektirir"],
+    ["Not Started", "Başlamadı"],
+    ["In Progress", "Devam Ediyor"],
+    ["Validated", "Doğrulandı"],
     ["Recommendation", "Tavsiye"],
     ["RECOMMENDATION", "TAVSİYE"],
     ["Next Critical Action", "Sonraki Kritik Aksiyon"],
@@ -160,6 +203,7 @@ const pdfPresentationLabelPairs = [
     ["ARR", "ARR"],
     ["MRR", "MRR"],
     ["Revenue", "Gelir"],
+    ["Revenue Potential", "Gelir Potansiyeli"],
     ["Gross Margin", "Brüt Marj"],
     ["Burn Rate", "Nakit Yakımı"],
     ["Runway", "Finansal Pist"],
@@ -170,6 +214,7 @@ const pdfPresentationLabelPairs = [
     ["Owner", "Sahip"],
     ["Trigger", "Tetikleyici"],
     ["Action", "Aksiyon"],
+    ["Evidence", "Kanıt"],
     ["Validation needed", "Gerekli doğrulama"],
     ["Monitor actuals", "Gerçekleşenleri izle"],
     ["Validate with operating data", "Operasyon verisiyle doğrula"],
@@ -210,9 +255,13 @@ const pdfPresentationLabelPairs = [
     ["Invest", "Yatırım Yap"],
     ["Rivalry", "Rekabet Yoğunluğu"],
     ["Entrants", "Yeni Girişler"],
+    ["New Entrants", "Yeni Girişler"],
     ["Buyer", "Alıcı"],
+    ["Buyer Power", "Alıcı Gücü"],
     ["Supplier", "Tedarikçi"],
+    ["Supplier Power", "Tedarikçi Gücü"],
     ["Substitutes", "İkameler"],
+    ["Threat of Substitutes", "İkame Tehdidi"],
     ["NO DATA", "VERİ YOK"],
     ["Not available", "Mevcut değil"],
 ];
@@ -271,6 +320,33 @@ export function localizePdfPresentationLabel(value = "", locale = "en") {
 
 function cleanupTurkishPdfLanguageLeakage(value = "") {
   return String(value)
+    .replace(/\bfinansal[._-]benchmarklar(?:[._-][\p{L}\p{N}_-]+)*\b/giu, "Finansal benchmarklar")
+    .replace(/\bpazar[._-]büyüklüğü(?:[._-][\p{L}\p{N}_-]+)*\b/giu, "Pazar büyüklüğü")
+    .replace(/(^|[\n:•-]\s*)tam(?=$|[\n.;,)]|\s{2,})/giu, "$1TAM / SAM / SOM")
+    .replace(/\bsource(?:s)?[_\-. ](?:metadata|deduplicated|assumptions|fallback)(?:[_\-. ][a-z0-9_-]+)*\b/gi, "Kaynak bilgisi doğrulanamadı.")
+    .replace(/\bsources(?:[._-][a-z0-9_-]+)+\b/gi, "Kaynak bilgisi doğrulanamadı.")
+    .replace(/\bsources(?:\.[a-z0-9_-]+)+\b/gi, "Kaynak bilgisi doğrulanamadı.")
+    .replace(/\bdeduplicated\.none\.provided\.by\.user\b/gi, "Kaynak bilgisi doğrulanamadı.")
+    .replace(/\bnone\.provided\.by\.user\b/gi, "Kaynak bilgisi doğrulanamadı.")
+    .replace(/\bomitted\.unverifiable\.third(?:\.[a-z0-9_-]+)*\b/gi, "Kaynak bilgisi doğrulanamadı.")
+    .replace(
+      /Kaynak kategorisi:\s*Planlama varsayımı\.\s*Harici kaynak metadatası sağlanmadı\.?(?:\s*[.…]+\s*user\b|\s+user\b)/gi,
+      "Kaynak bilgisi doğrulanamadı."
+    )
+    .replace(/\bKaynak bilgisi doğrulanamadı\.?(?:\s*[.…]+\s*user\b|\s+user\b)/gi, "Kaynak bilgisi doğrulanamadı.")
+    .replace(/\s*[.…]{2,}\s*user\b/gi, "")
+    .replace(/\bHarici kaynak metadatası sağlanmadı\.?/gi, "Kaynak bilgisi doğrulanamadı.")
+    .replace(/\bRivalite\b/gi, "Rekabet Yoğunluğu")
+    .replace(/\bCustomer validation gaps remain unresolved\.?/gi, "Müşteri doğrulama boşlukları devam ediyor.")
+    .replace(/\bMarket sizing uses benchmark market scope[^.\n]*(?:\.[^\n]*)?/gi, "Pazar büyüklüğü, benchmark pazar kapsamı ve planlama varsayımları kullanılarak değerlendirilmiştir.")
+    .replace(/\bNext\s+30\s+(?:Days|Gün)\b/gi, "Sonraki 30 Gün")
+    .replace(/\bNext\s+90\s+(?:Days|Gün)\b/gi, "Sonraki 90 Gün")
+    .replace(/\bNext\s+6\s+(?:Months?|Ay)\b/gi, "Sonraki 6 Ay")
+    .replace(/\bNext\s+12\s+(?:Months?|Ay)\b/gi, "Sonraki 12 Ay")
+    .replace(/\bMonth\s+(\d+)\b/gi, "$1 ay")
+    .replace(/\bimplication\b/gi, "etkisi")
+    .replace(/\btier\b/gi, "paket seviyesi")
+    .replace(/\bupsell\b/gi, "ek satış")
     .replace(/\bFood & Beverage \/ Specialty Coffee\b/g, "Yiyecek & İçecek / Özel Kahve")
     .replace(/\bD2C Brand \+ Subscription \+ B2B\b/g, "D2C Marka + Abonelik + B2B")
     .replace(/\bSTRENGTHS\b/g, "GÜÇLÜ YÖNLER")
@@ -356,7 +432,29 @@ export function localizePdfPresentationText(value = "", locale = "en") {
 
   if (locale === "tr") {
     return cleanupTurkishPdfLanguageLeakage(localized
-      .replace(/\bSource category: Planning assumption\. External citation metadata was not provided\./g, "Kaynak kategorisi: Planlama varsayımı. Harici kaynak metadatası sağlanmadı.")
+      .replace(/\bfinansal[._-]benchmarklar(?:[._-][\p{L}\p{N}_-]+)*\b/giu, "Finansal benchmarklar")
+      .replace(/\bpazar[._-]büyüklüğü(?:[._-][\p{L}\p{N}_-]+)*\b/giu, "Pazar büyüklüğü")
+      .replace(/(^|[\n:•-]\s*)tam(?=$|[\n.;,)]|\s{2,})/giu, "$1TAM / SAM / SOM")
+      .replace(/\bSource category: Planning assumption\. External citation metadata was not provided\./g, "Kaynak bilgisi doğrulanamadı.")
+      .replace(/\bKaynak kategorisi: Planlama varsayımı\. Harici atıf metadatası sağlanmadı\./g, "Kaynak bilgisi doğrulanamadı.")
+      .replace(/\bsources(?:\.[a-z0-9_-]+)+\b/gi, "Kaynak bilgisi doğrulanamadı.")
+      .replace(/\bsource[_\-. ]metadata(?:[_\-. ][a-z0-9_-]+)*\b/gi, "Kaynak bilgisi doğrulanamadı.")
+      .replace(/\bsource(?:s)?[_\-. ](?:metadata|deduplicated|assumptions|fallback)(?:[_\-. ][a-z0-9_-]+)*\b/gi, "Kaynak bilgisi doğrulanamadı.")
+      .replace(/\bsource(?:s)?[._-](?:[a-z0-9_-]+[._-])*(?:fallback|slug|metadata|deduplicated|assumptions)(?:[._-][a-z0-9_-]+)*\b/gi, "Kaynak bilgisi doğrulanamadı.")
+      .replace(/\bsources(?:[._-][a-z0-9_-]+)+\b/gi, "Kaynak bilgisi doğrulanamadı.")
+      .replace(/\bdeduplicated\.none\.provided\.by\.user\b/gi, "Kaynak bilgisi doğrulanamadı.")
+      .replace(/\bnone\.provided\.by\.user\b/gi, "Kaynak bilgisi doğrulanamadı.")
+      .replace(/\bomitted\.unverifiable\.third(?:\.[a-z0-9_-]+)*\b/gi, "Kaynak bilgisi doğrulanamadı.")
+      .replace(
+        /Kaynak kategorisi:\s*Planlama varsayımı\.\s*Harici kaynak metadatası sağlanmadı\.?(?:\s*[.…]+\s*user\b|\s+user\b)/gi,
+        "Kaynak bilgisi doğrulanamadı."
+      )
+      .replace(/\bKaynak bilgisi doğrulanamadı\.?(?:\s*[.…]+\s*user\b|\s+user\b)/gi, "Kaynak bilgisi doğrulanamadı.")
+      .replace(/\s*[.…]{2,}\s*user\b/gi, "")
+      .replace(/\bHarici kaynak metadatası sağlanmadı\.?/gi, "Kaynak bilgisi doğrulanamadı.")
+      .replace(/\bRivalite\b/gi, "Rekabet Yoğunluğu")
+      .replace(/\bCustomer validation gaps remain unresolved\.?/gi, "Müşteri doğrulama boşlukları devam ediyor.")
+      .replace(/\bMarket sizing uses benchmark market scope[^.\n]*(?:\.[^\n]*)?/gi, "Pazar büyüklüğü, benchmark pazar kapsamı ve planlama varsayımları kullanılarak değerlendirilmiştir.")
       .replace(/\bAI Executive Insight\b/g, "AI Yönetici İçgörüsü")
       .replace(/\bKey insights\b/g, "Temel İçgörüler")
       .replace(/\bHold for validation\b/g, "Doğrulama Beklemede")
@@ -369,6 +467,11 @@ export function localizePdfPresentationText(value = "", locale = "en") {
       .replace(/\bmarket size and contribution margin assumptions\b/gi, "pazar büyüklüğü ve katkı marjı varsayımları")
       .replace(/\bCapital efficiency is based on\s+([^.\n]+)\./gi, "Sermaye verimliliği $1 temel alınarak değerlendirilmiştir.")
       .replace(/\bCapital efficiency improves when\s+([^.\n]+)\./gi, "Sermaye verimliliği $1 gerçekleştiğinde iyileşir.")
+      .replace(/\bSubscription model creates recurring revenue potential\.?/gi, "Abonelik modeli tekrar eden gelir potansiyeli yaratır.")
+      .replace(/\bVerified\s+benchmark[-\s]?derived\b/gi, "Doğrulanmış benchmark kaynaklı")
+      .replace(/\bVerified\s*\/\s*Benchmark[-\s]?derived\b/gi, "Doğrulanmış / Benchmark kaynaklı")
+      .replace(/\bDiscovery\b/g, "Keşif")
+      .replace(/\bProcurement friction\b/gi, "Satın alma sürtünmesi")
       .replace(/\bCapital efficiency:\s*investment need is \$3\.6M against \$768k Year-1 ARR\./gi, "Sermaye verimliliği: $3.6M yatırım ihtiyacına karşılık 1. yıl ARR hedefi $768k.")
       .replace(/\binvestment need is \$3\.6M against \$768k Year-1 ARR\b/gi, "Sermaye verimliliği: $3.6M yatırım ihtiyacına karşılık 1. yıl ARR hedefi $768k.")
       .replace(/\bopportunity is supported by reachable demand\b/gi, "fırsat, erişilebilir talep tarafından desteklenmektedir")
@@ -391,6 +494,9 @@ export function localizePdfPresentationText(value = "", locale = "en") {
       .replace(/\b(\d+(?:[.,]\d+)?)\s+months\b/gi, "$1 ay")
       .replace(/\bMonth\s+48\b/g, "48. Ay")
       .replace(/\bRevenue\b/g, "Gelir")
+      .replace(/\bRevenue Potential\b/g, "Gelir Potansiyeli")
+      .replace(/\bGelir Potential\b/g, "Gelir Potansiyeli")
+      .replace(/\bEvidence\b/g, "Kanıt")
       .replace(/\bBurn Rate\b/g, "Nakit Yakımı")
       .replace(/\bMonthly Burn\b/g, "Aylık Nakit Yakımı")
       .replace(/\bBurn\b/g, "Nakit Yakımı")
@@ -408,10 +514,28 @@ export function localizePdfPresentationText(value = "", locale = "en") {
       .replace(/\bNext 90 Days\b/g, "Sonraki 90 Gün")
       .replace(/\bNext 6 months\b/gi, "Sonraki 6 Ay")
       .replace(/\bNext 12 months\b/gi, "Sonraki 12 Ay")
+      .replace(/\bNext 30 Gün\b/g, "Sonraki 30 Gün")
+      .replace(/\bNext 90 Gün\b/g, "Sonraki 90 Gün")
+      .replace(/\bNext 6 Ay\b/gi, "Sonraki 6 Ay")
+      .replace(/\bNext 12 Ay\b/gi, "Sonraki 12 Ay")
+      .replace(/\bMonth\s+(\d+)\b/gi, "$1 ay")
+      .replace(/\b(\d+)\s+ay\b/g, "$1 ay")
+      .replace(/\bimplication\b/gi, "etkisi")
+      .replace(/\btier\b/gi, "paket seviyesi")
+      .replace(/\bupsell\b/gi, "ek satış")
+      .replace(/\b(\d+(?:\.\d+)?)\s+month\b/gi, "$1 ay")
+      .replace(/\b(\d+(?:\.\d+)?)\s+months\b/gi, "$1 ay")
+      .replace(/\b(\d+)\.(\d+)\s+ay\b/g, "$1,$2 ay")
+      .replace(/\b\/month\b/gi, "/ay")
       .replace(/\band\b/gi, "ve")
       .replace(/\bD2C unit sales, recurring subscriptions, ve B2B wholesale accounts\b/g, "D2C ürün satışları, tekrar eden abonelikler ve B2B toptan hesaplar")
       .replace(/\bhold spend until proof points improve\b/gi, "Kanıt noktaları iyileşene kadar harcamayı sınırlayın")
       .replace(/\bDo not scale spend until[^.\n]*(?:\.[^\n]*)?/gi, "Kanıt noktaları güçlenene kadar harcamayı ölçeklendirmeyin.")
+      .replace(/\bValidate a lower-CAC acquisition motion before increasing budget\.?/gi, "Bütçeyi artırmadan önce daha düşük CAC'li edinim hareketini doğrulayın.")
+      .replace(/\bRun primary research to validate market size and contribution margin assumptions\.?/gi, "Pazar büyüklüğü ve katkı marjı varsayımlarını doğrulamak için birincil araştırma yapın.")
+      .replace(/\bConvert the strongest ICP into paid pilots using the calculated pricing and payback targets\.?/gi, "En güçlü ICP'yi hesaplanan fiyatlandırma ve geri ödeme hedefleriyle ücretli pilotlara dönüştürün.")
+      .replace(/\bValidate pricing, buyer urgency, and repeatable acquisition before committing full funding\.?/gi, "Tam fonlama taahhüdünden önce fiyatlandırmayı, alıcı aciliyetini ve tekrarlanabilir edinimi doğrulayın.")
+      .replace(/\bDo not scale spend until the weakest economics are redesigned and validated\.?/gi, "En zayıf ekonomik varsayımlar yeniden tasarlanıp doğrulanana kadar harcamayı ölçeklendirmeyin.")
       .replace(/\bprove customer pain\b/gi, "müşteri problemini kanıtlayın")
       .replace(/\bvalidate repeatable acquisition\b/gi, "tekrarlanabilir müşteri edinimini doğrulayın")
       .replace(/\bExpected impact\b/gi, "Beklenen etki")
@@ -426,6 +550,12 @@ export function localizePdfPresentationText(value = "", locale = "en") {
       .replace(/\bWorst Case\b/g, "Kötü Senaryo")
       .replace(/\bBase Case\b/g, "Baz Senaryo")
       .replace(/\bBest Case\b/g, "En İyi Senaryo")
+      .replace(/\bRivalry\b/g, "Rekabet Yoğunluğu")
+      .replace(/\bNew Entrants\b/g, "Yeni Girişler")
+      .replace(/\bEntrants\b/g, "Yeni Girişler")
+      .replace(/\bBuyer Power\b/g, "Alıcı Gücü")
+      .replace(/\bSupplier Power\b/g, "Tedarikçi Gücü")
+      .replace(/\bSubstitutes\b/g, "İkameler")
       .replace(/\bINVESTMENT RECOMMENDATION\b/g, "YATIRIM TAVSİYESİ")
       .replace(/\bType: Industry benchmark\b/g, "Tür: Sektör benchmarkı")
       .replace(/\bType: Financial benchmark \/ planning assumption\b/g, "Tür: Finansal benchmark / planlama varsayımı")

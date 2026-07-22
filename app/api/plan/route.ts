@@ -49,6 +49,10 @@ import {
   buildDecisionSupportDirectives,
   buildFullReportStructureDirectives,
 } from "@/app/lib/ai/report-quality-directives";
+import {
+  localizePdfPresentationLabel,
+  localizePdfPresentationText,
+} from "@/app/lib/pdf-normalization.mjs";
 
 const planPrompts = {
   executiveSummary: {
@@ -699,7 +703,7 @@ function enforcePlanReportLanguage(
   }
 
   if (language === "Turkish") {
-    return normalizeTurkishReportSourcePhrases(normalized)
+    return localizeDeterministicReportText(normalizeTurkishReportSourcePhrases(normalized), language)
       .replace(/\bAI Executive Insight\b/g, "AI Yönetici İçgörüsü")
       .replace(/\bMarket Opportunity Score\b/g, "Pazar Fırsatı Skoru")
       .replace(/\bAI Confidence Breakdown\b/g, "AI Güven Dağılımı")
@@ -728,7 +732,7 @@ function enforcePlanReportLanguage(
       .trim();
   }
 
-  return normalized
+  return localizeDeterministicReportText(normalized, language)
     .replace(/\bAI Yönetici İçgörüsü\b/g, "AI Executive Insight")
     .replace(/\bPazar Fırsatı Skoru\b/g, "Market Opportunity Score")
     .replace(/\bAI Güven Dağılımı\b/g, "AI Confidence Breakdown")
@@ -939,7 +943,13 @@ function reportText(language: ResponseLanguage, english: string, turkish: string
 }
 
 function reportLabel(language: ResponseLanguage, english: string, turkish: string) {
-  return reportText(language, english, turkish);
+  return language === "Turkish"
+    ? localizePdfPresentationLabel(turkish || english, "tr")
+    : localizePdfPresentationLabel(english, "en");
+}
+
+function localizeDeterministicReportText(content: string, language: ResponseLanguage) {
+  return localizePdfPresentationText(content, language === "Turkish" ? "tr" : "en");
 }
 
 function normalizeTurkishReportSourcePhrases(content: string) {

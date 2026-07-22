@@ -33,6 +33,7 @@ import {
   formatInvestmentScore,
   type InvestmentScore,
 } from "@/app/lib/ai/investment-score";
+import { localizePdfPresentationLabel } from "@/app/lib/pdf-normalization.mjs";
 import { getEvidenceLabel, inferEvidenceLevel } from "@/app/lib/report-evidence";
 
 export type ReportKind = "business_plan" | "market_analysis";
@@ -44,6 +45,10 @@ export type AiFinancialModelContext = FinancialModel & {
   sourceIntelligence: SourceIntelligenceModel;
   validationIntelligence: ValidationIntelligenceModel;
 };
+
+function localizeReportLabel(value: string, language: "English" | "Turkish") {
+  return localizePdfPresentationLabel(value, language === "Turkish" ? "tr" : "en");
+}
 
 export function createCanonicalFinancialAssumptions(input: {
   prompt: string;
@@ -324,9 +329,9 @@ export function formatDecisionConfidenceReport(
   };
 
   return [
-    language === "Turkish" ? "AI Karar Güveni:" : "AI Decision Confidence:",
-    `${language === "Turkish" ? "Karar" : "Decision"}: ${decision.decision}`,
-    `${language === "Turkish" ? "Güven" : "Confidence"}: ${decision.confidenceScore}%`,
+    `${localizeReportLabel("AI Decision Confidence", language)}:`,
+    `${localizeReportLabel("Decision", language)}: ${decision.decision}`,
+    `${localizeReportLabel("Confidence", language)}: ${decision.confidenceScore}%`,
     positiveTitle,
     ...(decision.positiveFactors.length > 0
       ? decision.positiveFactors.map((factor) => `- ${translateFactor(factor)}`)
@@ -385,22 +390,22 @@ export function formatReportIntelligenceSummary(
   };
 
   return [
-    language === "Turkish" ? "Report Intelligence:" : "Report Intelligence:",
-    `${language === "Turkish" ? "Rapor Kalitesi" : "Report Quality"}: ${qualityLabel[intelligence.overallQuality]}`,
-    `${language === "Turkish" ? "Kalite Skoru" : "Quality Score"}: ${intelligence.qualityScore}/100`,
-    language === "Turkish" ? "Güçlü Yönler:" : "Strengths:",
+    `${localizeReportLabel("Report Intelligence", language)}:`,
+    `${localizeReportLabel("Report Quality", language)}: ${qualityLabel[intelligence.overallQuality]}`,
+    `${localizeReportLabel("Quality Score", language)}: ${intelligence.qualityScore}/100`,
+    `${localizeReportLabel("Strengths", language)}:`,
     ...(intelligence.strengths.length > 0
       ? intelligence.strengths.map((strength) => `- ${translate(strength)}`)
       : [language === "Turkish" ? "- Güçlü sinyaller doğrulama gerektiriyor." : "- Strengths require validation."]),
-    language === "Turkish" ? "Zayıf Yönler:" : "Weaknesses:",
+    `${localizeReportLabel("Weaknesses", language)}:`,
     ...(intelligence.risks.length > 0
       ? intelligence.risks.map((risk) => `- ${translate(risk)}`)
       : [language === "Turkish" ? "- Kritik kalite riski tespit edilmedi." : "- No critical quality risk detected."]),
-    language === "Turkish" ? "Tutarlılık Uyarıları:" : "Consistency Warnings:",
+    `${localizeReportLabel("Consistency Warnings", language)}:`,
     ...(intelligence.warnings.length > 0
       ? intelligence.warnings.map((warning) => `- ${translate(warning)}`)
       : [language === "Turkish" ? "- Çelişki tespit edilmedi." : "- No contradictions detected."]),
-    `${language === "Turkish" ? "Güven Özeti" : "Confidence Summary"}: ${translate(intelligence.confidenceSummary)}`,
+    `${localizeReportLabel("Confidence Summary", language)}: ${translate(intelligence.confidenceSummary)}`,
   ].join("\n");
 }
 
@@ -461,7 +466,7 @@ function localizeSourceText(value: string, language: "English" | "Turkish") {
 }
 
 function formatSourceItem(item: SourceIntelligenceItem, language: "English" | "Turkish") {
-  const area = item.area;
+  const area = localizeReportLabel(item.area, language);
 
   return language === "Turkish"
     ? `- ${area}: ${localizeSourceType(item.sourceType, language)} | ${localizeSourceConfidence(item.confidence, language)} | ${localizeSourceText(item.validationRecommendation, language)}`
@@ -473,7 +478,7 @@ export function formatSourceIntelligenceSummary(
   language: "English" | "Turkish" = "English"
 ) {
   const source = context.sourceIntelligence;
-  const sectionTitle = language === "Turkish" ? "Source Intelligence" : "Source Intelligence";
+  const sectionTitle = localizeReportLabel("Source Intelligence", language);
   const high = source.summary.highConfidence.length > 0
     ? source.summary.highConfidence.map((item) => `- ${localizeSourceText(item, language)}`)
     : [language === "Turkish" ? "- Yüksek güvenli kaynak yok." : "- No high-confidence source available."];
@@ -486,13 +491,13 @@ export function formatSourceIntelligenceSummary(
 
   return [
     `${sectionTitle}:`,
-    language === "Turkish" ? "Yüksek Güven:" : "High Confidence:",
+    `${localizeReportLabel("High Confidence", language)}:`,
     ...high,
-    language === "Turkish" ? "Orta Güven:" : "Medium Confidence:",
+    `${localizeReportLabel("Medium Confidence", language)}:`,
     ...medium,
-    language === "Turkish" ? "Düşük Güven:" : "Low Confidence:",
+    `${localizeReportLabel("Low Confidence", language)}:`,
     ...low,
-    language === "Turkish" ? "Doğrulama Önerileri:" : "Validation Recommendations:",
+    `${localizeReportLabel("Validation Recommendations", language)}:`,
     ...source.items.map((item) => formatSourceItem(item, language)),
   ].join("\n");
 }
@@ -576,8 +581,8 @@ export function formatValidationIntelligenceSummary(
   language: "English" | "Turkish" = "English"
 ) {
   return [
-    language === "Turkish" ? "Validation Roadmap:" : "Validation Roadmap:",
-    `${language === "Turkish" ? "Doğrulama Skoru" : "Validation Score"}: ${localizeValidationScore(context.validationIntelligence.score, language)}`,
+    `${localizeReportLabel("Validation Roadmap", language)}:`,
+    `${localizeReportLabel("Validation Score", language)}: ${localizeValidationScore(context.validationIntelligence.score, language)}`,
     ...context.validationIntelligence.experiments
       .slice(0, 5)
       .map((experiment) => formatValidationExperiment(experiment, language)),
