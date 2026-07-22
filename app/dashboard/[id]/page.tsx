@@ -36,7 +36,11 @@ import {
   isExecutivePresentationSection,
   normalizeReportPresentationText,
 } from "@/app/lib/report-presentation";
-import type { ReportInvestmentScore } from "@/app/lib/report-investment-score";
+import type {
+  ReportBenchmarkFit,
+  ReportInvestmentScore,
+} from "@/app/lib/report-investment-score";
+import { localizePdfPresentationText } from "@/app/lib/pdf-normalization.mjs";
 import {
   getEvidenceBadgeClass,
   getEvidenceLabel,
@@ -1781,6 +1785,128 @@ function ExecutiveSnapshotPanel({
   );
 }
 
+function getBenchmarkFitLocale(source = "") {
+  return /[çğıöşüÇĞİÖŞÜ]|\b(ve|için|pazar|müşteri|yatırım|doğrulama)\b/i.test(source)
+    ? "tr"
+    : "en";
+}
+
+function localizeBenchmarkFitValue(value = "", locale: "en" | "tr") {
+  if (locale !== "tr") {
+    return value;
+  }
+
+  return localizePdfPresentationText(value, "tr")
+    .replace(/\bStrong Fit\b/g, "Güçlü Uyum")
+    .replace(/\bModerate Fit\b/g, "Orta Uyum")
+    .replace(/\bNeeds Validation\b/g, "Doğrulama Gerekli")
+    .replace(/\bHigh\b/g, "Yüksek")
+    .replace(/\bMedium\b/g, "Orta")
+    .replace(/\bLow\b/g, "Düşük")
+    .replace(/\bNo direct customer, revenue, retention, or acquisition evidence was provided in the request\./g, "İstekte doğrudan müşteri, gelir, elde tutma veya edinim kanıtı sağlanmadı.")
+    .replace(/\bBenchmark confidence is low for this business model and requires primary validation\./g, "Bu iş modeli için benchmark güveni düşük; birincil doğrulama gerektiriyor.")
+    .replace(/\bBusiness model signal is broad, so benchmark selection may need refinement\./g, "İş modeli sinyali geniş; benchmark seçimi netleştirme gerektirebilir.")
+    .replace(/\bBenchmark fit is based on detected industry, business model, geography, pricing model, and whether the prompt includes validation evidence\. It does not change financial calculations or scoring\./g, "Benchmark uyumu; tespit edilen sektör, iş modeli, coğrafya, fiyatlandırma modeli ve doğrulama kanıtına göre değerlendirilir. Finansal hesaplamaları veya skorlamayı değiştirmez.");
+}
+
+function BenchmarkIntelligencePanel({
+  benchmarkFit,
+  sourceText,
+}: {
+  benchmarkFit?: ReportBenchmarkFit;
+  sourceText: string;
+}) {
+  if (!benchmarkFit) {
+    return null;
+  }
+
+  const locale = getBenchmarkFitLocale(sourceText);
+  const labels =
+    locale === "tr"
+      ? {
+          eyebrow: "Benchmark Zekası",
+          title: "Benchmark Intelligence",
+          fitLevel: "Uyum Seviyesi",
+          industry: "Sektör",
+          businessModel: "İş Modeli",
+          confidence: "Benchmark Güveni",
+          validationGaps: "Doğrulama Boşlukları",
+          rationale: "Gerekçe",
+          noGaps: "Belirgin doğrulama boşluğu yok.",
+        }
+      : {
+          eyebrow: "Benchmark Intelligence",
+          title: "Benchmark fit",
+          fitLevel: "Fit Level",
+          industry: "Industry",
+          businessModel: "Business Model",
+          confidence: "Benchmark Confidence",
+          validationGaps: "Validation Gaps",
+          rationale: "Rationale",
+          noGaps: "No material validation gaps detected.",
+        };
+  const gaps = benchmarkFit.validationGaps?.length ? benchmarkFit.validationGaps : [labels.noGaps];
+  const summaryItems = [
+    { label: labels.fitLevel, value: benchmarkFit.fit || "—" },
+    { label: labels.industry, value: benchmarkFit.industry || "—" },
+    { label: labels.businessModel, value: benchmarkFit.businessModel || "—" },
+    { label: labels.confidence, value: benchmarkFit.confidence || "—" },
+  ];
+
+  return (
+    <section className="rounded-[2rem] border border-teal-200/15 bg-[linear-gradient(135deg,rgba(94,234,212,0.075),rgba(255,255,255,0.025))] p-5 shadow-xl shadow-black/25 ring-1 ring-teal-200/5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-teal-200/70">
+            {labels.eyebrow}
+          </p>
+          <h3 className="mt-2 text-xl font-semibold tracking-tight text-white">
+            {labels.title}
+          </h3>
+        </div>
+        <span className="w-fit rounded-full border border-teal-200/20 bg-teal-200/10 px-3 py-1.5 text-xs font-semibold text-teal-100">
+          {localizeBenchmarkFitValue(benchmarkFit.fit || "—", locale)}
+        </span>
+      </div>
+      <div className="mt-4 grid gap-3 md:grid-cols-4">
+        {summaryItems.map((item) => (
+          <div key={item.label} className="rounded-2xl border border-white/10 bg-black/25 p-3">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
+              {item.label}
+            </p>
+            <p className="mt-2 line-clamp-2 text-sm font-semibold leading-5 text-zinc-100">
+              {localizeBenchmarkFitValue(item.value, locale)}
+            </p>
+          </div>
+        ))}
+      </div>
+      <div className="mt-3 grid gap-3 lg:grid-cols-[1fr_1.2fr]">
+        <div className="rounded-2xl border border-white/10 bg-black/25 p-3">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500">
+            {labels.validationGaps}
+          </p>
+          <ul className="mt-3 space-y-2 text-sm leading-6 text-zinc-300">
+            {gaps.slice(0, 3).map((gap) => (
+              <li key={gap} className="flex gap-2">
+                <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-teal-200/80" />
+                <span>{localizeBenchmarkFitValue(gap, locale)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div className="rounded-2xl border border-white/10 bg-black/25 p-3">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500">
+            {labels.rationale}
+          </p>
+          <p className="mt-3 text-sm leading-6 text-zinc-300">
+            {localizeBenchmarkFitValue(benchmarkFit.rationale || benchmarkFit.benchmarkBasis || "—", locale)}
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function SectionTakeaway({ content }: { content: string }) {
   const takeaway = getSectionTakeaway(content);
   const labels = getReportPresentationLabels(content);
@@ -2765,6 +2891,13 @@ export default async function ReportDetailPage({
                 </aside>
 
                 <div className="space-y-8 xl:max-w-5xl">
+                  <BenchmarkIntelligencePanel
+                    benchmarkFit={report.metadata?.benchmarkFit}
+                    sourceText={`${report.title}\n${report.prompt}\n${uniqueReportSections
+                      .map((section) => `${section.title}\n${section.content}`)
+                      .join("\n\n")}`}
+                  />
+
                   {visibleSections.map((section, index) => {
                     const Icon = getSectionIcon(section.title);
                     const isFinancialDashboard = section.title

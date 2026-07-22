@@ -12,6 +12,7 @@ import {
 } from "@/app/lib/report-presentation";
 import {
   detectPdfPresentationLocale,
+  insertPdfBenchmarkIntelligenceSection,
   localizePdfPresentationLabel,
   localizePdfPresentationText,
   localizePdfReportSections,
@@ -1815,7 +1816,12 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
           .filter(Boolean)
           .join("\n\n");
       const pdfLocale = detectPdfPresentationLocale(pdfLanguageSource);
-      const pdfSections = localizePdfReportSections(basePdfSections, pdfLocale);
+      const pdfBaseSectionsWithBenchmark = insertPdfBenchmarkIntelligenceSection(
+        basePdfSections,
+        report.metadata?.benchmarkFit,
+        pdfLocale
+      );
+      const pdfSections = localizePdfReportSections(pdfBaseSectionsWithBenchmark, pdfLocale);
       const localizedReportTitle = localizePdfPresentationLabel(report.title, pdfLocale);
       const businessIdea = deriveBusinessDescriptionFromSections(report, pdfSections);
       const fullReportContent = basePdfSections

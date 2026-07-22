@@ -59,6 +59,7 @@ const pdfPresentationLabelPairs = [
     ["Unit Economics", "Birim Ekonomisi"],
     ["Financial Dashboard", "Finansal Panel"],
     ["Financial Assumptions", "Finansal Varsayımlar"],
+    ["Benchmark Intelligence", "Benchmark Zekası"],
     ["Scenario Analysis: Worst / Base / Best Case", "Senaryo Analizi: Kötü / Baz / En İyi"],
     ["Worst Case", "Kötü Senaryo"],
     ["Base Case", "Baz Senaryo"],
@@ -617,6 +618,122 @@ export function localizePdfReportSections(sections = [], locale) {
     title: localizePdfPresentationLabel(section.title, resolvedLocale),
     content: section.content,
   }));
+}
+
+function localizeBenchmarkFitValue(value = "", locale = "en") {
+  if (locale !== "tr") {
+    return normalizePdfText(String(value || ""));
+  }
+
+  const rawValue = String(value || "").replace(
+    /\bBenchmark fit is based on detected industry, business model, geography, pricing model, and whether the prompt includes validation evidence\.?\s*It does not change financial calculations or scoring\.?/gi,
+    "Benchmark uyumu; tespit edilen sektör, iş modeli, coğrafya, fiyatlandırma modeli ve doğrulama kanıtına göre değerlendirilir. Finansal hesaplamaları veya skorlamayı değiştirmez."
+  );
+
+  return localizePdfPresentationText(rawValue, "tr")
+    .replace(/\bStrong Fit\b/g, "Güçlü Uyum")
+    .replace(/\bModerate Fit\b/g, "Orta Uyum")
+    .replace(/\bNeeds Validation\b/g, "Doğrulama Gerekli")
+    .replace(/\bHigh\b/g, "Yüksek")
+    .replace(/\bMedium\b/g, "Orta")
+    .replace(/\bLow\b/g, "Düşük")
+    .replace(/\bNo direct customer, revenue, retention, or acquisition evidence was provided in the request\./g, "İstekte doğrudan müşteri, gelir, elde tutma veya edinim kanıtı sağlanmadı.")
+    .replace(/\bBenchmark confidence is low for this business model and requires primary validation\./g, "Bu iş modeli için benchmark güveni düşük; birincil doğrulama gerektiriyor.")
+    .replace(/\bBusiness model signal is broad, so benchmark selection may need refinement\./g, "İş modeli sinyali geniş; benchmark seçimi netleştirme gerektirebilir.")
+    .replace(/\bBenchmark fit is based on detected industry, business model, geography, pricing model, ve whether the prompt includes validation evidence\.?\s*It does not change financial calculations or scoring\.?/gi, "Benchmark uyumu; tespit edilen sektör, iş modeli, coğrafya, fiyatlandırma modeli ve doğrulama kanıtına göre değerlendirilir. Finansal hesaplamaları veya skorlamayı değiştirmez.")
+    .replace(/\bBenchmark fit is based on detected industry, business model, geography, pricing model, and whether the prompt includes validation evidence\.?\s*It does not change financial calculations or scoring\.?/gi, "Benchmark uyumu; tespit edilen sektör, iş modeli, coğrafya, fiyatlandırma modeli ve doğrulama kanıtına göre değerlendirilir. Finansal hesaplamaları veya skorlamayı değiştirmez.")
+    .replace(/\bSeed-stage B2B SaaS subscription, ACV, retention, margin, and founder-led sales benchmarks\.?/gi, "Seed aşaması B2B SaaS abonelik, ACV, elde tutma, marj ve kurucu liderliğindeki satış benchmarkları.")
+    .replace(/\bAI application software benchmarks adjusted for model cost, implementation friction, and B2B adoption\.?/gi, "Model maliyeti, uygulama sürtünmesi ve B2B adaptasyonuna göre ayarlanmış AI yazılım benchmarkları.")
+    .replace(/\bSpecialty coffee and premium food & beverage benchmarks adjusted for D2C repeat purchase, subscription retention, wholesale office buyers, inventory, and fulfillment economics\.?/gi, "D2C tekrar satın alma, abonelik elde tutma, ofis/B2B alıcıları, envanter ve teslimat ekonomisine göre ayarlanmış özel kahve ve premium yiyecek-içecek benchmarkları.")
+    .replace(/\bE-commerce benchmarks adjusted for contribution margin, paid acquisition, repeat purchase, fulfillment, and inventory risk\.?/gi, "Katkı marjı, ücretli edinim, tekrar satın alma, teslimat ve envanter riskine göre ayarlanmış e-ticaret benchmarkları.")
+    .replace(/\bProfessional services benchmarks adjusted for utilization, delivery capacity, founder-led sales, and margin constraints\.?/gi, "Kapasite kullanımı, teslimat kapasitesi, kurucu liderliğinde satış ve marj kısıtlarına göre ayarlanmış profesyonel hizmet benchmarkları.");
+}
+
+export function createPdfBenchmarkIntelligenceSection(benchmarkFit, locale = "en") {
+  if (!benchmarkFit || typeof benchmarkFit !== "object") {
+    return null;
+  }
+
+  const labels =
+    locale === "tr"
+      ? {
+          fitLevel: "Uyum Seviyesi",
+          industry: "Sektör",
+          businessModel: "İş Modeli",
+          confidence: "Benchmark Güveni",
+          validationGaps: "Doğrulama Boşlukları",
+          rationale: "Gerekçe",
+          noGaps: "Belirgin doğrulama boşluğu yok.",
+        }
+      : {
+          fitLevel: "Fit Level",
+          industry: "Industry",
+          businessModel: "Business Model",
+          confidence: "Benchmark Confidence",
+          validationGaps: "Validation Gaps",
+          rationale: "Rationale",
+          noGaps: "No material validation gaps detected.",
+        };
+  const gaps = Array.isArray(benchmarkFit.validationGaps) && benchmarkFit.validationGaps.length
+    ? benchmarkFit.validationGaps
+    : [labels.noGaps];
+  const content = [
+    `${labels.fitLevel}: ${localizeBenchmarkFitValue(benchmarkFit.fit || "—", locale)}`,
+    `${labels.industry}: ${localizeBenchmarkFitValue(benchmarkFit.industry || "—", locale)}`,
+    `${labels.businessModel}: ${localizeBenchmarkFitValue(benchmarkFit.businessModel || "—", locale)}`,
+    `${labels.confidence}: ${localizeBenchmarkFitValue(benchmarkFit.confidence || "—", locale)}`,
+    "",
+    `${labels.validationGaps}:`,
+    ...gaps.slice(0, 4).map((gap) => `- ${localizeBenchmarkFitValue(gap, locale)}`),
+    "",
+    `${labels.rationale}: ${localizeBenchmarkFitValue(benchmarkFit.rationale || benchmarkFit.benchmarkBasis || "—", locale)}`,
+  ].join("\n");
+
+  return {
+    field: "benchmarkIntelligence",
+    title: "Benchmark Intelligence",
+    content,
+  };
+}
+
+export function insertPdfBenchmarkIntelligenceSection(sections = [], benchmarkFit, locale = "en") {
+  const benchmarkSection = createPdfBenchmarkIntelligenceSection(benchmarkFit, locale);
+
+  if (!benchmarkSection) {
+    return sections;
+  }
+
+  const existingRemoved = sections.filter((section) => {
+    const field = String(section?.field || "").toLowerCase();
+    const title = String(section?.title || "").toLowerCase();
+
+    return field !== "benchmarkintelligence" && title !== "benchmark intelligence" && title !== "benchmark zekası";
+  });
+  const sourceIndex = existingRemoved.findIndex((section) => {
+    const field = String(section?.field || "").toLowerCase();
+    const title = String(section?.title || "").toLowerCase();
+
+    return field === "sources" || field === "sourcesassumptions" || /^(sources|kaynaklar|sources \/ assumptions|kaynaklar \/ varsayımlar)$/.test(title);
+  });
+  const financialAssumptionsIndex = existingRemoved.findIndex((section) => {
+    const field = String(section?.field || "").toLowerCase();
+    const title = String(section?.title || "").toLowerCase();
+
+    return field === "financialassumptions" || title === "financial assumptions" || title === "finansal varsayımlar";
+  });
+  const preferredIndex = financialAssumptionsIndex >= 0 ? financialAssumptionsIndex + 1 : sourceIndex;
+  const insertIndex =
+    sourceIndex >= 0 && preferredIndex > sourceIndex
+      ? sourceIndex
+      : preferredIndex >= 0
+        ? preferredIndex
+        : existingRemoved.length;
+
+  return [
+    ...existingRemoved.slice(0, insertIndex),
+    benchmarkSection,
+    ...existingRemoved.slice(insertIndex),
+  ];
 }
 
 export function preservePdfInlineTokens(value) {

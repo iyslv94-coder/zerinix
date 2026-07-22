@@ -23,6 +23,15 @@ declare module "@/app/lib/pdf-normalization.mjs" {
   export function detectPdfPresentationLocale(value?: string): "en" | "tr";
   export function localizePdfPresentationLabel(value?: string, locale?: "en" | "tr"): string;
   export function localizePdfPresentationText(value?: string, locale?: "en" | "tr"): string;
+  export function createPdfBenchmarkIntelligenceSection(
+    benchmarkFit?: unknown,
+    locale?: "en" | "tr"
+  ): { field: string; title: string; content: string } | null;
+  export function insertPdfBenchmarkIntelligenceSection<T extends { field?: string; title: string; content: string }>(
+    sections?: T[],
+    benchmarkFit?: unknown,
+    locale?: "en" | "tr"
+  ): Array<T | { field: string; title: string; content: string }>;
   export function localizePdfReportSections<T extends { title: string; content: string }>(
     sections?: T[],
     locale?: "en" | "tr"

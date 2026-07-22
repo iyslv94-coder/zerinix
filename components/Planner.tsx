@@ -65,6 +65,7 @@ import {
   normalizeReportPresentationText,
 } from "@/app/lib/report-presentation";
 import type {
+  ReportBenchmarkFit,
   ReportInvestmentScore,
   ReportMetadata,
 } from "@/app/lib/report-investment-score";
@@ -75,6 +76,7 @@ import {
 import { dedupeReportSections } from "@/app/lib/report-section-normalization";
 import {
   detectPdfPresentationLocale,
+  insertPdfBenchmarkIntelligenceSection,
   localizePdfPresentationLabel,
   localizePdfPresentationText,
   localizePdfReportSections,
@@ -97,7 +99,7 @@ import {
 } from "@/app/lib/report-evidence";
 
 type ReportSection = {
-  field?: keyof (MarketReport & PlanReport);
+  field?: keyof (MarketReport & PlanReport) | string;
   title: string;
   icon: LucideIcon;
   content: string;
@@ -4510,6 +4512,128 @@ function ExecutiveSnapshotPanel({
   );
 }
 
+function getBenchmarkFitLocale(source = "") {
+  return /[çğıöşüÇĞİÖŞÜ]|\b(ve|için|pazar|müşteri|yatırım|doğrulama)\b/i.test(source)
+    ? "tr"
+    : "en";
+}
+
+function localizeBenchmarkFitValue(value = "", locale: "en" | "tr") {
+  if (locale !== "tr") {
+    return value;
+  }
+
+  return localizePdfPresentationText(value, "tr")
+    .replace(/\bStrong Fit\b/g, "Güçlü Uyum")
+    .replace(/\bModerate Fit\b/g, "Orta Uyum")
+    .replace(/\bNeeds Validation\b/g, "Doğrulama Gerekli")
+    .replace(/\bHigh\b/g, "Yüksek")
+    .replace(/\bMedium\b/g, "Orta")
+    .replace(/\bLow\b/g, "Düşük")
+    .replace(/\bNo direct customer, revenue, retention, or acquisition evidence was provided in the request\./g, "İstekte doğrudan müşteri, gelir, elde tutma veya edinim kanıtı sağlanmadı.")
+    .replace(/\bBenchmark confidence is low for this business model and requires primary validation\./g, "Bu iş modeli için benchmark güveni düşük; birincil doğrulama gerektiriyor.")
+    .replace(/\bBusiness model signal is broad, so benchmark selection may need refinement\./g, "İş modeli sinyali geniş; benchmark seçimi netleştirme gerektirebilir.")
+    .replace(/\bBenchmark fit is based on detected industry, business model, geography, pricing model, and whether the prompt includes validation evidence\. It does not change financial calculations or scoring\./g, "Benchmark uyumu; tespit edilen sektör, iş modeli, coğrafya, fiyatlandırma modeli ve doğrulama kanıtına göre değerlendirilir. Finansal hesaplamaları veya skorlamayı değiştirmez.");
+}
+
+function BenchmarkIntelligencePanel({
+  benchmarkFit,
+  sourceText,
+}: {
+  benchmarkFit?: ReportBenchmarkFit;
+  sourceText: string;
+}) {
+  if (!benchmarkFit) {
+    return null;
+  }
+
+  const locale = getBenchmarkFitLocale(sourceText);
+  const labels =
+    locale === "tr"
+      ? {
+          eyebrow: "Benchmark Zekası",
+          title: "Benchmark Intelligence",
+          fitLevel: "Uyum Seviyesi",
+          industry: "Sektör",
+          businessModel: "İş Modeli",
+          confidence: "Benchmark Güveni",
+          validationGaps: "Doğrulama Boşlukları",
+          rationale: "Gerekçe",
+          noGaps: "Belirgin doğrulama boşluğu yok.",
+        }
+      : {
+          eyebrow: "Benchmark Intelligence",
+          title: "Benchmark fit",
+          fitLevel: "Fit Level",
+          industry: "Industry",
+          businessModel: "Business Model",
+          confidence: "Benchmark Confidence",
+          validationGaps: "Validation Gaps",
+          rationale: "Rationale",
+          noGaps: "No material validation gaps detected.",
+        };
+  const gaps = benchmarkFit.validationGaps?.length ? benchmarkFit.validationGaps : [labels.noGaps];
+  const summaryItems = [
+    { label: labels.fitLevel, value: benchmarkFit.fit || "—" },
+    { label: labels.industry, value: benchmarkFit.industry || "—" },
+    { label: labels.businessModel, value: benchmarkFit.businessModel || "—" },
+    { label: labels.confidence, value: benchmarkFit.confidence || "—" },
+  ];
+
+  return (
+    <section className="rounded-[2rem] border border-teal-200/15 bg-[linear-gradient(135deg,rgba(94,234,212,0.075),rgba(255,255,255,0.025))] p-5 shadow-xl shadow-black/25 ring-1 ring-teal-200/5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-teal-200/70">
+            {labels.eyebrow}
+          </p>
+          <h3 className="mt-2 text-xl font-semibold tracking-tight text-white">
+            {labels.title}
+          </h3>
+        </div>
+        <span className="w-fit rounded-full border border-teal-200/20 bg-teal-200/10 px-3 py-1.5 text-xs font-semibold text-teal-100">
+          {localizeBenchmarkFitValue(benchmarkFit.fit || "—", locale)}
+        </span>
+      </div>
+      <div className="mt-4 grid gap-3 md:grid-cols-4">
+        {summaryItems.map((item) => (
+          <div key={item.label} className="rounded-2xl border border-white/10 bg-black/25 p-3">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
+              {item.label}
+            </p>
+            <p className="mt-2 line-clamp-2 text-sm font-semibold leading-5 text-zinc-100">
+              {localizeBenchmarkFitValue(item.value, locale)}
+            </p>
+          </div>
+        ))}
+      </div>
+      <div className="mt-3 grid gap-3 lg:grid-cols-[1fr_1.2fr]">
+        <div className="rounded-2xl border border-white/10 bg-black/25 p-3">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500">
+            {labels.validationGaps}
+          </p>
+          <ul className="mt-3 space-y-2 text-sm leading-6 text-zinc-300">
+            {gaps.slice(0, 3).map((gap) => (
+              <li key={gap} className="flex gap-2">
+                <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-teal-200/80" />
+                <span>{localizeBenchmarkFitValue(gap, locale)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div className="rounded-2xl border border-white/10 bg-black/25 p-3">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500">
+            {labels.rationale}
+          </p>
+          <p className="mt-3 text-sm leading-6 text-zinc-300">
+            {localizeBenchmarkFitValue(benchmarkFit.rationale || benchmarkFit.benchmarkBasis || "—", locale)}
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function SectionTakeaway({ content }: { content: string }) {
   const takeaway = getSectionTakeaway(content);
   const labels = getReportPresentationLabels(content);
@@ -5142,6 +5266,7 @@ const ReportPanel = memo(function ReportPanel({
   failureMessage,
   warningMessage,
   investmentScore,
+  benchmarkFit,
 }: {
   reportData: Partial<MarketReport & PlanReport> | null;
   reportFields: Array<{
@@ -5156,6 +5281,7 @@ const ReportPanel = memo(function ReportPanel({
   failureMessage?: string;
   warningMessage?: string;
   investmentScore?: ReportInvestmentScore;
+  benchmarkFit?: ReportBenchmarkFit;
 }) {
   const [exportingPdf, setExportingPdf] = useState(false);
   const [pdfError, setPdfError] = useState("");
@@ -5270,13 +5396,21 @@ const ReportPanel = memo(function ReportPanel({
           .filter(Boolean)
           .join("\n\n");
       const pdfLocale = detectPdfPresentationLocale(pdfLanguageSource);
-      const pdfSections = localizePdfReportSections(basePdfSections, pdfLocale);
+      const pdfBaseSectionsWithBenchmark = insertPdfBenchmarkIntelligenceSection(
+        basePdfSections,
+        benchmarkFit,
+        pdfLocale
+      ).map((section) => ({
+        ...section,
+        icon: "icon" in section ? section.icon : FileText,
+      })) as ReportSection[];
+      const pdfSections = localizePdfReportSections(pdfBaseSectionsWithBenchmark, pdfLocale);
       const localizedReportTitle = localizePdfPresentationLabel(reportTitle, pdfLocale);
       const fullReportContent = basePdfSections
         .map((section) => `${section.title}\n${section.content}`)
         .join("\n\n");
       const businessIdea = deriveBusinessDescriptionFromSections(
-        pdfSections,
+        localizePdfReportSections(basePdfSections, pdfLocale),
         localizedReportTitle,
         sourcePrompt
       );
@@ -6409,6 +6543,13 @@ const ReportPanel = memo(function ReportPanel({
       </div>
 
       <div className="space-y-5 p-4 sm:p-5">
+        <BenchmarkIntelligencePanel
+          benchmarkFit={benchmarkFit}
+          sourceText={`${reportTitle}\n${sourcePrompt || ""}\n${sections
+            .map((section) => `${section.title}\n${section.content}`)
+            .join("\n\n")}`}
+        />
+
         {visibleSections.map((section, index) => {
           const Icon = section.icon;
           const isFinancialDashboard = section.field === "financialDashboard";
@@ -6739,6 +6880,8 @@ export default function Planner({
   );
   const [currentReportInvestmentScore, setCurrentReportInvestmentScore] =
     useState<ReportInvestmentScore | undefined>(initialReport?.investmentScore);
+  const [currentReportMetadata, setCurrentReportMetadata] =
+    useState<ReportMetadata | undefined>(initialReport?.metadata);
   const [regeneratingReportMode, setRegeneratingReportMode] =
     useState<ChatMode | null>(null);
   const chatScrollerRef = useRef<HTMLDivElement | null>(null);
@@ -6885,6 +7028,7 @@ export default function Planner({
     setMarketReport(null);
     setPlanReport(null);
     setCurrentReportInvestmentScore(undefined);
+    setCurrentReportMetadata(undefined);
     setActiveReportId("");
     setWorkflowCompletedSteps(0);
     setReportProgress(0);
@@ -8096,9 +8240,12 @@ export default function Planner({
       await readStreamingSectionJson(
         res,
         (event) => {
-          if (event.reportMetadata?.investmentScore) {
+          if (event.reportMetadata) {
             reportMetadata = event.reportMetadata;
-            setCurrentReportInvestmentScore(event.reportMetadata.investmentScore);
+            setCurrentReportMetadata(event.reportMetadata);
+            if (event.reportMetadata.investmentScore) {
+              setCurrentReportInvestmentScore(event.reportMetadata.investmentScore);
+            }
           }
 
           for (const { field } of planReportFields) {
@@ -8243,6 +8390,7 @@ export default function Planner({
     setPlanReport(null);
     setMarketReport(null);
     setCurrentReportInvestmentScore(undefined);
+    setCurrentReportMetadata(undefined);
 
     const reportOutput: MarketReport = { ...emptyMarketReport };
     let reportMetadata: ReportMetadata | undefined;
@@ -8293,9 +8441,12 @@ export default function Planner({
       await readStreamingSectionJson(
         res,
         (event) => {
-          if (event.reportMetadata?.investmentScore) {
+          if (event.reportMetadata) {
             reportMetadata = event.reportMetadata;
-            setCurrentReportInvestmentScore(event.reportMetadata.investmentScore);
+            setCurrentReportMetadata(event.reportMetadata);
+            if (event.reportMetadata.investmentScore) {
+              setCurrentReportInvestmentScore(event.reportMetadata.investmentScore);
+            }
           }
 
           if (event.warning) {
@@ -9150,6 +9301,7 @@ export default function Planner({
                   failureMessage={reportGenerationError}
                   warningMessage={reportGenerationWarning}
                   investmentScore={currentReportInvestmentScore || initialReport?.investmentScore}
+                  benchmarkFit={currentReportMetadata?.benchmarkFit || initialReport?.metadata?.benchmarkFit}
                 />
 	              ) : null}
               </div>
