@@ -194,6 +194,11 @@ const FULL_REPORT_FIELD = "fullReport";
 const MAX_AI_CALLS_PER_MARKET_REPORT = 1;
 
 type MarketReportChunk = Partial<Record<MarketReportField, string>>;
+type MarketReportMetadataChunk = {
+  reportMetadata: {
+    investmentScore: AiFinancialModelContext["investmentScore"];
+  };
+};
 type MarketReportWarningChunk = {
   warning: string;
   missingFields?: MarketReportField[];
@@ -418,6 +423,18 @@ function serializeMarketReportChunks(report: Record<MarketReportField, string>) 
     .filter((field) => report[field]?.trim())
     .map((field) => serializeReportChunk(field, report[field]))
     .join("");
+}
+
+function serializeMarketReportMetadataChunk(
+  context: AiFinancialModelContext
+) {
+  const chunk: MarketReportMetadataChunk = {
+    reportMetadata: {
+      investmentScore: context.investmentScore,
+    },
+  };
+
+  return `${JSON.stringify(chunk)}\n`;
 }
 
 function createFallbackMarketReport() {
@@ -1645,7 +1662,11 @@ Do not generate business-plan sections here. Do not suggest website URLs, domain
                 })
               : "";
 
-          return new Response(encoder.encode(cachedWarning + serializeMarketReportChunks(parsedCachedReport)), {
+          return new Response(encoder.encode(
+            serializeMarketReportMetadataChunk(canonicalFinancialAssumptions) +
+              cachedWarning +
+              serializeMarketReportChunks(parsedCachedReport)
+          ), {
             headers: {
               "Content-Type": "application/x-ndjson; charset=utf-8",
               "Cache-Control": "no-cache, no-transform",
@@ -1881,7 +1902,11 @@ Do not include markdown code fences, braces inside string values, or commentary 
               })
             : "";
 
-        return new Response(encoder.encode(warning + serializeMarketReportChunks(parsedReport)), {
+        return new Response(encoder.encode(
+          serializeMarketReportMetadataChunk(canonicalFinancialAssumptions) +
+            warning +
+            serializeMarketReportChunks(parsedReport)
+        ), {
           headers: {
             "Content-Type": "application/x-ndjson; charset=utf-8",
             "Cache-Control": "no-cache, no-transform",
@@ -1941,7 +1966,11 @@ Do not include markdown code fences, braces inside string values, or commentary 
         });
 
         return new Response(
-          encoder.encode(warning + serializeMarketReportChunks(fallbackReport)),
+          encoder.encode(
+            serializeMarketReportMetadataChunk(canonicalFinancialAssumptions) +
+              warning +
+              serializeMarketReportChunks(fallbackReport)
+          ),
           {
             status: 200,
             headers: {

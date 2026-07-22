@@ -1991,11 +1991,12 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
 
       const drawCoverPage = () => {
         const investmentScore =
+          report.investmentScore?.totalScore ??
           extractScore(fullReportContent, "Total Investment Score") ??
           extractScore(fullReportContent, "Investment Score") ??
           extractScore(fullReportContent, "AI Investment Score") ??
           extractScore(fullReportContent, "Overall Score");
-        const recommendation = detectRecommendation(fullReportContent) || "WAIT";
+        const recommendation = report.investmentScore?.recommendation || detectRecommendation(fullReportContent) || "WAIT";
         const recommendationFill =
           recommendation === "GO"
             ? "#064e3b"
@@ -2008,7 +2009,7 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
             : recommendation === "PASS"
               ? "#fecaca"
               : "#fde68a";
-        const executiveSnapshot = buildExecutiveSnapshot(fullReportContent);
+        const executiveSnapshot = buildExecutiveSnapshot(fullReportContent, report.investmentScore);
         const founderScore = executiveSnapshot.founderScoreValue ?? investmentScore;
 
         paintPage();
@@ -2508,9 +2509,10 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
         }
 
         if (field === "executiveRecommendation" || normalizedTitle.includes("executive recommendation") || normalizedTitle.includes("yönetici tavsiyesi")) {
-          const selected = detectRecommendation(content) || "REVIEW";
+          const selected = report.investmentScore?.recommendation || detectRecommendation(content) || "REVIEW";
           const decisionLabel = formatDecisionLabel(selected);
           const confidence =
+            report.investmentScore?.confidence ??
             extractConfidence(content) ??
             extractConfidence(fullReportContent) ??
             extractScore(fullReportContent, "Investment Score");

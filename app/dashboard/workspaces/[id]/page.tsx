@@ -133,6 +133,10 @@ function extractWorkspaceInsight(content: string, keywords: string[]) {
 }
 
 function detectWorkspaceSignal(report: DashboardReport) {
+  if (report.investmentScore?.recommendation) {
+    return cleanWorkspaceText(report.investmentScore.recommendation, 70);
+  }
+
   const recommendation = getWorkspaceSection(report, [
     "executiverecommendation",
     "executive recommendation",

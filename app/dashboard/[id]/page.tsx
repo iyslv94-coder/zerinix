@@ -36,6 +36,7 @@ import {
   isExecutivePresentationSection,
   normalizeReportPresentationText,
 } from "@/app/lib/report-presentation";
+import type { ReportInvestmentScore } from "@/app/lib/report-investment-score";
 import {
   getEvidenceBadgeClass,
   getEvidenceLabel,
@@ -756,19 +757,22 @@ function MiniProgressCircle({
 function ExecutiveSummaryVisual({
   title,
   content,
+  investmentScore,
 }: {
   title: string;
   content: string;
+  investmentScore?: ReportInvestmentScore;
 }) {
   if (!title.toLowerCase().includes("executive summary")) {
     return null;
   }
 
   const score =
+    investmentScore?.totalScore ??
     extractScore(content, "AI Investment Score") ??
     extractScore(content, "AI Founder Score") ??
     extractConfidence(content);
-  const recommendation = detectRecommendation(content) || "REVIEW";
+  const recommendation = investmentScore?.recommendation || detectRecommendation(content) || "REVIEW";
   const highlights = getExecutiveHighlights(content);
   const kpis = [
     {
@@ -1645,14 +1649,16 @@ function SnapshotGauge({
 
 function ExecutiveSnapshotPanel({
   section,
+  investmentScore,
 }: {
   section: { field?: string; title: string; content: string };
+  investmentScore?: ReportInvestmentScore;
 }) {
   if (!isExecutivePresentationSection(section)) {
     return null;
   }
 
-  const snapshot = buildExecutiveSnapshot(section.content);
+  const snapshot = buildExecutiveSnapshot(section.content, investmentScore);
   const labels = getReportPresentationLabels(section.content);
   const groups = [
     { label: labels.why, items: snapshot.why },
@@ -2808,8 +2814,12 @@ export default async function ReportDetailPage({
                               <ExecutiveSummaryVisual
                                 title={section.title}
                                 content={section.content}
+                                investmentScore={report.investmentScore}
                               />
-                              <ExecutiveSnapshotPanel section={section} />
+                              <ExecutiveSnapshotPanel
+                                section={section}
+                                investmentScore={report.investmentScore}
+                              />
                               {hasReportSectionVisual(section.title) &&
                               !section.title.toLowerCase().includes("executive summary") &&
                               !isFinancialDashboard ? (

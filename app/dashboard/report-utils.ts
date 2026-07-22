@@ -1,5 +1,10 @@
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 import { containsReportGenerationFailure } from "@/app/lib/report-errors";
+import {
+  readReportInvestmentScore,
+  type ReportInvestmentScore,
+  type ReportMetadata,
+} from "@/app/lib/report-investment-score";
 import { dedupeReportSections } from "@/app/lib/report-section-normalization";
 
 export type DashboardReport = {
@@ -10,6 +15,8 @@ export type DashboardReport = {
   createdAt: string;
   type: "Business Plan" | "Market Analysis";
   status: string;
+  metadata?: ReportMetadata;
+  investmentScore?: ReportInvestmentScore;
   sections: Array<{
     field?: string;
     title: string;
@@ -199,6 +206,7 @@ export function normalizeReport(row: ReportRow): DashboardReport {
   const titleFallback =
     reportType === "Market Analysis" ? "Market Analysis Report" : "Business Plan Report";
   const sections = normalizeSections(row);
+  const investmentScore = readReportInvestmentScore(row.metadata);
   const rowStatus = readString(row, ["status", "state"], "completed");
   const failedReport =
     rowStatus.toLowerCase() !== "completed" ||
@@ -212,6 +220,11 @@ export function normalizeReport(row: ReportRow): DashboardReport {
     createdAt,
     type: reportType,
     status: failedReport ? "failed" : rowStatus,
+    metadata:
+      row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
+        ? (row.metadata as ReportMetadata)
+        : undefined,
+    investmentScore,
     sections: failedReport ? [] : sections,
   };
 }
@@ -291,7 +304,7 @@ export async function loadUserWorkspaces(supabase: SupabaseClient, user: User) {
 export async function loadUserReports(supabase: SupabaseClient, user: User) {
   const { data, error } = await supabase
     .from("reports")
-    .select("id,user_id,workspace_id,title,prompt,report_type,status,created_at,updated_at,sections")
+    .select("id,user_id,workspace_id,title,prompt,report_type,status,created_at,updated_at,sections,metadata")
     .eq("user_id", user.id)
     .order("created_at", { ascending: false });
 
@@ -323,7 +336,7 @@ export async function loadWorkspaceReports(
 
   const { data, error } = await supabase
     .from("reports")
-    .select("id,user_id,workspace_id,title,prompt,report_type,status,created_at,updated_at,sections")
+    .select("id,user_id,workspace_id,title,prompt,report_type,status,created_at,updated_at,sections,metadata")
     .eq("user_id", user.id)
     .eq("workspace_id", workspaceId)
     .order("created_at", { ascending: false });
@@ -345,7 +358,7 @@ export async function loadUserReport(
 ) {
   const { data, error } = await supabase
     .from("reports")
-    .select("id,user_id,workspace_id,title,prompt,report_type,status,created_at,updated_at,sections")
+    .select("id,user_id,workspace_id,title,prompt,report_type,status,created_at,updated_at,sections,metadata")
     .eq("user_id", user.id)
     .eq("id", reportId)
     .maybeSingle();

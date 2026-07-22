@@ -181,6 +181,11 @@ const planPrompts = {
 type PlanReportField = keyof typeof planPrompts;
 
 type PlanReportChunk = Partial<Record<PlanReportField, string>>;
+type PlanReportMetadataChunk = {
+  reportMetadata: {
+    investmentScore: AiFinancialModelContext["investmentScore"];
+  };
+};
 
 const planFields = Object.keys(planPrompts) as PlanReportField[];
 const FULL_REPORT_FIELD = "fullReport";
@@ -313,6 +318,18 @@ function serializePlanChunk(field: PlanReportField, content: string) {
 
 function serializePlanReportChunks(report: Record<PlanReportField, string>) {
   return planFields.map((field) => serializePlanChunk(field, report[field])).join("");
+}
+
+function serializePlanReportMetadataChunk(
+  context: AiFinancialModelContext
+) {
+  const chunk: PlanReportMetadataChunk = {
+    reportMetadata: {
+      investmentScore: context.investmentScore,
+    },
+  };
+
+  return `${JSON.stringify(chunk)}\n`;
 }
 
 function logPlanStage(
@@ -2021,7 +2038,10 @@ Write only the content for this section. Do not write a JSON object, field name,
           },
         });
 
-        return new Response(encoder.encode(serializePlanReportChunks(parsedCachedReport)), {
+        return new Response(encoder.encode(
+          serializePlanReportMetadataChunk(canonicalFinancialAssumptions) +
+            serializePlanReportChunks(parsedCachedReport)
+        ), {
           headers: {
             "Content-Type": "application/x-ndjson; charset=utf-8",
             "Cache-Control": "no-cache, no-transform",
@@ -2217,7 +2237,10 @@ ${buildFullReportStructureDirectives("business_plan").map((directive) => `- ${di
         });
 
         fullReportStage = "stream_response";
-        return new Response(encoder.encode(serializePlanReportChunks(parsedReport)), {
+        return new Response(encoder.encode(
+          serializePlanReportMetadataChunk(canonicalFinancialAssumptions) +
+            serializePlanReportChunks(parsedReport)
+        ), {
           headers: {
             "Content-Type": "application/x-ndjson; charset=utf-8",
             "Cache-Control": "no-cache, no-transform",

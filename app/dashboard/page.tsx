@@ -149,6 +149,10 @@ function getDecisionSignal(report: DashboardReport | undefined) {
     return "No decision signal yet";
   }
 
+  if (report.investmentScore?.recommendation) {
+    return cleanMobileDashboardText(report.investmentScore.recommendation, 92);
+  }
+
   const recommendation = getReportSectionContent(report, [
     "executiverecommendation",
     "executive recommendation",

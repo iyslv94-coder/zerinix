@@ -1,3 +1,5 @@
+import type { ReportInvestmentScore } from "@/app/lib/report-investment-score";
+
 export type ExecutiveSnapshot = {
   decision: string;
   confidence: string;
@@ -262,6 +264,12 @@ function formatScore(score: number | null, suffix = "%") {
   return score === null ? "Validation Required" : `${score}${suffix}`;
 }
 
+function readFounderScoreValue(investmentScore?: ReportInvestmentScore) {
+  const founderScore = investmentScore?.decisionEngine?.founderScore?.score;
+
+  return typeof founderScore === "number" ? Math.max(0, Math.min(100, Math.round(founderScore))) : null;
+}
+
 function extractQuality(content: string, labels: string[], fallback: string) {
   return extractLabelValue(content, labels) || fallback;
 }
@@ -329,21 +337,29 @@ function collectBullets(content: string, keywords: string[], fallback: string[])
     .slice(0, 3);
 }
 
-export function buildExecutiveSnapshot(content: string): ExecutiveSnapshot {
+export function buildExecutiveSnapshot(
+  content: string,
+  investmentScore?: ReportInvestmentScore
+): ExecutiveSnapshot {
   const normalized = normalizeReportPresentationText(content);
   const isTurkish = isTurkishContent(normalized);
-  const confidenceScore = extractPercentScore(normalized, [
-    "Decision Confidence",
-    "Confidence",
-    "Karar Güveni",
-    "Güven",
-  ]);
-  const founderScoreValue = extractPercentScore(normalized, [
-    "AI Founder Score",
-    "Founder Score",
-    "AI Kurucu Skoru",
-    "Kurucu Skoru",
-  ]);
+  const confidenceScore =
+    typeof investmentScore?.confidence === "number"
+      ? investmentScore.confidence
+      : extractPercentScore(normalized, [
+          "Decision Confidence",
+          "Confidence",
+          "Karar Güveni",
+          "Güven",
+        ]);
+  const founderScoreValue =
+    readFounderScoreValue(investmentScore) ??
+    extractPercentScore(normalized, [
+      "AI Founder Score",
+      "Founder Score",
+      "AI Kurucu Skoru",
+      "Kurucu Skoru",
+    ]);
   const riskBullets = collectBullets(
     normalized,
     ["risk", "validation", "doğrulama", "uncertain", "belirsiz", "cac", "funding", "sermaye"],
@@ -360,8 +376,11 @@ export function buildExecutiveSnapshot(content: string): ExecutiveSnapshot {
   );
 
   return {
-    decision: extractDecision(normalized),
-    confidence: extractConfidenceValue(normalized),
+    decision: investmentScore?.recommendation || extractDecision(normalized),
+    confidence:
+      typeof investmentScore?.confidence === "number"
+        ? `${investmentScore.confidence}%`
+        : extractConfidenceValue(normalized),
     confidenceScore,
     founderScore: formatScore(founderScoreValue, "/100"),
     founderScoreValue,
@@ -375,8 +394,8 @@ export function buildExecutiveSnapshot(content: string): ExecutiveSnapshot {
       ["Overall Report Quality", "Report Quality", "Rapor Kalitesi", "Genel Rapor Kalitesi"],
       isTurkish ? "Orta Güven" : "Moderate Confidence"
     ),
-    mainRisk: riskBullets[0],
-    nextAction: actionBullets[0],
+    mainRisk: investmentScore?.topRisks?.[0] || riskBullets[0],
+    nextAction: investmentScore?.nextCriticalAction || actionBullets[0],
     riskLevel: inferRiskLevel(normalized, ["risk", "validation", "cac", "funding", "execution", "rekabet", "sermaye"]),
     riskHeatmap: buildRiskHeatmap(normalized),
     confidenceRadar: buildConfidenceRadar(normalized, confidenceScore),

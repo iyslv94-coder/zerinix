@@ -64,6 +64,10 @@ import {
   isExecutivePresentationSection,
   normalizeReportPresentationText,
 } from "@/app/lib/report-presentation";
+import type {
+  ReportInvestmentScore,
+  ReportMetadata,
+} from "@/app/lib/report-investment-score";
 import {
   containsReportGenerationFailure,
   isReportGenerationFailureText,
@@ -157,6 +161,7 @@ type PlanReportField = keyof PlanReport;
 
 type ReportStreamEvent = Partial<MarketReport & PlanReport> & {
   done?: boolean;
+  reportMetadata?: ReportMetadata;
   warning?: string;
   missingFields?: Array<MarketReportField | PlanReportField>;
   invalidFields?: Array<MarketReportField | PlanReportField>;
@@ -227,6 +232,8 @@ type InitialReport = {
   prompt: string;
   type: "Business Plan" | "Market Analysis";
   status: string;
+  metadata?: ReportMetadata;
+  investmentScore?: ReportInvestmentScore;
   sections: Array<{
     field?: string;
     title: string;
@@ -3419,16 +3426,23 @@ function MiniProgressCircle({
   );
 }
 
-function ExecutiveSummaryVisual({ section }: { section: ReportSection }) {
+function ExecutiveSummaryVisual({
+  section,
+  investmentScore,
+}: {
+  section: ReportSection;
+  investmentScore?: ReportInvestmentScore;
+}) {
   if (section.field !== "executiveSummary") {
     return null;
   }
 
   const score =
+    investmentScore?.totalScore ??
     extractScore(section.content, "AI Investment Score") ??
     extractScore(section.content, "AI Founder Score") ??
     extractConfidence(section.content);
-  const recommendation = detectRecommendation(section.content) || "REVIEW";
+  const recommendation = investmentScore?.recommendation || detectRecommendation(section.content) || "REVIEW";
   const highlights = getExecutiveHighlights(section.content);
   const kpis = [
     {
@@ -4362,12 +4376,18 @@ function SnapshotGauge({
   );
 }
 
-function ExecutiveSnapshotPanel({ section }: { section: ReportSection }) {
+function ExecutiveSnapshotPanel({
+  section,
+  investmentScore,
+}: {
+  section: ReportSection;
+  investmentScore?: ReportInvestmentScore;
+}) {
   if (!isExecutivePresentationSection(section)) {
     return null;
   }
 
-  const snapshot = buildExecutiveSnapshot(section.content);
+  const snapshot = buildExecutiveSnapshot(section.content, investmentScore);
   const labels = getReportPresentationLabels(section.content);
   const groups = [
     { label: labels.why, items: snapshot.why },
@@ -5121,6 +5141,7 @@ const ReportPanel = memo(function ReportPanel({
   result,
   failureMessage,
   warningMessage,
+  investmentScore,
 }: {
   reportData: Partial<MarketReport & PlanReport> | null;
   reportFields: Array<{
@@ -5134,6 +5155,7 @@ const ReportPanel = memo(function ReportPanel({
   result: string;
   failureMessage?: string;
   warningMessage?: string;
+  investmentScore?: ReportInvestmentScore;
 }) {
   const [exportingPdf, setExportingPdf] = useState(false);
   const [pdfError, setPdfError] = useState("");
@@ -5358,7 +5380,7 @@ const ReportPanel = memo(function ReportPanel({
           isOrphanBulletText
         );
 
-      const executiveSnapshot = buildExecutiveSnapshot(fullReportContent);
+      const executiveSnapshot = buildExecutiveSnapshot(fullReportContent, investmentScore);
 
       const drawDecisionGauge = (
         label: string,
@@ -5822,9 +5844,10 @@ const ReportPanel = memo(function ReportPanel({
         }
 
         if (section.field === "executiveRecommendation") {
-          const selected = detectRecommendation(section.content) || "REVIEW";
+          const selected = investmentScore?.recommendation || detectRecommendation(section.content) || "REVIEW";
           const decisionLabel = formatDecisionLabel(selected);
           const confidence =
+            investmentScore?.confidence ??
             extractConfidence(section.content) ??
             extractConfidence(fullReportContent) ??
             extractScore(fullReportContent, "Investment Score");
@@ -6420,9 +6443,15 @@ const ReportPanel = memo(function ReportPanel({
                   </div>
                   <div className="mt-4 border-t border-white/10 pt-4">
                     {section.field === "executiveSummary" ? (
-                      <ExecutiveSummaryVisual section={section} />
+                      <ExecutiveSummaryVisual
+                        section={section}
+                        investmentScore={investmentScore}
+                      />
                     ) : null}
-                    <ExecutiveSnapshotPanel section={section} />
+                    <ExecutiveSnapshotPanel
+                      section={section}
+                      investmentScore={investmentScore}
+                    />
                     {hasPremiumSectionVisual(section) &&
                     section.field !== "executiveSummary" &&
                     section.field !== "financialDashboard" &&
@@ -6708,6 +6737,8 @@ export default function Planner({
       initialConversations,
     })
   );
+  const [currentReportInvestmentScore, setCurrentReportInvestmentScore] =
+    useState<ReportInvestmentScore | undefined>(initialReport?.investmentScore);
   const [regeneratingReportMode, setRegeneratingReportMode] =
     useState<ChatMode | null>(null);
   const chatScrollerRef = useRef<HTMLDivElement | null>(null);
@@ -6853,6 +6884,7 @@ export default function Planner({
     setReportGenerationWarning("");
     setMarketReport(null);
     setPlanReport(null);
+    setCurrentReportInvestmentScore(undefined);
     setActiveReportId("");
     setWorkflowCompletedSteps(0);
     setReportProgress(0);
@@ -7568,6 +7600,7 @@ export default function Planner({
     status = "completed",
     sections,
     expectedSectionCount,
+    metadata,
   }: {
     title: string;
     promptText: string;
@@ -7576,6 +7609,7 @@ export default function Planner({
     status?: "completed" | "failed";
     sections: Array<{ title: string; content: string }>;
     expectedSectionCount: number;
+    metadata?: ReportMetadata;
   }) {
     try {
       const isCompletedReport =
@@ -7622,6 +7656,7 @@ export default function Planner({
           report_type: reportType,
           status: persistedStatus,
           sections: persistedSections,
+          metadata: persistedStatus === "completed" ? metadata || {} : {},
         })
         .select("id")
         .single();
@@ -8010,8 +8045,10 @@ export default function Planner({
     setReportGenerationWarning("");
     setMarketReport(null);
     setPlanReport(null);
+    setCurrentReportInvestmentScore(undefined);
 
     const reportOutput: PlanReport = { ...emptyPlanReport };
+    let reportMetadata: ReportMetadata | undefined;
     const completedFields = new Set<PlanReportField>();
     let reportApiCalls = 0;
     const maxReportApiCalls = 1;
@@ -8059,6 +8096,11 @@ export default function Planner({
       await readStreamingSectionJson(
         res,
         (event) => {
+          if (event.reportMetadata?.investmentScore) {
+            reportMetadata = event.reportMetadata;
+            setCurrentReportInvestmentScore(event.reportMetadata.investmentScore);
+          }
+
           for (const { field } of planReportFields) {
             const chunk = event[field];
 
@@ -8105,6 +8147,7 @@ export default function Planner({
         workspaceId: selectedWorkspaceId,
         sections: serializedSections,
         expectedSectionCount: outputFields.length,
+        metadata: reportMetadata,
       });
       setActiveReportId(savedReportId);
       await attributeReportUsage(savedReportId, reportRequestId);
@@ -8125,6 +8168,7 @@ export default function Planner({
         status: "failed",
         sections: [],
         expectedSectionCount: outputFields.length,
+        metadata: reportMetadata,
       });
       await attributeReportUsage(failedReportId, reportRequestId);
       updateAssistantMessage(
@@ -8198,8 +8242,10 @@ export default function Planner({
     setReportGenerationWarning("");
     setPlanReport(null);
     setMarketReport(null);
+    setCurrentReportInvestmentScore(undefined);
 
     const reportOutput: MarketReport = { ...emptyMarketReport };
+    let reportMetadata: ReportMetadata | undefined;
     const completedFields = new Set<MarketReportField>();
     let reportApiCalls = 0;
     const maxReportApiCalls = 1;
@@ -8247,6 +8293,11 @@ export default function Planner({
       await readStreamingSectionJson(
         res,
         (event) => {
+          if (event.reportMetadata?.investmentScore) {
+            reportMetadata = event.reportMetadata;
+            setCurrentReportInvestmentScore(event.reportMetadata.investmentScore);
+          }
+
           if (event.warning) {
             const affectedFields = [
               ...(event.missingFields || []),
@@ -8310,6 +8361,7 @@ export default function Planner({
         workspaceId: selectedWorkspaceId,
         sections: serializedSections,
         expectedSectionCount: outputFields.length,
+        metadata: reportMetadata,
       });
       setActiveReportId(savedReportId);
       await attributeReportUsage(savedReportId, reportRequestId);
@@ -8333,6 +8385,7 @@ export default function Planner({
         status: "failed",
         sections: [],
         expectedSectionCount: outputFields.length,
+        metadata: reportMetadata,
       });
       await attributeReportUsage(failedReportId, reportRequestId);
       updateAssistantMessage(
@@ -9096,6 +9149,7 @@ export default function Planner({
                   result={result}
                   failureMessage={reportGenerationError}
                   warningMessage={reportGenerationWarning}
+                  investmentScore={currentReportInvestmentScore || initialReport?.investmentScore}
                 />
 	              ) : null}
               </div>
