@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { createServiceRoleClient } from "@/app/lib/supabase/admin";
 import { createClient } from "@/app/lib/supabase/server";
 import { noStoreJson } from "@/app/lib/security/api-response";
+import { logServerError } from "@/app/lib/security/errors";
 import { checkRateLimit, getClientIpFromRequest } from "@/app/lib/security/rate-limit";
 import { validateApiRequest } from "@/app/lib/security/request-validation";
 
@@ -62,10 +63,7 @@ export async function POST(request: NextRequest) {
     .maybeSingle();
 
   if (reportError) {
-    console.error("[reports:attribute-usage] report ownership query failed", {
-      message: reportError.message,
-      code: reportError.code,
-    });
+    logServerError("reports:attribute-usage:ownership", reportError);
 
     return noStoreJson({ error: "Report could not be verified." }, { status: 500 });
   }
@@ -86,10 +84,7 @@ export async function POST(request: NextRequest) {
     .eq("report_request_id", reportRequestId);
 
   if (attributionError) {
-    console.error("[reports:attribute-usage] attribution failed", {
-      message: attributionError.message,
-      code: attributionError.code,
-    });
+    logServerError("reports:attribute-usage:update", attributionError);
 
     return noStoreJson({ error: "Report usage could not be attributed." }, { status: 500 });
   }

@@ -11,6 +11,7 @@ import {
 } from "@/app/lib/billing/stripe";
 import { getUserBillingProfile } from "@/app/lib/billing/stripe-sync";
 import { noStoreJson } from "@/app/lib/security/api-response";
+import { logServerError } from "@/app/lib/security/errors";
 import {
   checkRateLimit,
   getClientIpFromRequest,
@@ -111,10 +112,7 @@ export async function POST(req: NextRequest) {
       idempotencyKey,
     });
   } catch (error) {
-    console.error("[api:stripe:checkout] createCheckoutSession exception", {
-      plan,
-      message: error instanceof Error ? error.message : String(error),
-    });
+    logServerError("api:stripe:checkout:create-session", error);
 
     return noStoreJson(
       {
@@ -130,18 +128,19 @@ export async function POST(req: NextRequest) {
   }
 
   if (!checkout.ok) {
-    console.error("[api:stripe:checkout] createCheckoutSession failed", {
-      plan,
-      message: checkout.message,
-    });
+    logServerError(
+      "api:stripe:checkout:create-session-failed",
+      new Error(checkout.message)
+    );
 
     return noStoreJson({ error: checkout.message }, { status: 400 });
   }
 
   if (!checkout.data.url) {
-    console.error("[api:stripe:checkout] createCheckoutSession missing url", {
-      plan,
-    });
+    logServerError(
+      "api:stripe:checkout:missing-url",
+      new Error("Stripe checkout did not return a URL.")
+    );
 
     return noStoreJson(
       { error: "Stripe checkout did not return a URL." },

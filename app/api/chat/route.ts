@@ -8,7 +8,7 @@ import {
 } from "@/app/lib/security/rate-limit";
 import { validateApiRequest } from "@/app/lib/security/request-validation";
 import { logServerError } from "@/app/lib/security/errors";
-import { logOperationalInfo } from "@/app/lib/security/logging";
+import { logOperationalError, logOperationalInfo } from "@/app/lib/security/logging";
 import {
   createAiCacheKey,
   estimateAiCostUsd,
@@ -47,6 +47,7 @@ type ChatInputMessage = {
 
 type ChatAttachmentInput = {
   name: string;
+  type: string;
   size: number;
   textContent: string;
 };
@@ -136,8 +137,36 @@ const expertInstructions: Record<AiExpert, string> = {
 
 const MAX_CHAT_ATTACHMENTS = 6;
 const MAX_ATTACHMENT_SIZE_BYTES = 5_000_000;
+const MAX_TOTAL_ATTACHMENT_SIZE_BYTES = 12_000_000;
 const MAX_ATTACHMENT_TEXT_BYTES = 20_000;
 const MAX_ATTACHMENT_NAME_LENGTH = 180;
+const allowedAttachmentExtensions = new Set([
+  "txt",
+  "md",
+  "csv",
+  "json",
+  "ts",
+  "tsx",
+  "js",
+  "jsx",
+  "css",
+  "html",
+  "sql",
+  "pdf",
+  "doc",
+  "docx",
+]);
+const allowedAttachmentMimeTypes = new Set([
+  "text/plain",
+  "text/markdown",
+  "text/csv",
+  "application/csv",
+  "application/json",
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/octet-stream",
+]);
 
 function sanitizeAttachmentName(value: string) {
   return value
@@ -145,6 +174,33 @@ function sanitizeAttachmentName(value: string) {
     .replace(/[\\/]+/g, "-")
     .trim()
     .slice(0, MAX_ATTACHMENT_NAME_LENGTH);
+}
+
+function getAttachmentExtension(name: string) {
+  const match = name.toLowerCase().match(/\.([a-z0-9]+)$/);
+
+  return match?.[1] || "";
+}
+
+function isAllowedAttachmentType(name: string, type: string) {
+  const extension = getAttachmentExtension(name);
+  const normalizedType = type.trim().toLowerCase();
+
+  if (!allowedAttachmentExtensions.has(extension)) {
+    return false;
+  }
+
+  return (
+    !normalizedType ||
+    normalizedType.startsWith("text/") ||
+    allowedAttachmentMimeTypes.has(normalizedType)
+  );
+}
+
+function hasSuspiciousAttachmentMetadata(record: Record<string, unknown>) {
+  return ["url", "signedUrl", "path", "bucket", "token", "authorization"].some(
+    (key) => key in record
+  );
 }
 
 function getAttachmentValidationError(value: unknown) {
@@ -160,18 +216,30 @@ function getAttachmentValidationError(value: unknown) {
     return `Attach up to ${MAX_CHAT_ATTACHMENTS} files per message.`;
   }
 
+  let totalSize = 0;
+
   for (const attachment of value) {
     if (!attachment || typeof attachment !== "object") {
       return "Invalid attachment payload.";
     }
 
     const record = attachment as Record<string, unknown>;
-    const name = typeof record.name === "string" ? sanitizeAttachmentName(record.name) : "";
+    const rawName = typeof record.name === "string" ? record.name : "";
+    const name = sanitizeAttachmentName(rawName);
+    const type = typeof record.type === "string" ? record.type.trim() : "";
     const size =
       typeof record.size === "number" && Number.isFinite(record.size)
         ? record.size
         : 0;
     const textContent = typeof record.textContent === "string" ? record.textContent : "";
+
+    if (!name || rawName !== name || name.includes("..") || hasSuspiciousAttachmentMetadata(record)) {
+      return "Attachment metadata is invalid.";
+    }
+
+    if (!isAllowedAttachmentType(name, type)) {
+      return "Attachment type is not supported.";
+    }
 
     if (!name) {
       return "Attachment name is required.";
@@ -179,6 +247,12 @@ function getAttachmentValidationError(value: unknown) {
 
     if (size < 0 || size > MAX_ATTACHMENT_SIZE_BYTES) {
       return "Attachment is too large.";
+    }
+
+    totalSize += size;
+
+    if (totalSize > MAX_TOTAL_ATTACHMENT_SIZE_BYTES) {
+      return "Total attachment size is too large.";
     }
 
     if (textContent.length > MAX_ATTACHMENT_TEXT_BYTES) {
@@ -232,6 +306,7 @@ function normalizeAttachments(value: unknown): ChatAttachmentInput[] {
       }
 
       const name = (attachment as { name?: unknown }).name;
+      const type = (attachment as { type?: unknown }).type;
       const size = (attachment as { size?: unknown }).size;
       const textContent = (attachment as { textContent?: unknown }).textContent;
 
@@ -241,6 +316,7 @@ function normalizeAttachments(value: unknown): ChatAttachmentInput[] {
 
       return {
         name: sanitizeAttachmentName(name),
+        type: typeof type === "string" ? type.trim().toLowerCase().slice(0, 120) : "",
         size: typeof size === "number" && Number.isFinite(size) ? size : 0,
         textContent:
           typeof textContent === "string" ? textContent.trim().slice(0, 12_000) : "",
@@ -1245,7 +1321,7 @@ export async function POST(req: Request) {
       .maybeSingle();
 
     if (profileError) {
-      console.error("[ai_chat_profiles select failed]", profileError);
+      logServerError("api:chat:profile-select", profileError);
     }
 
     const chatProfile = normalizeProfile(profileData);
@@ -1749,7 +1825,7 @@ export async function POST(req: Request) {
                 completedText = extractResponseText(event.response);
 
                 if (getResponseStatus(event.response) === "incomplete") {
-                  console.error("[api:chat] OpenAI response incomplete", {
+                  logOperationalError("[api:chat]", new Error("OpenAI response incomplete"), {
                     model,
                     selectedIntent,
                     selectedExpert,
@@ -1774,7 +1850,7 @@ export async function POST(req: Request) {
                 tokenUsage = extractTokenUsage(event.response);
                 completedText = extractResponseText(event.response);
 
-                console.error("[api:chat] OpenAI response incomplete", {
+                logOperationalError("[api:chat]", new Error("OpenAI response incomplete"), {
                   model,
                   selectedIntent,
                   selectedExpert,
@@ -1805,7 +1881,7 @@ export async function POST(req: Request) {
             }
 
             if (!streamedText.trim()) {
-              console.error("[api:chat] OpenAI completed without output text", {
+              logOperationalError("[api:chat]", new Error("OpenAI completed without output text"), {
                 model,
                 selectedIntent,
                 selectedExpert,

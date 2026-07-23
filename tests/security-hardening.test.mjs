@@ -141,11 +141,86 @@ test("chat file attachments are bounded and sanitized on the server", () => {
 
   assert.match(source, /MAX_CHAT_ATTACHMENTS\s*=\s*6/);
   assert.match(source, /MAX_ATTACHMENT_SIZE_BYTES\s*=\s*5_000_000/);
+  assert.match(source, /MAX_TOTAL_ATTACHMENT_SIZE_BYTES\s*=\s*12_000_000/);
   assert.match(source, /MAX_ATTACHMENT_TEXT_BYTES\s*=\s*20_000/);
+  assert.match(source, /allowedAttachmentExtensions/);
+  assert.match(source, /allowedAttachmentMimeTypes/);
   assert.match(source, /sanitizeAttachmentName/);
+  assert.match(source, /hasSuspiciousAttachmentMetadata/);
   assert.match(source, /getAttachmentValidationError/);
   assert.match(source, /Attachment is too large/);
+  assert.match(source, /Total attachment size is too large/);
   assert.match(source, /Attachment text is too large/);
+  assert.match(source, /Attachment metadata is invalid/);
+  assert.match(source, /Attachment type is not supported/);
+  assert.match(source, /recordAIAbuseEvent/);
+  assert.match(source, /oversized_input/);
+});
+
+test("admin API routes reject unauthorized callers through the shared guard", () => {
+  const adminData = read("app/admin/admin-data.ts");
+  const adminRoutes = walkFiles("app/api/admin", (file) => file.endsWith("route.ts"));
+
+  assert.match(adminData, /export async function requireAdminApi/);
+  assert.match(adminData, /Admin access required\./);
+  assert.match(adminData, /status:\s*403/);
+
+  for (const route of adminRoutes) {
+    const source = read(route);
+
+    assert.match(source, /requireAdminApi/, `${route} must use the admin guard`);
+  }
+});
+
+test("report access remains scoped to the authenticated owner", () => {
+  const reportUtils = read("app/dashboard/report-utils.ts");
+  const reportApiRoutes = [
+    "app/api/reports/[id]/notify/route.ts",
+    "app/api/reports/attribute-usage/route.ts",
+  ];
+  const dashboardReportPage = read("app/dashboard/[id]/page.tsx");
+
+  assert.match(reportUtils, /export async function loadUserReport/);
+  assert.match(reportUtils, /\.from\("reports"\)/);
+  assert.match(reportUtils, /\.eq\("user_id", user\.id\)/);
+  assert.match(reportUtils, /\.eq\("id", reportId\)/);
+  assert.match(dashboardReportPage, /loadUserReport\(supabase,\s*user,\s*id\)/);
+
+  for (const route of reportApiRoutes) {
+    const source = read(route);
+
+    assert.match(source, /\.from\("reports"\)/, `${route} must read reports`);
+    assert.match(
+      source,
+      /\.eq\("user_id", user\.id\)/,
+      `${route} must scope report access to the authenticated user`
+    );
+  }
+});
+
+test("AI response cache lookup is user-isolated by default", () => {
+  const governance = read("app/lib/ai/governance.ts");
+  const start = governance.indexOf("export async function getCachedAiResponse");
+  const end = governance.indexOf("export async function storeCachedAiResponse", start);
+  const cacheLookup = governance.slice(start, end);
+
+  assert.notEqual(start, -1, "cache lookup function must exist");
+  assert.notEqual(end, -1, "cache write function must exist");
+  assert.match(cacheLookup, /\.eq\("user_id", userId\)/);
+  assert.match(cacheLookup, /\.eq\("cache_key", cacheKey\)/);
+  assert.match(governance, /function shouldAllowGlobalAiCacheSharing/);
+  assert.match(governance, /AI_CACHE_ALLOW_GLOBAL_SHARING/);
+});
+
+test("Stripe webhooks reject invalid signatures before processing events", () => {
+  const route = read("app/api/stripe/webhook/route.ts");
+  const webhook = read("app/lib/billing/stripe-webhook.ts");
+
+  assert.match(route, /req\.text\(\)/);
+  assert.match(route, /stripe-signature/);
+  assert.match(webhook, /verifyStripeWebhookSignature/);
+  assert.match(webhook, /Invalid Stripe signature\./);
+  assert.match(webhook, /status:\s*400/);
 });
 
 test("authentication diagnostics and signup errors do not expose sensitive internals", () => {

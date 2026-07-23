@@ -4,7 +4,7 @@ import {
   integrationNotConfigured,
   isFeatureEnabled,
 } from "@/app/lib/integrations/config";
-import { logOperationalError } from "@/app/lib/security/logging";
+import { logOperationalError, logOperationalInfo } from "@/app/lib/security/logging";
 
 export type BillingPlanId = "free" | "pro" | "team" | "business";
 
@@ -300,7 +300,7 @@ async function postStripeForm<T>(
       providerError = "unreadable_error";
     }
     const stripeRequestId = response.headers.get("request-id") || "";
-    console.error("[api:stripe:checkout] Stripe error details", {
+    logOperationalError("[api:stripe:checkout]", new Error("Stripe rejected the request."), {
       path,
       type: stripeError?.type,
       code: stripeError?.code,
@@ -341,14 +341,14 @@ export async function createStripeCheckoutSession(input: {
   const config = getStripeConfiguration();
   const checkoutConfig = getStripeCheckoutConfiguration(input.plan);
 
-  console.log("[stripe:checkout] create session input", {
+  logOperationalInfo("[stripe:checkout] create session input", {
     plan: input.plan,
     hasExistingCustomer: Boolean(input.existingCustomerId),
     configured: checkoutConfig.configured,
   });
 
   if (!checkoutConfig.configured) {
-    console.log("[stripe:checkout] missing configuration", {
+    logOperationalInfo("[stripe:checkout] missing configuration", {
       plan: input.plan,
       missing: checkoutConfig.missing,
     });
