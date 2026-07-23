@@ -444,6 +444,7 @@ function OpenAiAnalyticsSection({ data }: { data: AdminDashboardData }) {
           ["Cache hits", formatCompactNumber(data.openAiAnalytics.cacheHits)],
           ["Cache misses", formatCompactNumber(data.openAiAnalytics.cacheMisses)],
           ["Token savings", formatCompactNumber(data.openAiAnalytics.estimatedTokenSavings)],
+          ["Abuse blocked", formatCompactNumber(data.openAiAnalytics.blockedAbuseAttempts)],
           ["Blocked", formatCompactNumber(data.openAiAnalytics.blockedRequests)],
           ["Limits", formatCompactNumber(data.openAiAnalytics.limitReachedEvents)],
         ].map(([label, value]) => (
@@ -453,6 +454,20 @@ function OpenAiAnalyticsSection({ data }: { data: AdminDashboardData }) {
           </div>
         ))}
       </div>
+
+      {data.openAiAnalytics.topAbuseReasons.length ? (
+        <div className="mt-4 rounded-[1rem] border border-white/10 bg-black/20 p-3">
+          <p className="text-[10px] uppercase tracking-[0.16em] text-zinc-600">Top abuse reasons</p>
+          <div className="mt-2 space-y-1.5">
+            {data.openAiAnalytics.topAbuseReasons.map((item) => (
+              <div key={item.reason} className="flex items-center justify-between gap-3 text-xs">
+                <span className="min-w-0 truncate text-zinc-400">{item.reason}</span>
+                <span className="font-semibold text-zinc-200">{formatCompactNumber(item.count)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       {data.openAiAnalytics.operationCosts.length ? (
         <div className="mt-4 grid grid-cols-2 gap-2.5">

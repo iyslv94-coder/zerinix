@@ -20,6 +20,7 @@ import {
   type AiRequestKind,
 } from "@/app/lib/ai/governance";
 import { checkAiProductionRateLimit } from "@/app/lib/ai/rate-limit";
+import { recordAIAbuseEvent } from "@/app/lib/ai/abuse-protection";
 import { loadUserReport, type DashboardReport } from "@/app/dashboard/report-utils";
 import {
   createOpenAiClient,
@@ -1204,6 +1205,16 @@ export async function POST(req: Request) {
     const attachmentValidationError = getAttachmentValidationError(body?.attachments);
 
     if (attachmentValidationError) {
+      await recordAIAbuseEvent(supabase, {
+        userId: user.id,
+        type: "oversized_input",
+        metadata: {
+          endpoint: "/api/chat",
+          reason: attachmentValidationError,
+          ip,
+        },
+      });
+
       return NextResponse.json(
         { error: attachmentValidationError },
         { status: 400 }

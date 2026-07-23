@@ -121,6 +121,8 @@ export type AdminDashboardData = {
     cacheHits: number;
     cacheMisses: number;
     estimatedTokenSavings: number;
+    blockedAbuseAttempts: number;
+    topAbuseReasons: Array<{ reason: string; count: number }>;
     costPerUser: number | null;
     costPerReport: number | null;
     costRanges: {
@@ -805,6 +807,8 @@ function buildMockAdminDashboardData(dateRange: AdminDateRange): AdminDashboardD
       cacheHits: 0,
       cacheMisses: 0,
       estimatedTokenSavings: 0,
+      blockedAbuseAttempts: 0,
+      topAbuseReasons: [],
       costPerUser: null,
       costPerReport: null,
       costRanges: {
@@ -1648,6 +1652,48 @@ async function loadRecentUsage(range: AdminDateRange) {
         : "Read from ai_usage_events for the selected date range."
       : "ai_usage_events query succeeded, but no records exist in the selected date range.",
   };
+}
+
+async function loadRecentAiAbuseEvents(range: AdminDateRange) {
+  const serviceClient = createServiceRoleClient();
+  const { data, error } = await serviceClient
+    .from("ai_abuse_events")
+    .select("type,metadata,created_at")
+    .gte("created_at", range.fromIso)
+    .lte("created_at", range.toIso)
+    .order("created_at", { ascending: false })
+    .limit(1000);
+
+  if (error) {
+    if (!/ai_abuse_events|relation|table/i.test(error.message || "")) {
+      console.error("[admin:data] ai abuse events query failed", {
+        message: error.message,
+        code: error.code,
+      });
+    }
+
+    return [] as Array<Record<string, unknown>>;
+  }
+
+  return (data || []) as unknown as Array<Record<string, unknown>>;
+}
+
+function summarizeAiAbuseReasons(rows: Array<Record<string, unknown>>) {
+  const reasonMap = new Map<string, number>();
+
+  rows.forEach((row) => {
+    const metadata = readUsageMetadata(row);
+    const reason =
+      readString(metadata.reason) ||
+      readString(row.type, "unknown");
+
+    reasonMap.set(reason, (reasonMap.get(reason) || 0) + 1);
+  });
+
+  return [...reasonMap.entries()]
+    .map(([reason, count]) => ({ reason, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 5);
 }
 
 async function loadAllAccountStatuses() {
@@ -2632,6 +2678,7 @@ function calculateFinancials(input: {
 
 function calculateOpenAiAnalytics(input: {
   usage: Array<Record<string, unknown>>;
+  abuseEvents: Array<Record<string, unknown>>;
   totalUsers: number;
   official?: OpenAiCostCenterData;
 }) {
@@ -2649,6 +2696,8 @@ function calculateOpenAiAnalytics(input: {
       cacheHits: 0,
       cacheMisses: 0,
       estimatedTokenSavings: 0,
+      blockedAbuseAttempts: input.abuseEvents.length,
+      topAbuseReasons: summarizeAiAbuseReasons(input.abuseEvents),
       costPerUser: input.totalUsers > 0 ? Number((cost / input.totalUsers).toFixed(4)) : null,
       costPerReport: null,
       costRanges: input.official.costRanges,
@@ -2697,6 +2746,8 @@ function calculateOpenAiAnalytics(input: {
 
     return sum + (explicitSavings || readUsageTokenCounts(row).totalTokens);
   }, 0);
+  const blockedAbuseAttempts = input.abuseEvents.length;
+  const topAbuseReasons = summarizeAiAbuseReasons(input.abuseEvents);
   const modelMap = new Map<
     string,
     {
@@ -2784,6 +2835,8 @@ function calculateOpenAiAnalytics(input: {
     cacheHits,
     cacheMisses,
     estimatedTokenSavings,
+    blockedAbuseAttempts,
+    topAbuseReasons,
     costPerUser: input.totalUsers > 0 ? Number((cost / input.totalUsers).toFixed(4)) : null,
     costPerReport: null,
     costRanges: {
@@ -3420,13 +3473,14 @@ export async function loadAdminDashboardData(input?: {
     return buildMockAdminDashboardData(dateRange);
   }
 
-  const [authData, reportCount, conversationCount, workspaceSummary, usageResult, recentUsers, systemStatus, statuses] =
+  const [authData, reportCount, conversationCount, workspaceSummary, usageResult, abuseEvents, recentUsers, systemStatus, statuses] =
     await Promise.all([
       listAuthUsersForAdminScan(),
       countTableDetailed("reports", dateRange),
       countTableDetailed("ai_conversations", dateRange),
       countTableDetailed("report_workspaces", dateRange),
       loadRecentUsage(dateRange),
+      loadRecentAiAbuseEvents(dateRange),
       loadAdminUsers({ page: 1, pageSize: 5 }),
       loadSystemStatus(),
       loadAllAccountStatuses(),
@@ -3508,6 +3562,7 @@ export async function loadAdminDashboardData(input?: {
   });
   const openAiAnalytics = calculateOpenAiAnalytics({
     usage,
+    abuseEvents,
     totalUsers,
     official: openAiCostCenter,
   });

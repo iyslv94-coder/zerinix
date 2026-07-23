@@ -10,7 +10,9 @@ import {
   recordAiUsage,
   selectAiModel,
   type AiRequestKind,
+  type AIUsageOperationType,
 } from "@/app/lib/ai/governance";
+import { checkAIAbuseProtection } from "@/app/lib/ai/abuse-protection";
 import { QUOTA_COUNTING_USAGE_KIND_EXCLUSION } from "@/app/lib/ai/quota-rules.mjs";
 
 type AiProductionRateLimitInput = {
@@ -24,6 +26,18 @@ type AiProductionRateLimitInput = {
   reportRequestId?: string;
   ip: string;
 };
+
+function operationTypeForRequestKind(requestKind: AiRequestKind): AIUsageOperationType {
+  if (requestKind === "market_analysis") {
+    return "market_report";
+  }
+
+  if (requestKind === "report_generation") {
+    return "plan_report";
+  }
+
+  return "chat";
+}
 
 export async function checkAiProductionRateLimit({
   supabase,
@@ -40,7 +54,75 @@ export async function checkAiProductionRateLimit({
   const model = selectAiModel(requestKind);
   const normalizedPrompt = normalizeAiPrompt(promptText);
   const promptHash = createAiPromptHash(promptText);
+  const operationType = operationTypeForRequestKind(requestKind);
   const founderQuotaExempt = isFounderAccount(account);
+  const abuseProtection = await checkAIAbuseProtection({
+    supabase,
+    userId,
+    endpoint,
+    operationType,
+    promptText,
+    promptHash,
+    reportField,
+    reportRequestId,
+    ip,
+  });
+
+  if (!abuseProtection.allowed) {
+    logOperationalInfo("[ai abuse] request blocked", {
+      endpoint,
+      reportField: reportField ?? null,
+      reportRequestId: reportRequestId ?? null,
+      planTier,
+      requestKind,
+      operationType,
+      providerCalled: false,
+      quotaConsumed: false,
+      abuseType: abuseProtection.type,
+      failureReason: abuseProtection.reason,
+    });
+
+    await recordAiUsage(supabase, {
+      userId,
+      endpoint,
+      operationType,
+      reportField,
+      promptHash,
+      model,
+      planTier,
+      tokenUsage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+      estimatedCostUsd: 0,
+      cacheHit: false,
+      status: "rate_limited",
+      responseTimeMs: 0,
+      metadata: {
+        quota_event: false,
+        quota_mode: requestKind,
+        quota_consumed: false,
+        report_request_id: reportRequestId ?? null,
+        usage_kind: "abuse_check",
+        abuse_type: abuseProtection.type,
+        reason: abuseProtection.reason,
+        limitKey: userId || ip,
+        limitScope: userId ? "user" : "ip",
+      },
+    });
+
+    return {
+      allowed: false,
+      planTier,
+      dailyUsed: 0,
+      monthlyUsed: 0,
+      dailyRequests: 0,
+      monthlyRequests: 0,
+      reason: abuseProtection.reason || "AI request blocked.",
+      model,
+      promptHash,
+      normalizedPrompt,
+      quotaAlreadyCharged: true,
+      abuseType: abuseProtection.type,
+    };
+  }
 
   if (founderQuotaExempt) {
     logOperationalInfo("[ai quota] founder account quota bypass", {
