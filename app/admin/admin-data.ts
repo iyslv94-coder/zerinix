@@ -116,6 +116,8 @@ export type AdminDashboardData = {
     cachedTokens: number;
     totalTokens: number;
     cost: number;
+    blockedRequests: number;
+    limitReachedEvents: number;
     costPerUser: number | null;
     costPerReport: number | null;
     costRanges: {
@@ -795,6 +797,8 @@ function buildMockAdminDashboardData(dateRange: AdminDateRange): AdminDashboardD
       cachedTokens: 0,
       totalTokens: 0,
       cost: 0,
+      blockedRequests: 0,
+      limitReachedEvents: 0,
       costPerUser: null,
       costPerReport: null,
       costRanges: {
@@ -2634,6 +2638,8 @@ function calculateOpenAiAnalytics(input: {
       cachedTokens: input.official.cachedTokens,
       totalTokens: input.official.totalTokens,
       cost,
+      blockedRequests: 0,
+      limitReachedEvents: 0,
       costPerUser: input.totalUsers > 0 ? Number((cost / input.totalUsers).toFixed(4)) : null,
       costPerReport: null,
       costRanges: input.official.costRanges,
@@ -2660,6 +2666,12 @@ function calculateOpenAiAnalytics(input: {
   const cachedTokens = input.usage.reduce((sum, row) => sum + readUsageTokenCounts(row).cachedTokens, 0);
   const totalTokens = input.usage.reduce((sum, row) => sum + readUsageTokenCounts(row).totalTokens, 0);
   const cost = input.usage.reduce((sum, row) => sum + getUsageCost(row).costUsd, 0);
+  const blockedRequests = input.usage.filter(
+    (row) => readString(row.status).toLowerCase() === "rate_limited"
+  ).length;
+  const limitReachedEvents = input.usage.filter(
+    (row) => readString(row.status).toLowerCase() === "rate_limited"
+  ).length;
   const modelMap = new Map<
     string,
     {
@@ -2742,6 +2754,8 @@ function calculateOpenAiAnalytics(input: {
     cachedTokens,
     totalTokens,
     cost,
+    blockedRequests,
+    limitReachedEvents,
     costPerUser: input.totalUsers > 0 ? Number((cost / input.totalUsers).toFixed(4)) : null,
     costPerReport: null,
     costRanges: {

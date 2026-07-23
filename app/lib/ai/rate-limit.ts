@@ -98,6 +98,7 @@ export async function checkAiProductionRateLimit({
   }
 
   const allowance = await checkUsageAllowance(supabase, userId, planTier, requestKind);
+  const remainingUsage = "remainingUsage" in allowance ? allowance.remainingUsage : undefined;
 
   if (!allowance.allowed) {
     logOperationalInfo("[ai quota] request blocked", {
@@ -109,9 +110,10 @@ export async function checkAiProductionRateLimit({
       dailyRequests: allowance.dailyRequests,
       monthlyUsed: allowance.monthlyUsed,
       monthlyRequests: allowance.monthlyRequests,
+      remainingUsage,
       providerCalled: false,
       quotaConsumed: false,
-      failureReason: dailyAiLimitMessage,
+      failureReason: allowance.reason || dailyAiLimitMessage,
     });
 
     await recordAiUsage(supabase, {
@@ -132,11 +134,12 @@ export async function checkAiProductionRateLimit({
         quota_consumed: false,
         report_request_id: reportRequestId ?? null,
         usage_kind: "quota_check",
-        reason: dailyAiLimitMessage,
+        reason: allowance.reason || dailyAiLimitMessage,
         dailyUsed: allowance.dailyUsed,
         dailyRequests: allowance.dailyRequests,
         monthlyUsed: allowance.monthlyUsed,
         monthlyRequests: allowance.monthlyRequests,
+        remainingUsage,
         limitKey: userId || ip,
         limitScope: userId ? "user" : "ip",
       },

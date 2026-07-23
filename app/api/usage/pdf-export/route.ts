@@ -1,0 +1,143 @@
+import { NextRequest } from "next/server";
+import { createClient } from "@/app/lib/supabase/server";
+import { noStoreJson } from "@/app/lib/security/api-response";
+import { checkRateLimit, getClientIpFromRequest } from "@/app/lib/security/rate-limit";
+import { validateApiRequest } from "@/app/lib/security/request-validation";
+import {
+  checkAIUsagePermission,
+  createAiPromptHash,
+  getUserPlanTier,
+  recordAiUsage,
+} from "@/app/lib/ai/governance";
+
+function readBodyString(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim().slice(0, 256) : "";
+}
+
+export async function POST(request: NextRequest) {
+  const requestValidation = validateApiRequest(request, {
+    maxBodyBytes: 2048,
+  });
+
+  if (!requestValidation.ok) {
+    return noStoreJson(
+      { error: requestValidation.message },
+      { status: requestValidation.status }
+    );
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return noStoreJson({ error: "Authentication required." }, { status: 401 });
+  }
+
+  const rateLimit = checkRateLimit(
+    `usage:pdf-export:${user.id}:${getClientIpFromRequest(request)}`,
+    {
+      limit: 30,
+      windowMs: 10 * 60 * 1000,
+    }
+  );
+
+  if (!rateLimit.allowed) {
+    return noStoreJson({ error: "Too many PDF export attempts." }, { status: 429 });
+  }
+
+  const body = await request.json().catch(() => null) as Record<string, unknown> | null;
+  const reportId = readBodyString(body?.reportId);
+  const reportTitle = readBodyString(body?.reportTitle);
+
+  if (reportId) {
+    const { data: report, error } = await supabase
+      .from("reports")
+      .select("id")
+      .eq("id", reportId)
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (error) {
+      return noStoreJson({ error: "Report could not be verified." }, { status: 500 });
+    }
+
+    if (!report) {
+      return noStoreJson({ error: "Report not found." }, { status: 404 });
+    }
+  }
+
+  const planTier = await getUserPlanTier(supabase, user.id);
+  const permission = await checkAIUsagePermission({
+    supabase,
+    userId: user.id,
+    operationType: "pdf_export",
+    planTier,
+  });
+  const promptHash = createAiPromptHash(`pdf_export:${reportId || reportTitle || user.id}`);
+
+  if (!permission.allowed) {
+    await recordAiUsage(supabase, {
+      userId: user.id,
+      endpoint: "/api/usage/pdf-export",
+      operationType: "pdf_export",
+      reportId: reportId || null,
+      promptHash,
+      model: "pdf-export",
+      planTier,
+      tokenUsage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+      estimatedCostUsd: 0,
+      cacheHit: false,
+      status: "rate_limited",
+      responseTimeMs: 0,
+      metadata: {
+        quota_event: false,
+        quota_mode: "pdf_export",
+        quota_consumed: false,
+        usage_kind: "pdf_export_limit",
+        reason: permission.reason || "Monthly PDF export limit reached.",
+        remainingUsage: permission.remainingUsage,
+        report_title_present: Boolean(reportTitle),
+      },
+    });
+
+    return noStoreJson(
+      {
+        error: permission.reason || "Monthly PDF export limit reached.\nUpgrade your plan to continue.",
+        remainingUsage: permission.remainingUsage,
+      },
+      { status: 429 }
+    );
+  }
+
+  await recordAiUsage(supabase, {
+    userId: user.id,
+    endpoint: "/api/usage/pdf-export",
+    operationType: "pdf_export",
+    reportId: reportId || null,
+    promptHash,
+    model: "pdf-export",
+    planTier,
+    tokenUsage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+    estimatedCostUsd: 0,
+    cacheHit: false,
+    responseTimeMs: 0,
+    metadata: {
+      quota_event: true,
+      quota_mode: "pdf_export",
+      quota_consumed: true,
+      usage_kind: "pdf_export",
+      remainingUsage: permission.remainingUsage,
+      report_title_present: Boolean(reportTitle),
+    },
+  });
+
+  return noStoreJson({
+    ok: true,
+    remainingUsage: {
+      ...permission.remainingUsage,
+      pdfExports: Math.max(0, permission.remainingUsage.pdfExports - 1),
+    },
+  });
+}

@@ -44,9 +44,9 @@ type UsageLimit = {
 type UsageLimitSet = Record<AiRequestKind, UsageLimit>;
 
 type AiOperationLimit = {
-  monthlyReports: number;
+  monthlyReportCount: number;
   monthlyChatTokens: number;
-  pdfExports: number;
+  monthlyPdfExports: number;
 };
 
 type AiUsageLimitConfig = Record<PlanTier, AiOperationLimit>;
@@ -81,19 +81,19 @@ type UsageEventInput = {
 
 const defaultAiOperationLimits: AiUsageLimitConfig = {
   free: {
-    monthlyReports: 3,
+    monthlyReportCount: 3,
     monthlyChatTokens: 100_000,
-    pdfExports: 10,
+    monthlyPdfExports: 10,
   },
   pro: {
-    monthlyReports: 50,
+    monthlyReportCount: 50,
     monthlyChatTokens: 1_000_000,
-    pdfExports: 100,
+    monthlyPdfExports: 100,
   },
   business: {
-    monthlyReports: 250,
+    monthlyReportCount: 250,
     monthlyChatTokens: 5_000_000,
-    pdfExports: 500,
+    monthlyPdfExports: 500,
   },
 };
 
@@ -190,9 +190,15 @@ function getAiUsageLimitConfig(): AiUsageLimitConfig {
         const fallback = defaultAiOperationLimits[tier];
 
         config[tier] = {
-          monthlyReports: safeLimitNumber(tierLimits.monthlyReports, fallback.monthlyReports),
+          monthlyReportCount: safeLimitNumber(
+            tierLimits.monthlyReportCount ?? tierLimits.monthlyReports,
+            fallback.monthlyReportCount
+          ),
           monthlyChatTokens: safeLimitNumber(tierLimits.monthlyChatTokens, fallback.monthlyChatTokens),
-          pdfExports: safeLimitNumber(tierLimits.pdfExports, fallback.pdfExports),
+          monthlyPdfExports: safeLimitNumber(
+            tierLimits.monthlyPdfExports ?? tierLimits.pdfExports,
+            fallback.monthlyPdfExports
+          ),
         };
 
         return config;
@@ -293,14 +299,14 @@ async function loadMonthlyOperationUsage(
 
 function buildUsageLimitMessage(operationType: AIUsageOperationType) {
   if (operationType === "chat") {
-    return "Monthly AI chat token limit reached. Please upgrade your plan to continue.";
+    return "Monthly AI chat token limit reached.\nUpgrade your plan to continue.";
   }
 
   if (operationType === "pdf_export") {
-    return "Monthly PDF export limit reached. Please upgrade your plan to continue.";
+    return "Monthly PDF export limit reached.\nUpgrade your plan to continue.";
   }
 
-  return "Monthly report generation limit reached. Please upgrade your plan to continue.";
+  return "Monthly AI report limit reached.\nUpgrade your plan to continue.";
 }
 
 export function selectAiModel(kind: AiRequestKind) {
@@ -377,6 +383,69 @@ export async function getUserPlanTier(
   }
 
   return normalizePlanTier(data?.plan_tier);
+}
+
+export async function checkAIUsagePermission({
+  supabase,
+  userId,
+  operationType,
+  planTier,
+}: {
+  supabase: SupabaseClient;
+  userId: string;
+  operationType: AIUsageOperationType;
+  planTier?: PlanTier;
+}): Promise<{
+  allowed: boolean;
+  reason?: string;
+  planTier: PlanTier;
+  remainingUsage: {
+    reports: number;
+    tokens: number;
+    pdfExports: number;
+  };
+  usage: {
+    reports: number;
+    tokens: number;
+    pdfExports: number;
+  };
+  limits: {
+    monthlyReportCount: number;
+    monthlyChatTokens: number;
+    monthlyPdfExports: number;
+  };
+}> {
+  const resolvedPlanTier = planTier ?? await getUserPlanTier(supabase, userId);
+  const limits = getAiUsageLimitConfig()[resolvedPlanTier];
+  const [reportUsage, chatUsage, pdfUsage] = await Promise.all([
+    loadMonthlyOperationUsage(supabase, userId, ["plan_report", "market_report"]),
+    loadMonthlyOperationUsage(supabase, userId, "chat"),
+    loadMonthlyOperationUsage(supabase, userId, "pdf_export"),
+  ]);
+  const usage = {
+    reports: reportUsage.requestCount,
+    tokens: chatUsage.totalTokens,
+    pdfExports: pdfUsage.requestCount,
+  };
+  const remainingUsage = {
+    reports: Math.max(0, limits.monthlyReportCount - usage.reports),
+    tokens: Math.max(0, limits.monthlyChatTokens - usage.tokens),
+    pdfExports: Math.max(0, limits.monthlyPdfExports - usage.pdfExports),
+  };
+  const blocked =
+    (operationType === "chat" && remainingUsage.tokens <= 0) ||
+    ((operationType === "plan_report" || operationType === "market_report") &&
+      remainingUsage.reports <= 0) ||
+    (operationType === "pdf_export" && remainingUsage.pdfExports <= 0);
+
+  return {
+    allowed: !blocked,
+    reason: blocked ? buildUsageLimitMessage(operationType) : undefined,
+    planTier: resolvedPlanTier,
+    remainingUsage,
+    usage,
+    limits,
+  };
 }
 
 export async function checkUsageAllowance(
@@ -459,19 +528,16 @@ export async function checkUsageAllowance(
     reportField: requestKind,
   });
   const operationLimits = getAiUsageLimitConfig()[planTier];
-  const meteredOperationTypes =
-    operationType === "plan_report" || operationType === "market_report"
-      ? ["plan_report", "market_report"] as const
-      : [operationType] as const;
-  const monthlyOperationUsage = await loadMonthlyOperationUsage(
+  const operationPermission = await checkAIUsagePermission({
     supabase,
     userId,
-    [...meteredOperationTypes]
-  );
+    operationType,
+    planTier,
+  });
 
   if (
     operationType === "chat" &&
-    monthlyOperationUsage.totalTokens >= operationLimits.monthlyChatTokens
+    !operationPermission.allowed
   ) {
     return {
       allowed: false,
@@ -480,16 +546,17 @@ export async function checkUsageAllowance(
       operationType,
       dailyUsed,
       monthlyUsed,
-      monthlyOperationUsed: monthlyOperationUsage.totalTokens,
+      monthlyOperationUsed: operationPermission.usage.tokens,
       monthlyOperationLimit: operationLimits.monthlyChatTokens,
+      remainingUsage: operationPermission.remainingUsage,
       ...limit,
-      reason: buildUsageLimitMessage(operationType),
+      reason: operationPermission.reason || buildUsageLimitMessage(operationType),
     };
   }
 
   if (
     (operationType === "plan_report" || operationType === "market_report") &&
-    monthlyOperationUsage.requestCount >= operationLimits.monthlyReports
+    !operationPermission.allowed
   ) {
     return {
       allowed: false,
@@ -498,10 +565,11 @@ export async function checkUsageAllowance(
       operationType,
       dailyUsed,
       monthlyUsed,
-      monthlyOperationUsed: monthlyOperationUsage.requestCount,
-      monthlyOperationLimit: operationLimits.monthlyReports,
+      monthlyOperationUsed: operationPermission.usage.reports,
+      monthlyOperationLimit: operationLimits.monthlyReportCount,
+      remainingUsage: operationPermission.remainingUsage,
       ...limit,
-      reason: buildUsageLimitMessage(operationType),
+      reason: operationPermission.reason || buildUsageLimitMessage(operationType),
     };
   }
 
@@ -514,12 +582,17 @@ export async function checkUsageAllowance(
     monthlyUsed,
     monthlyOperationUsed:
       operationType === "chat"
-        ? monthlyOperationUsage.totalTokens
-        : monthlyOperationUsage.requestCount,
+        ? operationPermission.usage.tokens
+        : operationType === "pdf_export"
+          ? operationPermission.usage.pdfExports
+          : operationPermission.usage.reports,
     monthlyOperationLimit:
       operationType === "chat"
         ? operationLimits.monthlyChatTokens
-        : operationLimits.monthlyReports,
+        : operationType === "pdf_export"
+          ? operationLimits.monthlyPdfExports
+          : operationLimits.monthlyReportCount,
+    remainingUsage: operationPermission.remainingUsage,
     ...limit,
     reason: "",
   };

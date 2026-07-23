@@ -5430,6 +5430,7 @@ function areChatMessagesEqual(
 const ReportPanel = memo(function ReportPanel({
   reportData,
   reportFields,
+  reportId,
   reportTitle,
   sourcePrompt,
   waitingMessage,
@@ -5447,6 +5448,7 @@ const ReportPanel = memo(function ReportPanel({
     title: string;
     icon: LucideIcon;
   }>;
+  reportId?: string;
   reportTitle: string;
   sourcePrompt?: string;
   waitingMessage: string;
@@ -5530,7 +5532,7 @@ const ReportPanel = memo(function ReportPanel({
     };
   }, []);
 
-  function downloadPdf() {
+  async function downloadPdf() {
     if (effectiveFailureMessage) {
       setPdfError("Report generation failed. PDF export is available only after a report completes successfully.");
       return;
@@ -5552,6 +5554,24 @@ const ReportPanel = memo(function ReportPanel({
       navigator.vendor.includes("Apple");
 
     try {
+      const permissionResponse = await fetch("/api/usage/pdf-export", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          reportId: reportId || null,
+          reportTitle,
+        }),
+      });
+
+      if (!permissionResponse.ok) {
+        const errorPayload = await permissionResponse
+          .json()
+          .catch(() => null) as { error?: string } | null;
+
+        setPdfError(errorPayload?.error || "PDF export is unavailable right now.");
+        return;
+      }
+
       const pdf = new jsPDF("p", "mm", "a4");
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
@@ -9515,6 +9535,7 @@ export default function Planner({
                 <ReportPanel
                   reportData={planReport || marketReport}
                   reportFields={activeReportFields}
+                  reportId={activeReportId}
                   reportTitle={currentReportTitle}
                   sourcePrompt={lastRequest?.prompt}
                   waitingMessage={currentLanguageCopy.waitingSection}

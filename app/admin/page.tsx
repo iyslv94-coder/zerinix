@@ -436,11 +436,13 @@ function OpenAiAnalyticsSection({ data }: { data: AdminDashboardData }) {
         <StatusBadge status={aiStatus} />
       </div>
 
-      <div className="mt-5 grid grid-cols-3 gap-2.5">
+      <div className="mt-5 grid grid-cols-2 gap-2.5 sm:grid-cols-5">
         {[
           ["Tokens", formatCompactNumber(data.openAiAnalytics.totalTokens)],
           ["Input", formatCompactNumber(data.openAiAnalytics.inputTokens)],
           ["Output", formatCompactNumber(data.openAiAnalytics.outputTokens)],
+          ["Blocked", formatCompactNumber(data.openAiAnalytics.blockedRequests)],
+          ["Limits", formatCompactNumber(data.openAiAnalytics.limitReachedEvents)],
         ].map(([label, value]) => (
           <div key={label} className="rounded-[1rem] border border-white/10 bg-black/20 px-3 py-3">
             <p className="text-[10px] uppercase tracking-[0.16em] text-zinc-600">{label}</p>
