@@ -26,9 +26,14 @@ import {
   type SourceIntelligenceType,
 } from "@/app/lib/ai/source-intelligence";
 import {
+  createValidationIntelligence,
   createValidationIntelligenceModel,
+  type ValidationAssumption,
+  type ValidationEvidenceStatus,
+  type ValidationIntelligence,
   type ValidationExperiment,
   type ValidationIntelligenceModel,
+  type ValidationRiskLevel,
   type ValidationScore,
   type ValidationType,
 } from "@/app/lib/ai/validation-intelligence";
@@ -49,6 +54,7 @@ export type AiFinancialModelContext = FinancialModel & {
   reportIntelligence: ReportIntelligenceModel;
   sourceIntelligence: SourceIntelligenceModel;
   validationIntelligence: ValidationIntelligenceModel;
+  validationIntelligenceV2: ValidationIntelligence;
 };
 
 function localizeReportLabel(value: string, language: "English" | "Turkish") {
@@ -88,10 +94,17 @@ export function createCanonicalFinancialAssumptions(input: {
     sourceIntelligence: contextWithoutReportIntelligence.sourceIntelligence,
     decisionConfidence: contextWithoutReportIntelligence.decisionConfidence,
   });
+  const validationIntelligenceV2 = createValidationIntelligence({
+    financialModel,
+    financialConsistency,
+    sourceIntelligence: contextWithoutReportIntelligence.sourceIntelligence,
+    decisionConfidence: contextWithoutReportIntelligence.decisionConfidence,
+  });
 
   return {
     ...contextWithoutReportIntelligence,
     validationIntelligence,
+    validationIntelligenceV2,
     reportIntelligence: createReportIntelligenceModel({
       ...contextWithoutReportIntelligence,
       validationIntelligence,
@@ -581,6 +594,39 @@ function localizeValidationScore(score: ValidationScore, language: "English" | "
   return "Başlamadı";
 }
 
+function localizeValidationRiskLevel(level: ValidationRiskLevel, language: "English" | "Turkish") {
+  if (language !== "Turkish") {
+    return level;
+  }
+
+  if (level === "Critical") return "Kritik";
+  if (level === "High") return "Yüksek";
+
+  return "Orta";
+}
+
+function localizeValidationEvidenceStatus(status: ValidationEvidenceStatus, language: "English" | "Turkish") {
+  if (language !== "Turkish") {
+    return status;
+  }
+
+  if (status === "Validated") return "Doğrulanmış";
+  if (status === "Partial") return "Kısmi";
+
+  return "Eksik";
+}
+
+function localizeValidationConfidence(level: ValidationIntelligence["confidenceLevel"], language: "English" | "Turkish") {
+  if (language !== "Turkish") {
+    return level;
+  }
+
+  if (level === "High") return "Yüksek";
+  if (level === "Medium") return "Orta";
+
+  return "Düşük";
+}
+
 function localizeValidationText(value: string, language: "English" | "Turkish") {
   if (language !== "Turkish") {
     return value;
@@ -611,9 +657,51 @@ function localizeValidationText(value: string, language: "English" | "Turkish") 
     "Test the smallest prototype or concierge workflow": "En küçük prototip veya concierge akışını test et",
     "5+ verified competitor/source checks": "5+ doğrulanmış rakip/kaynak kontrolü",
     "5+ qualified users complete the core workflow": "5+ nitelikli kullanıcı temel akışı tamamlar",
+    "Customer demand": "Müşteri talebi",
+    "Run a $500 paid acquisition test": "$500 ücretli edinim testi çalıştır",
+    "14 days": "14 gün",
+    "14-21 days": "14-21 gün",
+    "Pricing acceptance": "Fiyat kabulü",
+    "Run an A/B pricing test with 3 packages": "3 paketle A/B fiyatlandırma testi yap",
+    "10-14 days": "10-14 gün",
+    "Retention and repeat purchase": "Elde tutma ve tekrar satın alma",
+    "Run a B2B pilot cohort": "B2B pilot kohortu çalıştır",
+    "Track repeat purchase or subscription cohort": "Tekrar satın alma veya abonelik kohortunu takip et",
+    "Repeat purchase or retention signal meets benchmark": "Tekrar satın alma veya elde tutma sinyali benchmarkı karşılar",
+    "30-45 days": "30-45 gün",
+    "Operational delivery": "Operasyonel teslimat",
+    "Test the smallest delivery workflow before scaling": "Ölçeklemeden önce en küçük teslimat iş akışını test et",
+    "Core workflow completes within target cost, quality, and delivery threshold":
+      "Temel iş akışı hedef maliyet, kalite ve teslimat eşiği içinde tamamlanır",
+    "30 days": "30 gün",
+    "Validation evidence supports scaling the next decision step.":
+      "Doğrulama kanıtı bir sonraki karar adımını ölçeklemeyi destekliyor.",
+    "Validation is partially complete; the next decision should focus on unresolved assumptions.":
+      "Doğrulama kısmen tamamlandı; sonraki karar çözülmemiş varsayımlara odaklanmalı.",
+    "Validation is early; customer demand, pricing, acquisition, retention, and operations need proof before scaling.":
+      "Doğrulama erken aşamada; ölçeklemeden önce müşteri talebi, fiyatlandırma, edinim, elde tutma ve operasyonlar kanıtlanmalı.",
+    "Validate customer demand": "Müşteri talebini doğrula",
+    "Validate pricing": "Fiyatlandırmayı doğrula",
+    "Test acquisition channel": "Edinim kanalını test et",
+    "Confirm retention": "Elde tutmayı doğrula",
+    "Scale operations": "Operasyonları ölçekle",
   };
 
   return dictionary[value] || value;
+}
+
+function formatValidationAssumptionV2(
+  assumption: ValidationAssumption,
+  language: "English" | "Turkish"
+) {
+  return [
+    `${language === "Turkish" ? "Öncelik" : "Priority"} ${assumption.priority}: ${localizeValidationText(assumption.assumption, language)}`,
+    `${language === "Turkish" ? "Risk" : "Risk"}: ${localizeValidationRiskLevel(assumption.riskLevel, language)}`,
+    `${language === "Turkish" ? "Kanıt" : "Evidence"}: ${localizeValidationEvidenceStatus(assumption.evidenceStatus, language)}`,
+    `${language === "Turkish" ? "Deney" : "Experiment"}: ${localizeValidationText(assumption.experiment, language)}`,
+    `${language === "Turkish" ? "Başarı Metriği" : "Success Metric"}: ${localizeValidationText(assumption.successMetric, language)}`,
+    `${language === "Turkish" ? "Zamanlama" : "Timeline"}: ${localizeValidationText(assumption.timeframe, language)}`,
+  ].join("\n");
 }
 
 function formatValidationExperiment(experiment: ValidationExperiment, language: "English" | "Turkish") {
@@ -630,6 +718,24 @@ export function formatValidationIntelligenceSummary(
   context: AiFinancialModelContext,
   language: "English" | "Turkish" = "English"
 ) {
+  if (context.validationIntelligenceV2) {
+    const validation = context.validationIntelligenceV2;
+
+    return [
+      `${language === "Turkish" ? "Doğrulama Hazırlık Skoru" : "Validation Readiness Score"}: ${validation.overallScore}/100`,
+      `${language === "Turkish" ? "Güven" : "Confidence"}: ${localizeValidationConfidence(validation.confidenceLevel, language)}`,
+      `${language === "Turkish" ? "Özet" : "Summary"}: ${localizeValidationText(validation.summary, language)}`,
+      "",
+      language === "Turkish" ? "Kritik Varsayımlar:" : "Critical Assumptions:",
+      ...validation.assumptions
+        .slice(0, 5)
+        .map((assumption) => formatValidationAssumptionV2(assumption, language)),
+      "",
+      language === "Turkish" ? "Önerilen Sıra:" : "Recommended Sequence:",
+      ...validation.recommendedSequence.map((item, index) => `${index + 1}. ${localizeValidationText(item, language)}`),
+    ].join("\n\n");
+  }
+
   return [
     `${localizeReportLabel("Validation Score", language)}: ${localizeValidationScore(context.validationIntelligence.score, language)}`,
     ...context.validationIntelligence.experiments

@@ -20,6 +20,11 @@ declare module "@/app/lib/pdf-normalization.mjs" {
     content?: string,
     section?: { field?: string; title?: string }
   ): string;
+  export function cleanPdfLegacyValidationIntelligenceContent(value?: string): string;
+  export function extractPdfValidationIntelligenceSection<T extends { field?: string; title: string; content: string }>(
+    sections?: T[],
+    locale?: "en" | "tr"
+  ): Array<T | { field: string; title: string; content: string }>;
   export function detectPdfPresentationLocale(value?: string): "en" | "tr";
   export function localizePdfPresentationLabel(value?: string, locale?: "en" | "tr"): string;
   export function localizePdfPresentationText(value?: string, locale?: "en" | "tr"): string;

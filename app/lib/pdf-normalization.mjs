@@ -133,6 +133,14 @@ const pdfPresentationLabelPairs = [
     ["Expected impact", "Beklenen etki"],
     ["Validation Intelligence", "Doğrulama Zekası"],
     ["Validation Roadmap", "Doğrulama Yol Haritası"],
+    ["Validation Readiness Score", "Doğrulama Hazırlık Skoru"],
+    ["Doğrulama Hazırlık Skoru", "Doğrulama Hazırlık Skoru"],
+    ["Overall Score", "Genel Skor"],
+    ["Critical Assumptions", "Kritik Varsayımlar"],
+    ["Evidence", "Kanıt"],
+    ["Success Metric", "Başarı Metriği"],
+    ["Timeline", "Zamanlama"],
+    ["Recommended Sequence", "Önerilen Sıra"],
     ["Source Intelligence", "Kaynak Zekası"],
     ["Report Intelligence", "Rapor Zekası"],
     ["CEO Brief", "CEO Özeti"],
@@ -171,6 +179,9 @@ const pdfPresentationLabelPairs = [
     ["High Confidence", "Yüksek Güven"],
     ["Medium Confidence", "Orta Güven"],
     ["Low Confidence", "Düşük Güven"],
+    ["High", "Yüksek"],
+    ["Medium", "Orta"],
+    ["Low", "Düşük"],
     ["Market Size", "Pazar Büyüklüğü"],
     ["Competitor Insights", "Rakip İçgörüleri"],
     ["Financial Benchmarks", "Finansal Benchmarklar"],
@@ -372,6 +383,115 @@ function cleanupDuplicatePdfHeadingLines(value = "") {
     .join("\n");
 }
 
+export function cleanPdfLegacyValidationIntelligenceContent(value = "") {
+  const content = String(value || "");
+
+  if (!/\b(?:Validation Readiness Score|Doğrulama Hazırlık Skoru)\b/i.test(content)) {
+    return content;
+  }
+
+  const validationBlockStart = content.search(
+    /(?:^|\n)\s*(?:#{1,6}\s*)?(?:Validation Intelligence|Doğrulama Zekası)\s*:?\s*(?:\n|$)/i
+  );
+  const v2Content = validationBlockStart >= 0 ? content.slice(validationBlockStart) : content;
+
+  return v2Content
+    .split(/\n{2,}/)
+    .map((block) =>
+      block
+        .split("\n")
+        .filter((line) => {
+          const normalizedLine = normalizePdfText(line).replace(/^#{1,6}\s*/, "").replace(/:$/, "");
+
+          return !/^(?:Validation Intelligence|Doğrulama Zekası)\b/i.test(normalizedLine) &&
+            !/^(?:Validation Roadmap|Doğrulama Yol Haritası)\b/i.test(normalizedLine) &&
+            !/^(?:Validation Score|Doğrulama Skoru)\s*[:\-–—]/i.test(normalizedLine);
+        })
+        .join("\n")
+    )
+    .filter((block) => {
+      const normalizedBlock = normalizePdfText(block);
+      const isOldPriorityBlock =
+        /^(?:Priority|Öncelik)\s+\d+\s*[:\-–—]/i.test(normalizedBlock) &&
+        /\b(?:Status|Durum)\s*[:\-–—]\s*(?:Not Started|Başlamadı|In Progress|Devam Ediyor|Validated|Doğrulandı)\b/i.test(normalizedBlock) &&
+        !/\b(?:Success Metric|Başarı Metriği|Timeline|Zamanlama|Evidence|Kanıt)\s*[:\-–—]/i.test(normalizedBlock);
+
+      return normalizedBlock.trim().length > 0 && !isOldPriorityBlock;
+    })
+    .join("\n\n");
+}
+
+function removePdfLegacyValidationBlocks(value = "") {
+  return String(value || "")
+    .split(/\n{2,}/)
+    .filter((block) => {
+      const normalizedBlock = normalizePdfText(block);
+      const hasLegacyValidationHeading =
+        /\b(?:Validation Roadmap|Doğrulama Yol Haritası)\s*:/i.test(normalizedBlock);
+      const hasLegacyValidationScore =
+        /\b(?:Validation Score|Doğrulama Skoru)\s*[:\-–—]\s*(?:Not Started|Başlamadı|In Progress|Devam Ediyor|Validated|Doğrulandı)\b/i.test(normalizedBlock);
+      const hasLegacyPriorityStatus =
+        /\b(?:Priority|Öncelik)\s+\d+\s*[:\-–—]/i.test(normalizedBlock) &&
+        /\b(?:Status|Durum)\s*[:\-–—]\s*(?:Not Started|Başlamadı|In Progress|Devam Ediyor|Validated|Doğrulandı)\b/i.test(normalizedBlock) &&
+        !/\b(?:Success Metric|Başarı Metriği|Timeline|Zamanlama|Evidence|Kanıt)\s*[:\-–—]/i.test(normalizedBlock);
+
+      return !hasLegacyValidationHeading && !hasLegacyValidationScore && !hasLegacyPriorityStatus;
+    })
+    .join("\n\n")
+    .trim();
+}
+
+function findPdfValidationIntelligenceBlockStart(content = "") {
+  const headingIndex = content.search(
+    /(?:^|\n)\s*(?:#{1,6}\s*)?(?:Validation Intelligence|Doğrulama Zekası)\s*:?\s*(?:\n|$)/i
+  );
+
+  if (headingIndex >= 0) {
+    return headingIndex;
+  }
+
+  return content.search(/(?:^|\n).*?(?:Validation Readiness Score|Doğrulama Hazırlık Skoru)\s*[:\-–—]/i);
+}
+
+export function extractPdfValidationIntelligenceSection(sections = [], locale = "en") {
+  const output = [];
+  let validationSection = null;
+
+  for (const section of sections) {
+    const content = String(section?.content || "");
+    const hasV2Validation = /\b(?:Validation Readiness Score|Doğrulama Hazırlık Skoru)\b/i.test(content);
+    const blockStart = hasV2Validation ? findPdfValidationIntelligenceBlockStart(content) : -1;
+
+    if (blockStart < 0) {
+      output.push(section);
+      continue;
+    }
+
+    const sectionBeforeValidation = removePdfLegacyValidationBlocks(
+      content.slice(0, blockStart)
+    );
+    const validationContent = cleanPdfLegacyValidationIntelligenceContent(content.slice(blockStart));
+
+    if (sectionBeforeValidation) {
+      output.push({
+        ...section,
+        content: sectionBeforeValidation,
+      });
+    }
+
+    if (!validationSection && validationContent.trim()) {
+      validationSection = {
+        field: "validationIntelligence",
+        title: localizePdfPresentationLabel("Validation Intelligence", locale),
+        content: validationContent.trim(),
+      };
+      output.push(validationSection);
+    }
+  }
+
+  return output;
+}
+
 function cleanupTurkishPdfLanguageLeakage(value = "") {
   return String(value)
     .replace(/\bfinansal[._-]benchmarklar(?:[._-][\p{L}\p{N}_-]+)*\b/giu, "Finansal benchmarklar")
@@ -416,6 +536,8 @@ function cleanupTurkishPdfLanguageLeakage(value = "") {
     .replace(/\bOPPORTUNITIES\b/g, "FIRSATLAR")
     .replace(/\bTHREATS\b/g, "TEHDİTLER")
     .replace(/\bRevenue\b/g, "Gelir")
+    .replace(/\bmedium\b/g, "orta")
+    .replace(/\bMedium\b/g, "Orta")
     .replace(/\bBurn Rate\b/g, "Nakit Yakımı")
     .replace(/\bMonthly Burn\b/g, "Aylık Nakit Yakımı")
     .replace(/\bburn\b/gi, "Nakit Yakımı")

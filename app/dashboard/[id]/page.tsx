@@ -45,6 +45,7 @@ import type {
   ReportBenchmarkScore,
   ReportInvestmentScore,
   ReportQualityScore,
+  ReportValidationIntelligence,
 } from "@/app/lib/report-investment-score";
 import {
   detectPdfPresentationLocale,
@@ -678,8 +679,21 @@ function stripValidationLabel(value: string) {
 }
 
 function getValidationIntelligenceOverview(
-  sections: Array<{ field?: string; title: string; content: string }>
+  sections: Array<{ field?: string; title: string; content: string }>,
+  validationIntelligence?: ReportValidationIntelligence
 ) {
+  if (validationIntelligence) {
+    const topAssumption =
+      [...validationIntelligence.assumptions].sort((a, b) => a.priority - b.priority)[0];
+
+    return {
+      score: `${validationIntelligence.overallScore}/100 • ${validationIntelligence.confidenceLevel}`,
+      topAssumption: topAssumption?.assumption || validationIntelligence.summary,
+      experiment: topAssumption?.experiment || validationIntelligence.recommendedSequence[0] || "Run the highest-priority validation experiment.",
+      successCriteria: topAssumption?.successMetric || "Define success criteria before scaling.",
+    };
+  }
+
   const validationContent =
     getSectionContentByFieldOrTitle(sections, [
       "validationplan",
@@ -2483,7 +2497,10 @@ export default async function ReportDetailPage({
     decisionSummaryItems.find((item) => item.label === "Recommended Next Step") ||
     decisionSummaryItems[2];
   const reportIntelligenceOverview = getReportIntelligenceOverview(visibleSections);
-  const validationIntelligenceOverview = getValidationIntelligenceOverview(visibleSections);
+  const validationIntelligenceOverview = getValidationIntelligenceOverview(
+    visibleSections,
+    report.metadata?.validationIntelligence
+  );
   const continueAnalysisHref = `/chat?reportId=${encodeURIComponent(report.id)}`;
   const regenerateMode = report.type === "Market Analysis" ? "market" : "plan";
   const regenerateParams = new URLSearchParams({

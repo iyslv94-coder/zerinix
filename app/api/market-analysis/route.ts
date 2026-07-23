@@ -204,6 +204,7 @@ type MarketReportMetadataChunk = {
     benchmarkFit: AiFinancialModelContext["benchmarkFit"];
     benchmarkScore: AiFinancialModelContext["benchmarkScore"];
     reportQuality: AiFinancialModelContext["reportIntelligence"];
+    validationIntelligence: AiFinancialModelContext["validationIntelligenceV2"];
   };
 };
 type MarketReportWarningChunk = {
@@ -441,6 +442,7 @@ function serializeMarketReportMetadataChunk(
       benchmarkFit: context.benchmarkFit,
       benchmarkScore: context.benchmarkScore,
       reportQuality: context.reportIntelligence,
+      validationIntelligence: context.validationIntelligenceV2,
     },
   };
 
@@ -595,6 +597,25 @@ function appendIntelligenceBlock(content: string, title: string, lines: string[]
   }
 
   return sanitizeMarketReportContent(`${content.trim()}\n\n${title}:\n${cleanLines.join("\n")}`);
+}
+
+function removeLegacyValidationIntelligenceBlock(content: string) {
+  return sanitizeMarketReportContent(content)
+    .split(/\n{2,}/)
+    .filter((block) => {
+      const normalizedBlock = block.trim();
+      const hasLegacyHeading =
+        /\b(?:Validation Roadmap|Doğrulama Yol Haritası)\s*:/i.test(normalizedBlock);
+      const hasOldValidationScore =
+        /\b(?:Validation Score|Doğrulama Skoru)\s*[:\-–—]\s*(?:Not Started|Başlamadı|In Progress|Devam Ediyor|Validated|Doğrulandı)\b/i.test(normalizedBlock);
+      const hasOldPriorityFormat =
+        /\b(?:Priority|Öncelik)\s+\d+\s*[:\-–—]\s*/i.test(normalizedBlock) &&
+        !/\b(?:Success Metric|Başarı Metriği|Timeline|Zamanlama|Evidence|Kanıt)\s*[:\-–—]/i.test(normalizedBlock);
+
+      return !hasLegacyHeading && !hasOldValidationScore && !hasOldPriorityFormat;
+    })
+    .join("\n\n")
+    .trim();
 }
 
 function marketText(language: ResponseLanguage, english: string, turkish: string) {
@@ -933,6 +954,11 @@ function buildCanonicalMarketExecutiveRecommendation(
     marketText(language, `Decision: ${decision}`, `Karar: ${decision}`),
     marketText(language, `Decision Confidence: ${confidence}% (${confidenceLabel})`, `Karar Güveni: ${confidence}% (${confidenceLabel})`),
     marketText(language, `Report Quality Confidence: ${reportQualityConfidence} (${context.reportIntelligence.totalScore}/100)`, `Rapor Kalitesi Güveni: ${reportQualityConfidence} (${context.reportIntelligence.totalScore}/100)`),
+    marketText(
+      language,
+      `Validation Intelligence: ${context.validationIntelligenceV2.overallScore}/100 (${context.validationIntelligenceV2.confidenceLevel}). Priority: ${context.validationIntelligenceV2.recommendedSequence[0] || "Validate customer demand"}`,
+      `Doğrulama Zekası: ${context.validationIntelligenceV2.overallScore}/100 (${context.validationIntelligenceV2.confidenceLevel === "High" ? "Yüksek" : context.validationIntelligenceV2.confidenceLevel === "Medium" ? "Orta" : "Düşük"}). Öncelik: ${context.validationIntelligenceV2.recommendedSequence[0] === "Validate customer demand" ? "Müşteri talebini doğrula" : context.validationIntelligenceV2.recommendedSequence[0] || "Müşteri talebini doğrula"}`
+    ),
     marketText(language, `Benchmark Fit: ${context.benchmarkScore.overallFit}/100 (${context.benchmarkScore.confidence}). ${benchmarkActions}`, `Benchmark Uyumu: ${context.benchmarkScore.overallFit}/100 (${context.benchmarkScore.confidence}). ${benchmarkActionsTr}`),
     marketText(language, `Investment Recommendation: ${recommendation}`, `Yatırım Tavsiyesi: ${recommendation}`),
     marketText(language, `Main Risk: ${context.investmentScore.topRisks[0] || "Market demand requires validation."}`, `Ana Risk: ${context.investmentScore.topRisks[0] || "Pazar talebi doğrulama gerektiriyor."}`),
@@ -1080,6 +1106,7 @@ function ensureMarketReportQuality(
       marketText(language, "- Next 12 Months: expand only after the entry wedge is repeatable. Expected impact: scales from evidence, not narrative.", "- Sonraki 12 Ay: yalnızca giriş kaması tekrarlanabilir olduğunda genişle. Beklenen etki: anlatıdan değil kanıttan ölçeklenir."),
     ]
   );
+  normalized.validationPlan = removeLegacyValidationIntelligenceBlock(normalized.validationPlan);
   normalized.validationPlan = appendIntelligenceBlock(
     normalized.validationPlan,
     marketLabel(language, "Validation Intelligence", "Doğrulama Zekası"),

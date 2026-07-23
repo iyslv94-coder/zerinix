@@ -191,6 +191,7 @@ type PlanReportMetadataChunk = {
     benchmarkFit: AiFinancialModelContext["benchmarkFit"];
     benchmarkScore: AiFinancialModelContext["benchmarkScore"];
     reportQuality: AiFinancialModelContext["reportIntelligence"];
+    validationIntelligence: AiFinancialModelContext["validationIntelligenceV2"];
   };
 };
 
@@ -336,6 +337,7 @@ function serializePlanReportMetadataChunk(
       benchmarkFit: context.benchmarkFit,
       benchmarkScore: context.benchmarkScore,
       reportQuality: context.reportIntelligence,
+      validationIntelligence: context.validationIntelligenceV2,
     },
   };
 
@@ -1273,6 +1275,11 @@ function buildCanonicalExecutiveRecommendation(context: AiFinancialModelContext,
     reportText(language, `Decision: ${visibleDecision}`, `Karar: ${visibleDecision}`),
     reportText(language, `Decision Confidence: ${score.confidence}% (${confidenceLabel})`, `Karar Güveni: ${score.confidence}% (${confidenceLabel})`),
     reportText(language, `Report Quality Confidence: ${reportQualityConfidence} (${context.reportIntelligence.totalScore}/100)`, `Rapor Kalitesi Güveni: ${reportQualityConfidence} (${context.reportIntelligence.totalScore}/100)`),
+    reportText(
+      language,
+      `Validation Intelligence: ${context.validationIntelligenceV2.overallScore}/100 (${context.validationIntelligenceV2.confidenceLevel}). Priority: ${context.validationIntelligenceV2.recommendedSequence[0] || "Validate customer demand"}`,
+      `Doğrulama Zekası: ${context.validationIntelligenceV2.overallScore}/100 (${context.validationIntelligenceV2.confidenceLevel === "High" ? "Yüksek" : context.validationIntelligenceV2.confidenceLevel === "Medium" ? "Orta" : "Düşük"}). Öncelik: ${context.validationIntelligenceV2.recommendedSequence[0] === "Validate customer demand" ? "Müşteri talebini doğrula" : context.validationIntelligenceV2.recommendedSequence[0] || "Müşteri talebini doğrula"}`
+    ),
     reportText(language, `Benchmark Fit: ${context.benchmarkScore.overallFit}/100 (${context.benchmarkScore.confidence}). ${benchmarkActions}`, `Benchmark Uyumu: ${context.benchmarkScore.overallFit}/100 (${context.benchmarkScore.confidence}). ${benchmarkActionsTr}`),
     reportText(language, `Investment Recommendation: ${investmentRecommendation}`, `Yatırım Tavsiyesi: ${investmentRecommendation}`),
     reportText(language, `Main Risk: ${score.topRisks[0] || "Primary risk requires validation."}`, `Ana Risk: ${score.topRisks[0] || "Birincil risk doğrulama gerektiriyor."}`),
@@ -1352,6 +1359,25 @@ function appendIntelligenceBlock(content: string, title: string, lines: string[]
   }
 
   return `${content.trim()}\n\n${title}:\n${cleanLines.join("\n")}`.trim();
+}
+
+function removeLegacyValidationIntelligenceBlock(content: string) {
+  return content
+    .split(/\n{2,}/)
+    .filter((block) => {
+      const normalizedBlock = block.trim();
+      const hasLegacyHeading =
+        /\b(?:Validation Roadmap|Doğrulama Yol Haritası)\s*:/i.test(normalizedBlock);
+      const hasOldValidationScore =
+        /\b(?:Validation Score|Doğrulama Skoru)\s*[:\-–—]\s*(?:Not Started|Başlamadı|In Progress|Devam Ediyor|Validated|Doğrulandı)\b/i.test(normalizedBlock);
+      const hasOldPriorityFormat =
+        /\b(?:Priority|Öncelik)\s+\d+\s*[:\-–—]\s*/i.test(normalizedBlock) &&
+        !/\b(?:Success Metric|Başarı Metriği|Timeline|Zamanlama|Evidence|Kanıt)\s*[:\-–—]/i.test(normalizedBlock);
+
+      return !hasLegacyHeading && !hasOldValidationScore && !hasOldPriorityFormat;
+    })
+    .join("\n\n")
+    .trim();
 }
 
 function buildExecutiveInsight(context: AiFinancialModelContext, focus: string, language: ResponseLanguage) {
@@ -1572,6 +1598,7 @@ function normalizeFullPlanReport(
     reportLabel(language, "Founder Decision Engine", "Kurucu Karar Motoru"),
     buildFounderDecisionEngine(context, language)
   );
+  normalized.roadmap306090 = removeLegacyValidationIntelligenceBlock(normalized.roadmap306090);
   normalized.roadmap306090 = appendIntelligenceBlock(
     normalized.roadmap306090,
     reportLabel(language, "AI Action Plan", "AI Aksiyon Planı"),

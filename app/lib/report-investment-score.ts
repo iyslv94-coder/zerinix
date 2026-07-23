@@ -69,11 +69,30 @@ export type ReportBenchmarkScore = {
   actions: string[];
 };
 
+export type ReportValidationIntelligence = {
+  version?: string;
+  overallScore: number;
+  confidenceLevel: "High" | "Medium" | "Low" | string;
+  assumptions: Array<{
+    id: string;
+    assumption: string;
+    riskLevel: "Critical" | "High" | "Medium" | string;
+    evidenceStatus: "Validated" | "Partial" | "Missing" | string;
+    experiment: string;
+    successMetric: string;
+    timeframe: string;
+    priority: number;
+  }>;
+  summary: string;
+  recommendedSequence: string[];
+};
+
 export type ReportMetadata = {
   investmentScore?: ReportInvestmentScore;
   benchmarkFit?: ReportBenchmarkFit;
   benchmarkScore?: ReportBenchmarkScore;
   reportQuality?: ReportQualityScore;
+  validationIntelligence?: ReportValidationIntelligence;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {

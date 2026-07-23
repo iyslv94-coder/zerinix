@@ -81,7 +81,9 @@ import {
 } from "@/app/lib/report-errors";
 import { dedupeReportSections } from "@/app/lib/report-section-normalization";
 import {
+  cleanPdfLegacyValidationIntelligenceContent,
   detectPdfPresentationLocale,
+  extractPdfValidationIntelligenceSection,
   insertPdfBenchmarkIntelligenceSection,
   localizePdfPresentationLabel,
   localizePdfPresentationText,
@@ -3043,6 +3045,14 @@ function getPdfSectionCardTitle(section: ReportSection, locale: "en" | "tr") {
   return section.title;
 }
 
+function getPdfTocEntryTitle(section: ReportSection, locale: "en" | "tr") {
+  if (/\b(?:Validation Intelligence|Doğrulama Zekası)\b/i.test(section.content)) {
+    return localizePdfPresentationLabel("Validation Intelligence", locale);
+  }
+
+  return section.title;
+}
+
 function removeDuplicateVisualText(title: string, content: string) {
   const financialContent = normalizePdfFinancialSectionContent(content, { title });
 
@@ -3187,7 +3197,9 @@ function formatPdfReadableContent(section: ReportSection, founderReadinessScore?
       ? normalizeFounderReadinessScoreText(section.content, founderReadinessScore)
       : section.content
   );
-  const normalized = cleanPdfEvidenceMetadataText(content);
+  const normalized = cleanPdfLegacyValidationIntelligenceContent(
+    cleanPdfEvidenceMetadataText(content)
+  );
 
   if (!normalized) {
     return "";
@@ -5559,11 +5571,14 @@ const ReportPanel = memo(function ReportPanel({
           .filter(Boolean)
           .join("\n\n");
       const pdfLocale = detectPdfPresentationLocale(pdfLanguageSource);
-      const pdfBaseSectionsWithBenchmark = insertPdfBenchmarkIntelligenceSection(
-        basePdfSections,
-        benchmarkFit,
-        pdfLocale,
-        benchmarkScore
+      const pdfBaseSectionsWithBenchmark = extractPdfValidationIntelligenceSection(
+        insertPdfBenchmarkIntelligenceSection(
+          basePdfSections,
+          benchmarkFit,
+          pdfLocale,
+          benchmarkScore
+        ),
+        pdfLocale
       ).map((section) => ({
         ...section,
         icon: "icon" in section ? section.icon : FileText,
@@ -6546,7 +6561,7 @@ const ReportPanel = memo(function ReportPanel({
 
           if (lineIndex === 0) {
             tocEntries.push({
-              title: section.title,
+              title: getPdfTocEntryTitle(section, pdfLocale),
               page: pdf.getCurrentPageInfo().pageNumber,
             });
           }

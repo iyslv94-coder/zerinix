@@ -29,6 +29,30 @@ export type ValidationIntelligenceModel = {
   experiments: ValidationExperiment[];
 };
 
+export type ValidationRiskLevel = "Critical" | "High" | "Medium";
+export type ValidationEvidenceStatus = "Validated" | "Partial" | "Missing";
+export type ValidationConfidenceLevel = "High" | "Medium" | "Low";
+
+export type ValidationAssumption = {
+  id: string;
+  assumption: string;
+  riskLevel: ValidationRiskLevel;
+  evidenceStatus: ValidationEvidenceStatus;
+  experiment: string;
+  successMetric: string;
+  timeframe: string;
+  priority: number;
+};
+
+export type ValidationIntelligence = {
+  version: "validation_intelligence_engine_v2";
+  overallScore: number;
+  confidenceLevel: ValidationConfidenceLevel;
+  assumptions: ValidationAssumption[];
+  summary: string;
+  recommendedSequence: string[];
+};
+
 function hasUserEvidence(financialConsistency: FinancialConsistencyCheck) {
   return financialConsistency.sources.userProvidedData.some((item) =>
     /supplied validation evidence|provided/i.test(item)
@@ -116,5 +140,183 @@ export function createValidationIntelligenceModel(input: {
     version: "validation_intelligence_engine_v1",
     score: getValidationScore({ financialConsistency, decisionConfidence }),
     experiments,
+  };
+}
+
+function clampScore(value: number) {
+  return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+function evidenceStatusFromScore(score: number): ValidationEvidenceStatus {
+  if (score >= 72) {
+    return "Validated";
+  }
+
+  if (score >= 48) {
+    return "Partial";
+  }
+
+  return "Missing";
+}
+
+function riskFromStatus(
+  status: ValidationEvidenceStatus,
+  fallback: ValidationRiskLevel = "High"
+): ValidationRiskLevel {
+  if (status === "Missing") {
+    return fallback;
+  }
+
+  if (status === "Partial") {
+    return "High";
+  }
+
+  return "Medium";
+}
+
+function confidenceFromScore(score: number): ValidationConfidenceLevel {
+  if (score >= 72) {
+    return "High";
+  }
+
+  if (score >= 48) {
+    return "Medium";
+  }
+
+  return "Low";
+}
+
+function hasValidationEvidence(financialConsistency: FinancialConsistencyCheck) {
+  return financialConsistency.sources.userProvidedData.some((item) =>
+    /customer|interview|pilot|paying|paid|revenue|traction|retention|waitlist|validation|müşteri|görüşme|pilot|gelir|çekiş/i.test(item)
+  );
+}
+
+export function createValidationIntelligence(input: {
+  financialModel: FinancialModel;
+  financialConsistency: FinancialConsistencyCheck;
+  sourceIntelligence: SourceIntelligenceModel;
+  decisionConfidence: DecisionConfidenceModel;
+}): ValidationIntelligence {
+  const { financialModel, financialConsistency, sourceIntelligence, decisionConfidence } = input;
+  const userEvidence = hasValidationEvidence(financialConsistency);
+  const customerEvidence = clampScore(
+    (userEvidence ? 58 : 18) + (decisionConfidence.confidenceScore >= 65 ? 18 : 0)
+  );
+  const pricingValidation = clampScore(
+    financialModel.metrics.arpa.confidence === "High"
+      ? 72
+      : financialModel.metrics.arpa.confidence === "Medium"
+        ? 48
+        : 24
+  );
+  const acquisitionValidation = clampScore(
+    financialModel.metrics.cac.confidence === "High"
+      ? 68
+      : financialModel.metrics.cac.confidence === "Medium"
+        ? 45
+        : 22
+  );
+  const retentionValidation = clampScore(
+    financialModel.metrics.ltv.confidence === "High"
+      ? 66
+      : financialModel.metrics.ltv.confidence === "Medium"
+        ? 44
+        : 24
+  );
+  const operationalValidation = clampScore(
+    financialConsistency.quality === "Healthy"
+      ? 70
+      : financialConsistency.quality === "Needs Validation"
+        ? 42
+        : 26
+  );
+  const overallScore = clampScore(
+    (customerEvidence * 0.3) +
+      (pricingValidation * 0.2) +
+      (acquisitionValidation * 0.2) +
+      (retentionValidation * 0.15) +
+      (operationalValidation * 0.15)
+  );
+  const customerStatus = evidenceStatusFromScore(customerEvidence);
+  const pricingStatus = evidenceStatusFromScore(pricingValidation);
+  const acquisitionStatus = evidenceStatusFromScore(acquisitionValidation);
+  const retentionStatus = evidenceStatusFromScore(retentionValidation);
+  const operationStatus = evidenceStatusFromScore(operationalValidation);
+  const isB2B =
+    /b2b|enterprise|company|companies|kurumsal/i.test(financialModel.inputs.businessModel) ||
+    /b2b|enterprise|company|companies|kurumsal/i.test(financialModel.inputs.targetCustomer);
+  const lowConfidenceSource = sourceIntelligence.items.find((item) => item.confidence === "Low Confidence");
+  const assumptions: ValidationAssumption[] = [
+    {
+      id: "customer-demand",
+      assumption: "Customer demand",
+      riskLevel: riskFromStatus(customerStatus, "Critical"),
+      evidenceStatus: customerStatus,
+      experiment: "Run 50 customer interviews",
+      successMetric: "30%+ strong purchase intent",
+      timeframe: "14 days",
+      priority: 1,
+    },
+    {
+      id: "cac",
+      assumption: "CAC",
+      riskLevel: riskFromStatus(acquisitionStatus),
+      evidenceStatus: acquisitionStatus,
+      experiment: "Run a $500 paid acquisition test",
+      successMetric: `${financialModel.metrics.cac.label} <= ${financialModel.metrics.cac.displayValue}`,
+      timeframe: "14-21 days",
+      priority: 2,
+    },
+    {
+      id: "pricing",
+      assumption: "Pricing acceptance",
+      riskLevel: riskFromStatus(pricingStatus),
+      evidenceStatus: pricingStatus,
+      experiment: "Run an A/B pricing test with 3 packages",
+      successMetric: "20%+ conversion intent",
+      timeframe: "10-14 days",
+      priority: 3,
+    },
+    {
+      id: "retention",
+      assumption: "Retention and repeat purchase",
+      riskLevel: riskFromStatus(retentionStatus),
+      evidenceStatus: retentionStatus,
+      experiment: isB2B ? "Run a B2B pilot cohort" : "Track repeat purchase or subscription cohort",
+      successMetric: isB2B ? "5+ pilot commitments" : "Repeat purchase or retention signal meets benchmark",
+      timeframe: "30-45 days",
+      priority: 4,
+    },
+    {
+      id: "operations",
+      assumption: lowConfidenceSource?.area || "Operational delivery",
+      riskLevel: riskFromStatus(operationStatus),
+      evidenceStatus: operationStatus,
+      experiment: "Test the smallest delivery workflow before scaling",
+      successMetric: "Core workflow completes within target cost, quality, and delivery threshold",
+      timeframe: "30 days",
+      priority: 5,
+    },
+  ];
+
+  return {
+    version: "validation_intelligence_engine_v2",
+    overallScore,
+    confidenceLevel: confidenceFromScore(overallScore),
+    assumptions,
+    summary:
+      overallScore >= 72
+        ? "Validation evidence supports scaling the next decision step."
+        : overallScore >= 48
+          ? "Validation is partially complete; the next decision should focus on unresolved assumptions."
+          : "Validation is early; customer demand, pricing, acquisition, retention, and operations need proof before scaling.",
+    recommendedSequence: [
+      "Validate customer demand",
+      "Validate pricing",
+      "Test acquisition channel",
+      "Confirm retention",
+      "Scale operations",
+    ],
   };
 }

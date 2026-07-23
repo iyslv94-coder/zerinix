@@ -15,7 +15,9 @@ import {
   readFounderReadinessScoreValue,
 } from "@/app/lib/report-presentation";
 import {
+  cleanPdfLegacyValidationIntelligenceContent,
   detectPdfPresentationLocale,
+  extractPdfValidationIntelligenceSection,
   insertPdfBenchmarkIntelligenceSection,
   localizePdfPresentationLabel,
   localizePdfPresentationText,
@@ -1484,6 +1486,14 @@ function getPdfSectionCardTitle(section: PdfReportSection, locale: "en" | "tr") 
   return section.title;
 }
 
+function getPdfTocEntryTitle(section: PdfReportSection, locale: "en" | "tr") {
+  if (/\b(?:Validation Intelligence|Doğrulama Zekası)\b/i.test(section.content)) {
+    return localizePdfPresentationLabel("Validation Intelligence", locale);
+  }
+
+  return section.title;
+}
+
 function extractKeywordInsight(content: string, keywords: string[]) {
   const lines = normalizePdfText(content)
     .replace(/^#{1,6}\s+/gm, "")
@@ -1849,11 +1859,14 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
           .filter(Boolean)
           .join("\n\n");
       const pdfLocale = detectPdfPresentationLocale(pdfLanguageSource);
-      const pdfBaseSectionsWithBenchmark = insertPdfBenchmarkIntelligenceSection(
-        basePdfSections,
-        report.metadata?.benchmarkFit,
-        pdfLocale,
-        report.metadata?.benchmarkScore
+      const pdfBaseSectionsWithBenchmark = extractPdfValidationIntelligenceSection(
+        insertPdfBenchmarkIntelligenceSection(
+          basePdfSections,
+          report.metadata?.benchmarkFit,
+          pdfLocale,
+          report.metadata?.benchmarkScore
+        ),
+        pdfLocale
       );
       const pdfSections = localizePdfReportSections(pdfBaseSectionsWithBenchmark, pdfLocale);
       const localizedReportTitle = localizePdfPresentationLabel(report.title, pdfLocale);
@@ -3035,15 +3048,17 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
             : isSourceSectionTitle(section.title)
               ? localizePdfPresentationText(formatPdfCitationContent(section.content), pdfLocale)
               : localizePdfPresentationText(
-                  cleanPdfEvidenceMetadataText(
-                    removeDuplicateVisualText(
-                      section.title,
-                      section.field === "founderScore"
-                        ? normalizeFounderReadinessScoreText(
-                            section.content,
-                            readFounderReadinessScoreValue(report.investmentScore)
-                          )
-                        : section.content
+                  cleanPdfLegacyValidationIntelligenceContent(
+                    cleanPdfEvidenceMetadataText(
+                      removeDuplicateVisualText(
+                        section.title,
+                        section.field === "founderScore"
+                          ? normalizeFounderReadinessScoreText(
+                              section.content,
+                              readFounderReadinessScoreValue(report.investmentScore)
+                            )
+                          : section.content
+                      )
                     )
                   ),
                   pdfLocale
@@ -3059,7 +3074,7 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
           const cardHeight = Math.max(31, cardHeaderHeight + visualHeight + cardBottomPadding);
           ensureSpace(cardHeight);
           tocEntries.push({
-            title: section.title,
+            title: getPdfTocEntryTitle(section, pdfLocale),
             page: pdf.getCurrentPageInfo().pageNumber,
           });
 
@@ -3134,7 +3149,7 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
 
           if (lineIndex === 0) {
             tocEntries.push({
-              title: section.title,
+              title: getPdfTocEntryTitle(section, pdfLocale),
               page: pdf.getCurrentPageInfo().pageNumber,
             });
           }
