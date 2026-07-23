@@ -57,7 +57,7 @@ const sectionLabels: Record<string, string> = {
   founderRoadmap: "Founder Roadmap",
   roadmap306090: "30-60-90 Day Roadmap",
   financialAssumptions: "Financial Assumptions",
-  founderScore: "Founder Score",
+  founderScore: "Founder Readiness Score",
   sourcesAssumptions: "Sources / Assumptions",
   marketOverview: "Market Overview",
   industryTrends: "Industry Trends",

@@ -238,7 +238,7 @@ const englishPlanFieldLabels: Record<PlanReportField, string> = {
   founderRoadmap: "Founder Roadmap",
   roadmap306090: "30-60-90 Day Roadmap",
   financialAssumptions: "Financial Assumptions",
-  founderScore: "Founder Score",
+  founderScore: "Founder Readiness Score",
   sourcesAssumptions: "Sources / Assumptions",
 };
 
@@ -266,7 +266,7 @@ const turkishPlanFieldLabels: Record<PlanReportField, string> = {
   founderRoadmap: "Kurucu Yol Haritası",
   roadmap306090: "30-60-90 Günlük Yol Haritası",
   financialAssumptions: "Finansal Varsayımlar",
-  founderScore: "100 Üzerinden AI Kurucu Skoru",
+  founderScore: "Kurucu Hazırlık Skoru",
   sourcesAssumptions: "Kaynaklar / Varsayımlar",
 };
 
@@ -872,7 +872,7 @@ function createPlanFieldFallback(
     founderRoadmap: `Founder roadmap: Tomorrow, define the riskiest assumption. This week, run direct customer validation. In 30 days, prove willingness to pay. In 90 days, validate repeatable acquisition. In 180 days, decide whether to scale or redesign.`,
     roadmap306090: `30 Days: Validate pain, ICP, and pricing signal.\n90 Days: Secure repeatable early acquisition and delivery proof.\n180 Days: Confirm retention, payback, and operating cadence.\n12 Months: Scale only if decision thresholds are met.`,
     financialAssumptions: `Key assumptions: Revenue, gross margin, CAC, LTV, payback, burn, runway, EBITDA, break-even timing, and investment needed must come from one assumption set. Missing values require validation with primary data.`,
-    founderScore: `Founder Score: Use the decision engine to evaluate market opportunity, financial health, execution difficulty, competitive pressure, capital efficiency, technology leverage, and founder readiness. Missing evidence lowers confidence.`,
+    founderScore: `Founder Readiness Score: Use the decision engine to evaluate market opportunity, financial health, execution difficulty, competitive pressure, capital efficiency, technology leverage, and founder readiness. Missing evidence lowers confidence.`,
     sourcesAssumptions: `Sources and Assumptions: Verified external citations were not returned in a complete structured form. No source URLs or publisher metadata have been fabricated. Planning inputs require validation before investment decisions.`,
   };
 
@@ -1309,7 +1309,7 @@ function buildCanonicalFounderScore(context: AiFinancialModelContext, language: 
   );
 
   return [
-    reportText(language, `Overall Score: ${overallScore}/100`, `Genel Skor: ${overallScore}/100`),
+    reportText(language, `Founder Readiness Score: ${overallScore}/100`, `Kurucu Hazırlık Skoru: ${overallScore}/100`),
     reportText(language, `Idea Quality: ${ideaQuality}/100 - The opportunity is evaluated on market pull, model strength, and economic potential before founder evidence is considered.`, `Fikir Kalitesi: ${ideaQuality}/100 - Fırsat, kurucu kanıtından önce pazar çekimi, model gücü ve ekonomik potansiyel üzerinden değerlendirilir.`),
     reportText(language, `Market Attractiveness: ${marketAttractiveness}/100 - The market appears attractive if reachable demand and an obtainable beachhead can be validated.`, `Pazar Çekiciliği: ${marketAttractiveness}/100 - Erişilebilir talep ve elde edilebilir başlangıç pazarı doğrulanırsa pazar çekici görünür.`),
     reportText(language, `Business Model Quality: ${businessModelQuality}/100 - The model depends on repeat purchase, gross margin discipline, and a payback path that can survive real acquisition costs.`, `İş Modeli Kalitesi: ${businessModelQuality}/100 - Model; tekrar satın alma, brüt marj disiplini ve gerçek edinim maliyetlerine dayanabilecek geri ödeme yoluna bağlıdır.`),

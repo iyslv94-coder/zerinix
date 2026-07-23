@@ -62,7 +62,10 @@ import {
   getReportPresentationLabels,
   getSectionTakeaway,
   isExecutivePresentationSection,
+  normalizeFounderReadinessScoreText,
   normalizeReportPresentationText,
+  readFounderReadinessMetricValue,
+  readFounderReadinessScoreValue,
 } from "@/app/lib/report-presentation";
 import type {
   ReportBenchmarkFit,
@@ -632,7 +635,7 @@ const planReportFields: Array<{
   { field: "founderRoadmap", title: "Founder Roadmap", icon: CalendarDays },
   { field: "roadmap306090", title: "30-60-90 Day Roadmap", icon: CalendarDays },
   { field: "financialAssumptions", title: "Financial Assumptions", icon: PieChart },
-  { field: "founderScore", title: "AI Founder Score out of 100", icon: Gauge },
+  { field: "founderScore", title: "Founder Readiness Score", icon: Gauge },
   { field: "sourcesAssumptions", title: "Sources / Assumptions", icon: FileText },
 ];
 
@@ -660,7 +663,7 @@ const turkishReportFieldTitles: Partial<Record<MarketReportField | PlanReportFie
   founderRoadmap: "Kurucu Yol Haritası",
   roadmap306090: "30-60-90 Günlük Yol Haritası",
   financialAssumptions: "Finansal Varsayımlar",
-  founderScore: "100 Üzerinden AI Kurucu Skoru",
+  founderScore: "Kurucu Hazırlık Skoru",
   sourcesAssumptions: "Kaynaklar / Varsayımlar",
   marketOverview: "Pazar Genel Bakışı",
   industryTrends: "Sektör Trendleri",
@@ -1875,7 +1878,21 @@ const mobilityFinancialDashboardMetrics = [
 ];
 
 const founderScoreMetrics = [
-  { label: "Overall Score", aliases: ["Overall Score", "Genel Skor"] },
+  { label: "Founder Readiness Score", aliases: ["Founder Readiness Score", "Kurucu Hazırlık Skoru", "Overall Score", "Genel Skor"] },
+  { label: "Idea Quality", aliases: ["Idea Quality", "Fikir Kalitesi"] },
+  { label: "Market Attractiveness", aliases: ["Market Attractiveness", "Pazar Çekiciliği"] },
+  { label: "Business Model Quality", aliases: ["Business Model Quality", "İş Modeli Kalitesi"] },
+  { label: "Validation Confidence", aliases: ["Validation Confidence", "Doğrulama Güveni"] },
+  { label: "Execution Complexity", aliases: ["Execution Complexity", "executionComplexity", "Execution Difficulty", "executionDifficulty", "Execution", "Uygulama Karmaşıklığı", "Yürütme Karmaşıklığı", "Uygulama Zorluğu"] },
+  { label: "Evidence Confidence", aliases: ["Evidence Confidence", "Kanıt Güveni"] },
+  { label: "Founder Evidence", aliases: ["Founder Evidence", "Kurucu Kanıtı"] },
+];
+
+const founderScoreDimensionMetrics = founderScoreMetrics.filter(
+  (metric) => metric.label !== "Founder Readiness Score"
+);
+
+const founderScorePdfDimensionMetrics = [
   { label: "Idea Quality", aliases: ["Idea Quality", "Fikir Kalitesi"] },
   { label: "Market Attractiveness", aliases: ["Market Attractiveness", "Pazar Çekiciliği"] },
   { label: "Business Model Quality", aliases: ["Business Model Quality", "İş Modeli Kalitesi"] },
@@ -2984,12 +3001,45 @@ function normalizePdfKpiMetrics(content: string) {
   });
 }
 
-function normalizePdfFounderScoreMetrics(content: string) {
-  return founderScoreMetrics.map((metric) => ({
+function normalizePdfFounderScoreMetrics(content: string, investmentScore?: ReportInvestmentScore) {
+  const textScoreValues = [
+    readFounderReadinessMetricValue("Founder Readiness Score", investmentScore, content),
+    readFounderReadinessMetricValue("Idea Quality", investmentScore, content),
+    readFounderReadinessMetricValue("Market Attractiveness", investmentScore, content),
+    readFounderReadinessMetricValue("Business Model Quality", investmentScore, content),
+    readFounderReadinessMetricValue("Validation Confidence", investmentScore, content),
+    readFounderReadinessMetricValue("Execution Complexity", investmentScore, content),
+    readFounderReadinessMetricValue("Evidence Confidence", investmentScore, content),
+    readFounderReadinessMetricValue("Founder Evidence", investmentScore, content),
+  ];
+  const dimensionScoreValues = textScoreValues.slice(1);
+
+  return founderScorePdfDimensionMetrics.map((metric) => ({
     label: metric.label,
     aliases: metric.aliases,
-    score: extractScoreFromAliases(content, metric.aliases),
+    score:
+      dimensionScoreValues[founderScorePdfDimensionMetrics.findIndex((item) => item.label === metric.label)] ??
+      readFounderReadinessMetricValue(metric.label, investmentScore, content),
   }));
+}
+
+function buildPdfFounderScoreCards(
+  content: string,
+  investmentScore: ReportInvestmentScore | undefined,
+  locale: "en" | "tr"
+) {
+  return normalizePdfFounderScoreMetrics(content, investmentScore).map((metric) => ({
+    label: localizePdfPresentationLabel(metric.label, locale),
+    score: metric.score,
+  }));
+}
+
+function getPdfSectionCardTitle(section: ReportSection, locale: "en" | "tr") {
+  if (section.field === "founderScore") {
+    return locale === "tr" ? "Boyut Skorları" : "Dimension Scores";
+  }
+
+  return section.title;
 }
 
 function removeDuplicateVisualText(title: string, content: string) {
@@ -3121,7 +3171,7 @@ function formatPdfCitationContent(content: string) {
   return `${sourceLines}\n\n${methodologyBlock}`;
 }
 
-function formatPdfReadableContent(section: ReportSection) {
+function formatPdfReadableContent(section: ReportSection, founderReadinessScore?: number | null) {
   if (isSourceLikeSection(section)) {
     return formatPdfCitationContent(section.content);
   }
@@ -3130,7 +3180,12 @@ function formatPdfReadableContent(section: ReportSection) {
     return cleanPdfEvidenceMetadataText(normalizePdfTamSamSomBodyContent(section.content));
   }
 
-  const content = removeDuplicateVisualText(section.title, section.content);
+  const content = removeDuplicateVisualText(
+    section.title,
+    section.field === "founderScore"
+      ? normalizeFounderReadinessScoreText(section.content, founderReadinessScore)
+      : section.content
+  );
   const normalized = cleanPdfEvidenceMetadataText(content);
 
   if (!normalized) {
@@ -3442,7 +3497,6 @@ function ExecutiveSummaryVisual({
   const score =
     investmentScore?.totalScore ??
     extractScore(section.content, "AI Investment Score") ??
-    extractScore(section.content, "AI Founder Score") ??
     extractConfidence(section.content);
   const recommendation = investmentScore?.recommendation || detectRecommendation(section.content) || "REVIEW";
   const highlights = getExecutiveHighlights(section.content);
@@ -3604,7 +3658,13 @@ function GaugeCircle({ label, score }: { label: string; score: number }) {
   );
 }
 
-function PremiumSectionVisual({ section }: { section: ReportSection }) {
+function PremiumSectionVisual({
+  section,
+  investmentScore,
+}: {
+  section: ReportSection;
+  investmentScore?: ReportInvestmentScore;
+}) {
   const field = section.field;
 
   if (field === "tamSamSom") {
@@ -3965,8 +4025,12 @@ if (field === "swotAnalysis") {
   }
 
   if (field === "founderScore") {
-    const scoredMetrics = founderScoreMetrics
-      .map((metric) => ({ metric: metric.label, score: extractScoreFromAliases(section.content, metric.aliases) }))
+    const founderScoreLocale = detectPdfPresentationLocale(section.content);
+    const scoredMetrics = founderScoreDimensionMetrics
+      .map((metric) => ({
+        metric: localizePdfPresentationLabel(metric.label, founderScoreLocale),
+        score: readFounderReadinessMetricValue(metric.label, investmentScore, section.content),
+      }))
       .filter((item): item is { metric: string; score: number } => item.score !== null);
 
     if (scoredMetrics.length === 0) {
@@ -5567,7 +5631,7 @@ const ReportPanel = memo(function ReportPanel({
         const metricCards = [
           [localizePdfPresentationLabel("Decision", pdfLocale), executiveSnapshot.decision],
           [localizePdfPresentationLabel("Confidence Score", pdfLocale), executiveSnapshot.confidence],
-          [localizePdfPresentationLabel("AI Founder Score", pdfLocale), executiveSnapshot.founderScore],
+          [localizePdfPresentationLabel("Founder Readiness Score", pdfLocale), executiveSnapshot.founderScore],
           [localizePdfPresentationLabel("Financial Quality", pdfLocale), executiveSnapshot.financialQuality],
           [localizePdfPresentationLabel("Report Quality", pdfLocale), executiveSnapshot.reportQuality],
           [localizePdfPresentationLabel("Main Risk", pdfLocale), executiveSnapshot.mainRisk],
@@ -5597,7 +5661,7 @@ const ReportPanel = memo(function ReportPanel({
 
         const gaugeWidth = (contentWidth - 33) / 2;
         drawDecisionGauge("Confidence Gauge", executiveSnapshot.confidenceScore, executiveSnapshot.confidence, margin + 12, 156, gaugeWidth);
-        drawDecisionGauge("Founder Score Gauge", executiveSnapshot.founderScoreValue, executiveSnapshot.founderScore, margin + 21 + gaugeWidth, 156, gaugeWidth);
+        drawDecisionGauge("Founder Readiness Gauge", executiveSnapshot.founderScoreValue, executiveSnapshot.founderScore, margin + 21 + gaugeWidth, 156, gaugeWidth);
 
         const heatmapY = 195;
         const panelWidth = (contentWidth - 33) / 2;
@@ -5841,7 +5905,7 @@ const ReportPanel = memo(function ReportPanel({
         }
 
         if (section.field === "founderScore") {
-          return 34;
+          return 46;
         }
 
         if (section.field === "tamSamSom") {
@@ -5949,12 +6013,15 @@ const ReportPanel = memo(function ReportPanel({
         }
 
         if (section.field === "founderScore") {
-          const labels = normalizePdfFounderScoreMetrics(section.content).slice(0, 6);
+          const cards = buildPdfFounderScoreCards(
+            section.content,
+            investmentScore,
+            pdfLocale
+          );
           const itemWidth = (visualWidth - 10) / 3;
 
-          labels.forEach((item, index) => {
-            const label = item.label;
-            const displayLabel = localizePdfPresentationLabel(label, pdfLocale);
+          cards.forEach((item, index) => {
+            const displayLabel = item.label;
             const x = bodyX + (index % 3) * (itemWidth + 5);
             const itemY = visualY + Math.floor(index / 3) * 15;
             const score = item.score;
@@ -5974,7 +6041,7 @@ const ReportPanel = memo(function ReportPanel({
             pdf.text(localizePdfPresentationLabel("Score", pdfLocale), x + 14, itemY + 8.8);
           });
 
-          return 31;
+          return 46;
         }
 
         if (section.field === "executiveRecommendation") {
@@ -6331,7 +6398,10 @@ const ReportPanel = memo(function ReportPanel({
           section.field === "financialDashboard" ||
           section.field === "unitEconomics"
             ? ""
-            : localizePdfPresentationText(formatPdfReadableContent(section), pdfLocale);
+            : localizePdfPresentationText(
+                formatPdfReadableContent(section, executiveSnapshot.founderScoreValue),
+                pdfLocale
+              );
 
 	        if (isSourceLikeSection(section) && !sectionBodyContent.trim()) {
 	          return;
@@ -6396,9 +6466,10 @@ const ReportPanel = memo(function ReportPanel({
           pdf.setFont("Geist", "normal");
           pdf.setFontSize(14);
           pdf.setTextColor("#ffffff");
+          const displaySectionTitle = getPdfSectionCardTitle(section, pdfLocale);
           const sectionTitle = isContinued && isSourceLikeSection(section)
             ? ""
-            : `${section.title}${isContinued ? pdfLocale === "tr" ? " devamı" : " continued" : ""}`;
+            : `${displaySectionTitle}${isContinued ? pdfLocale === "tr" ? " devamı" : " continued" : ""}`;
 
           if (sectionTitle) {
             pdf.text(sectionTitle, bodyX, y + 12.5, {
@@ -6555,7 +6626,14 @@ const ReportPanel = memo(function ReportPanel({
           const isFinancialDashboard = section.field === "financialDashboard";
           const detailsContent = isFinancialDashboard
             ? ""
-            : normalizeReportPresentationText(section.content);
+            : normalizeReportPresentationText(
+                section.field === "founderScore"
+                  ? normalizeFounderReadinessScoreText(
+                      section.content,
+                      readFounderReadinessScoreValue(investmentScore)
+                    )
+                  : section.content
+              );
           const presentationLabels = getReportPresentationLabels(section.content);
           const hasVisibleDetailsContent = detailsContent.replace(/[#*_`>\-[\]\s()]/g, "").trim().length > 0;
 
@@ -6599,7 +6677,10 @@ const ReportPanel = memo(function ReportPanel({
                     section.field !== "tamSamSom" ? (
                       <ExecutiveInsightBanner section={section} />
                     ) : null}
-                    <PremiumSectionVisual section={section} />
+                    <PremiumSectionVisual
+                      section={section}
+                      investmentScore={investmentScore}
+                    />
                     {hasVisibleDetailsContent && section.field !== "tamSamSom" ? (
                       <>
                         <SectionTakeaway content={detailsContent} />

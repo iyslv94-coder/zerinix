@@ -34,13 +34,20 @@ import {
   getReportPresentationLabels,
   getSectionTakeaway,
   isExecutivePresentationSection,
+  normalizeFounderReadinessScoreText,
   normalizeReportPresentationText,
+  readFounderReadinessMetricValue,
+  readFounderReadinessScoreValue,
 } from "@/app/lib/report-presentation";
 import type {
   ReportBenchmarkFit,
   ReportInvestmentScore,
 } from "@/app/lib/report-investment-score";
-import { localizePdfPresentationText } from "@/app/lib/pdf-normalization.mjs";
+import {
+  detectPdfPresentationLocale,
+  localizePdfPresentationLabel,
+  localizePdfPresentationText,
+} from "@/app/lib/pdf-normalization.mjs";
 import {
   getEvidenceBadgeClass,
   getEvidenceLabel,
@@ -127,15 +134,19 @@ const mobilityFinancialDashboardMetrics = [
 ];
 
 const founderScoreMetrics = [
-  "Overall Score",
-  "Innovation",
-  "Market Timing",
-  "Competition",
-  "Capital Intensity",
-  "Execution Difficulty",
-  "Revenue Potential",
-  "Risk Level",
+  { label: "Founder Readiness Score", aliases: ["Founder Readiness Score", "Kurucu Hazırlık Skoru", "Overall Score", "Genel Skor"] },
+  { label: "Idea Quality", aliases: ["Idea Quality", "Fikir Kalitesi"] },
+  { label: "Market Attractiveness", aliases: ["Market Attractiveness", "Pazar Çekiciliği"] },
+  { label: "Business Model Quality", aliases: ["Business Model Quality", "İş Modeli Kalitesi"] },
+  { label: "Validation Confidence", aliases: ["Validation Confidence", "Doğrulama Güveni"] },
+  { label: "Execution Complexity", aliases: ["Execution Complexity", "executionComplexity", "Execution Difficulty", "executionDifficulty", "Execution", "Uygulama Karmaşıklığı", "Yürütme Karmaşıklığı", "Uygulama Zorluğu"] },
+  { label: "Evidence Confidence", aliases: ["Evidence Confidence", "Kanıt Güveni"] },
+  { label: "Founder Evidence", aliases: ["Founder Evidence", "Kurucu Kanıtı"] },
 ];
+
+const founderScoreDimensionMetrics = founderScoreMetrics.filter(
+  (metric) => metric.label !== "Founder Readiness Score"
+);
 
 const founderRoadmapSteps = [
   "Tomorrow",
@@ -774,7 +785,6 @@ function ExecutiveSummaryVisual({
   const score =
     investmentScore?.totalScore ??
     extractScore(content, "AI Investment Score") ??
-    extractScore(content, "AI Founder Score") ??
     extractConfidence(content);
   const recommendation = investmentScore?.recommendation || detectRecommendation(content) || "REVIEW";
   const highlights = getExecutiveHighlights(content);
@@ -943,9 +953,11 @@ function GaugeCircle({ label, score }: { label: string; score: number }) {
 function ReportSectionVisual({
   title,
   content,
+  investmentScore,
 }: {
   title: string;
   content: string;
+  investmentScore?: ReportInvestmentScore;
 }) {
   const normalizedTitle = title.toLowerCase();
 
@@ -1263,9 +1275,18 @@ function ReportSectionVisual({
     );
   }
 
-  if (normalizedTitle.includes("founder score") || normalizedTitle.includes("kurucu skoru")) {
-    const scoredMetrics = founderScoreMetrics
-      .map((metric) => ({ metric, score: extractScore(content, metric) }))
+  if (
+    normalizedTitle.includes("founder score") ||
+    normalizedTitle.includes("founder readiness") ||
+    normalizedTitle.includes("kurucu skoru") ||
+    normalizedTitle.includes("kurucu hazırlık")
+  ) {
+    const founderScoreLocale = detectPdfPresentationLocale(content);
+    const scoredMetrics = founderScoreDimensionMetrics
+      .map((metric) => ({
+        metric: localizePdfPresentationLabel(metric.label, founderScoreLocale),
+        score: readFounderReadinessMetricValue(metric.label, investmentScore, content),
+      }))
       .filter((item): item is { metric: string; score: number } => item.score !== null);
 
     if (scoredMetrics.length === 0) {
@@ -1533,7 +1554,9 @@ function hasReportSectionVisual(title: string) {
     normalizedTitle.includes("financial dashboard") ||
     normalizedTitle.includes("financial assumptions") ||
     normalizedTitle.includes("founder score") ||
+    normalizedTitle.includes("founder readiness") ||
     normalizedTitle.includes("kurucu skoru") ||
+    normalizedTitle.includes("kurucu hazırlık") ||
     normalizedTitle.includes("scenario") ||
     normalizedTitle.includes("executive recommendation") ||
     normalizedTitle.includes("yönetici tavsiyesi") ||
@@ -1570,7 +1593,9 @@ function getReportArticleClass(title: string) {
     normalizedTitle.includes("executive recommendation") ||
     normalizedTitle.includes("yönetici tavsiyesi") ||
     normalizedTitle.includes("founder score") ||
-    normalizedTitle.includes("kurucu skoru")
+    normalizedTitle.includes("founder readiness") ||
+    normalizedTitle.includes("kurucu skoru") ||
+    normalizedTitle.includes("kurucu hazırlık")
   ) {
     return `${base} border-teal-200/15 bg-[linear-gradient(135deg,rgba(94,234,212,0.08),rgba(0,0,0,0.66))]`;
   }
@@ -2532,7 +2557,14 @@ export default async function ReportDetailPage({
                   const isFinancialDashboard = section.title
                     .toLowerCase()
                     .includes("financial dashboard");
-                  const detailsContent = isFinancialDashboard ? "" : section.content;
+                  const detailsContent = isFinancialDashboard
+                    ? ""
+                    : section.field === "founderScore"
+                      ? normalizeFounderReadinessScoreText(
+                          section.content,
+                          readFounderReadinessScoreValue(report.investmentScore)
+                        )
+                      : section.content;
 
                   return (
                     <div
@@ -2549,6 +2581,7 @@ export default async function ReportDetailPage({
                           <ReportSectionVisual
                             title={section.title}
                             content={section.content}
+                            investmentScore={report.investmentScore}
                           />
                           {detailsContent.trim() ? (
                             <div className="rounded-[1.25rem] border border-white/10 bg-black/25 p-4">
@@ -2905,7 +2938,14 @@ export default async function ReportDetailPage({
                       .includes("financial dashboard");
                     const detailsContent = isFinancialDashboard
                       ? ""
-                      : normalizeReportPresentationText(section.content);
+                      : normalizeReportPresentationText(
+                          section.field === "founderScore"
+                            ? normalizeFounderReadinessScoreText(
+                                section.content,
+                                readFounderReadinessScoreValue(report.investmentScore)
+                              )
+                            : section.content
+                        );
                     const presentationLabels = getReportPresentationLabels(section.content);
 
                     return (
@@ -2961,6 +3001,7 @@ export default async function ReportDetailPage({
                               <ReportSectionVisual
                                 title={section.title}
                                 content={section.content}
+                                investmentScore={report.investmentScore}
                               />
                               {detailsContent.trim() ? (
                                 <>

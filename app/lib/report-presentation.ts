@@ -49,14 +49,14 @@ const ENGLISH_LABELS: ReportPresentationLabels = {
   executiveSnapshot: "Executive Snapshot",
   decision: "Decision",
   confidence: "Confidence",
-  founderScore: "AI Founder Score",
+  founderScore: "Founder Readiness Score",
   financialQuality: "Financial Quality",
   reportQuality: "Report Quality",
   mainRisk: "Main Risk",
   nextAction: "Next Action",
   riskLevel: "Risk Level",
   confidenceGauge: "Confidence Gauge",
-  founderScoreGauge: "Founder Score Gauge",
+  founderScoreGauge: "Founder Readiness Gauge",
   riskHeatmap: "Risk Heatmap",
   confidenceRadar: "Confidence Radar",
   why: "Why",
@@ -70,14 +70,14 @@ const TURKISH_LABELS: ReportPresentationLabels = {
   executiveSnapshot: "Yönetici Özeti",
   decision: "Karar",
   confidence: "Güven",
-  founderScore: "AI Kurucu Skoru",
+  founderScore: "Kurucu Hazırlık Skoru",
   financialQuality: "Finansal Kalite",
   reportQuality: "Rapor Kalitesi",
   mainRisk: "Ana Risk",
   nextAction: "Sonraki Aksiyon",
   riskLevel: "Risk Seviyesi",
   confidenceGauge: "Güven Göstergesi",
-  founderScoreGauge: "Kurucu Skoru Göstergesi",
+  founderScoreGauge: "Kurucu Hazırlık Göstergesi",
   riskHeatmap: "Risk Isı Haritası",
   confidenceRadar: "Güven Radarı",
   why: "Neden",
@@ -270,6 +270,135 @@ function readFounderScoreValue(investmentScore?: ReportInvestmentScore) {
   return typeof founderScore === "number" ? Math.max(0, Math.min(100, Math.round(founderScore))) : null;
 }
 
+export function readFounderReadinessScoreValue(investmentScore?: ReportInvestmentScore) {
+  return readFounderScoreValue(investmentScore);
+}
+
+function readFounderReasoningScore(investmentScore: ReportInvestmentScore | undefined, label: string) {
+  const reasoning = investmentScore?.decisionEngine?.founderScore?.reasoning;
+
+  if (!Array.isArray(reasoning)) {
+    return null;
+  }
+
+  const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const pattern = new RegExp(`^\\s*${escapedLabel}\\s*:\\s*(\\d{1,3})\\s*%?`, "i");
+
+  for (const line of reasoning) {
+    const match = typeof line === "string" ? line.match(pattern) : null;
+    const score = match ? Number(match[1]) : NaN;
+
+    if (Number.isFinite(score)) {
+      return Math.max(0, Math.min(100, Math.round(score)));
+    }
+  }
+
+  return null;
+}
+
+export function readFounderReadinessMetrics(investmentScore?: ReportInvestmentScore) {
+  const marketAttractiveness = readFounderReasoningScore(investmentScore, "Market attractiveness");
+
+  return {
+    founderReadinessScore: readFounderReadinessScoreValue(investmentScore),
+    ideaQuality: marketAttractiveness,
+    marketAttractiveness,
+    businessModelQuality: readFounderReasoningScore(investmentScore, "Business model quality"),
+    validationConfidence: readFounderReasoningScore(investmentScore, "Validation confidence"),
+    executionComplexity: readFounderReasoningScore(investmentScore, "Execution complexity"),
+    evidenceConfidence: readFounderReasoningScore(investmentScore, "Evidence confidence"),
+    founderEvidence: readFounderReasoningScore(investmentScore, "Founder evidence"),
+  };
+}
+
+const FOUNDER_READINESS_TEXT_ALIASES: Record<string, string[]> = {
+  "Founder Readiness Score": ["Founder Readiness Score", "Kurucu Hazırlık Skoru", "Overall Score", "Genel Skor"],
+  "Idea Quality": ["Idea Quality", "Fikir Kalitesi"],
+  "Market Attractiveness": ["Market Attractiveness", "Pazar Çekiciliği"],
+  "Business Model Quality": ["Business Model Quality", "İş Modeli Kalitesi"],
+  "Validation Confidence": ["Validation Confidence", "Doğrulama Güveni"],
+  "Execution Complexity": ["Execution Complexity", "Yürütme Karmaşıklığı", "Uygulama Karmaşıklığı", "Execution Difficulty"],
+  "Evidence Confidence": ["Evidence Confidence", "Kanıt Güveni"],
+  "Founder Evidence": ["Founder Evidence", "Kurucu Kanıtı"],
+};
+
+function readFounderReadinessTextMetric(content: string | undefined, label: string) {
+  if (!content) {
+    return null;
+  }
+
+  for (const alias of FOUNDER_READINESS_TEXT_ALIASES[label] || [label]) {
+    const escapedAlias = alias.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const match = content.match(
+      new RegExp(
+        `(?:^|\\n)\\s*(?:[-*•]\\s*)?(?:\\*\\*)?${escapedAlias}(?:\\*\\*)?\\s*[:\\-–—]\\s*(\\d{1,3})\\s*(?:%|\\/\\s*100)?`,
+        "i"
+      )
+    );
+    const score = match ? Number(match[1]) : NaN;
+
+    if (Number.isFinite(score)) {
+      return Math.max(0, Math.min(100, Math.round(score)));
+    }
+  }
+
+  return null;
+}
+
+export function readFounderReadinessMetricValue(
+  label: string,
+  investmentScore?: ReportInvestmentScore,
+  content?: string
+) {
+  const metrics = readFounderReadinessMetrics(investmentScore);
+  const values: Record<string, number | null> = {
+    "Founder Readiness Score": metrics.founderReadinessScore,
+    "Idea Quality": metrics.ideaQuality,
+    "Market Attractiveness": metrics.marketAttractiveness,
+    "Business Model Quality": metrics.businessModelQuality,
+    "Validation Confidence": metrics.validationConfidence,
+    "Execution Complexity": metrics.executionComplexity,
+    "Evidence Confidence": metrics.evidenceConfidence,
+    "Founder Evidence": metrics.founderEvidence,
+  };
+
+  return values[label] ?? readFounderReadinessTextMetric(content, label);
+}
+
+export function normalizeFounderReadinessScoreText(
+  content: string,
+  founderReadinessScore?: number | null
+) {
+  if (typeof founderReadinessScore !== "number") {
+    return content;
+  }
+
+  const canonicalScore = Math.max(0, Math.min(100, Math.round(founderReadinessScore)));
+  let hasFounderReadinessLine = false;
+
+  const lines = content.split("\n").flatMap((line) => {
+    const match = line.match(
+      /^(\s*(?:[-*•]\s*)?(?:\*\*)?)(Founder Readiness Score|Kurucu Hazırlık Skoru|Overall Score|Genel Skor)(?:\*\*)?\s*[:\-–—]\s*\d{1,3}\s*(?:%|\/\s*100)?(.*)$/i
+    );
+
+    if (!match) {
+      return [line];
+    }
+
+    if (hasFounderReadinessLine) {
+      return [];
+    }
+
+    hasFounderReadinessLine = true;
+    const isTurkish = /Kurucu|Genel/i.test(match[2]) || isTurkishContent(content);
+    const label = isTurkish ? "Kurucu Hazırlık Skoru" : "Founder Readiness Score";
+
+    return [`${match[1]}${label}: ${canonicalScore}/100${match[3] || ""}`];
+  });
+
+  return lines.join("\n");
+}
+
 function extractQuality(content: string, labels: string[], fallback: string) {
   return extractLabelValue(content, labels) || fallback;
 }
@@ -357,6 +486,8 @@ export function buildExecutiveSnapshot(
     extractPercentScore(normalized, [
       "AI Founder Score",
       "Founder Score",
+      "Founder Readiness Score",
+      "Kurucu Hazırlık Skoru",
       "AI Kurucu Skoru",
       "Kurucu Skoru",
     ]);

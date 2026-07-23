@@ -9,6 +9,9 @@ import { dedupeReportSections } from "@/app/lib/report-section-normalization";
 import {
   buildExecutiveSnapshot,
   compactExecutiveDecisionMemoSections,
+  normalizeFounderReadinessScoreText,
+  readFounderReadinessMetricValue,
+  readFounderReadinessScoreValue,
 } from "@/app/lib/report-presentation";
 import {
   detectPdfPresentationLocale,
@@ -528,8 +531,7 @@ const competitorFieldLabels = [
   "Target Customer",
 ];
 
-const founderScoreMetrics = [
-  { label: "Overall Score", aliases: ["Overall Score", "Genel Skor"] },
+const founderScorePdfDimensionMetrics = [
   { label: "Idea Quality", aliases: ["Idea Quality", "Fikir Kalitesi"] },
   { label: "Market Attractiveness", aliases: ["Market Attractiveness", "Pazar Çekiciliği"] },
   { label: "Business Model Quality", aliases: ["Business Model Quality", "İş Modeli Kalitesi"] },
@@ -1443,12 +1445,45 @@ function normalizePdfKpiMetrics(content: string) {
   });
 }
 
-function normalizePdfFounderScoreMetrics(content: string) {
-  return founderScoreMetrics.map((metric) => ({
+function normalizePdfFounderScoreMetrics(content: string, investmentScore?: DashboardReport["investmentScore"]) {
+  const textScoreValues = [
+    readFounderReadinessMetricValue("Founder Readiness Score", investmentScore, content),
+    readFounderReadinessMetricValue("Idea Quality", investmentScore, content),
+    readFounderReadinessMetricValue("Market Attractiveness", investmentScore, content),
+    readFounderReadinessMetricValue("Business Model Quality", investmentScore, content),
+    readFounderReadinessMetricValue("Validation Confidence", investmentScore, content),
+    readFounderReadinessMetricValue("Execution Complexity", investmentScore, content),
+    readFounderReadinessMetricValue("Evidence Confidence", investmentScore, content),
+    readFounderReadinessMetricValue("Founder Evidence", investmentScore, content),
+  ];
+  const dimensionScoreValues = textScoreValues.slice(1);
+
+  return founderScorePdfDimensionMetrics.map((metric) => ({
     label: metric.label,
     aliases: metric.aliases,
-    score: extractScoreFromAliases(content, metric.aliases),
+    score:
+      dimensionScoreValues[founderScorePdfDimensionMetrics.findIndex((item) => item.label === metric.label)] ??
+      readFounderReadinessMetricValue(metric.label, investmentScore, content),
   }));
+}
+
+function buildPdfFounderScoreCards(
+  content: string,
+  investmentScore: DashboardReport["investmentScore"] | undefined,
+  locale: "en" | "tr"
+) {
+  return normalizePdfFounderScoreMetrics(content, investmentScore).map((metric) => ({
+    label: localizePdfPresentationLabel(metric.label, locale),
+    score: metric.score,
+  }));
+}
+
+function getPdfSectionCardTitle(section: PdfReportSection, locale: "en" | "tr") {
+  if (section.field === "founderScore") {
+    return locale === "tr" ? "Boyut Skorları" : "Dimension Scores";
+  }
+
+  return section.title;
 }
 
 function extractKeywordInsight(content: string, keywords: string[]) {
@@ -2000,8 +2035,7 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
           report.investmentScore?.totalScore ??
           extractScore(fullReportContent, "Total Investment Score") ??
           extractScore(fullReportContent, "Investment Score") ??
-          extractScore(fullReportContent, "AI Investment Score") ??
-          extractScore(fullReportContent, "Overall Score");
+          extractScore(fullReportContent, "AI Investment Score");
         const recommendation = report.investmentScore?.recommendation || detectRecommendation(fullReportContent) || "WAIT";
         const recommendationFill =
           recommendation === "GO"
@@ -2086,7 +2120,7 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
         pdf.text(String(founderScore ?? "--"), scoreX + 20, scoreY + 31);
         pdf.setFontSize(6.5);
         pdf.setTextColor("#99f6e4");
-        pdf.text(localizePdfPresentationLabel("AI Founder Score", pdfLocale).toUpperCase(), scoreX + 12, scoreY + 43);
+        pdf.text(localizePdfPresentationLabel("Founder Readiness Score", pdfLocale).toUpperCase(), scoreX + 12, scoreY + 43);
 
         pdf.setFillColor(recommendationFill);
         pdf.setDrawColor("#334155");
@@ -2404,7 +2438,12 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
         const visualY = sectionY + 19;
         const isTamSamSomSection = field === "tamSamSom" || normalizedTitle.includes("tam / sam / som");
         const isFinancialDashboardSection = field === "financialDashboard" || normalizedTitle.includes("financial dashboard") || normalizedTitle.includes("finansal panel");
-        const isFounderScoreSection = field === "founderScore" || normalizedTitle.includes("founder score") || normalizedTitle.includes("kurucu skoru");
+        const isFounderScoreSection =
+          field === "founderScore" ||
+          normalizedTitle.includes("founder score") ||
+          normalizedTitle.includes("founder readiness") ||
+          normalizedTitle.includes("kurucu skoru") ||
+          normalizedTitle.includes("kurucu hazırlık");
         const isScenarioSection = field === "scenarioAnalysis" || normalizedTitle.includes("scenario") || normalizedTitle.includes("senaryo");
         const isPorterSection = normalizedTitle.includes("porter");
         const isKpiSection = field === "kpiDashboard" || field === "kpis" || normalizedTitle.includes("kpi");
@@ -2486,12 +2525,15 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
         }
 
         if (isFounderScoreSection) {
-          const labels = normalizePdfFounderScoreMetrics(content).slice(0, 6);
+          const cards = buildPdfFounderScoreCards(
+            content,
+            report.investmentScore,
+            pdfLocale
+          );
           const itemWidth = (bodyWidth - 10) / 3;
 
-          labels.forEach((item, index) => {
-            const label = item.label;
-            const displayLabel = localizePdfPresentationLabel(label, pdfLocale);
+          cards.forEach((item, index) => {
+            const displayLabel = item.label;
             const x = bodyX + (index % 3) * (itemWidth + 5);
             const itemY = visualY + Math.floor(index / 3) * 15;
             const score = item.score;
@@ -2511,7 +2553,7 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
             pdf.text(localizePdfPresentationLabel("Score", pdfLocale), x + 14, itemY + 8.8);
           });
 
-          return 31;
+          return 46;
         }
 
         if (field === "executiveRecommendation" || normalizedTitle.includes("executive recommendation") || normalizedTitle.includes("yönetici tavsiyesi")) {
@@ -2696,7 +2738,6 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
 
         if (
           isFinancialDashboardSection ||
-          isFounderScoreSection ||
           isScenarioSection ||
           isPorterSection ||
           isKpiSection ||
@@ -2705,9 +2746,7 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
           const financialLayout = isFinancialDashboardSection
             ? getFinancialLayout(content, bodyWidth)
             : null;
-          const labels = isFounderScoreSection
-            ? founderScoreMetrics
-            : isScenarioSection
+          const labels = isScenarioSection
               ? ["Worst", "Base", "Best"]
               : isPorterSection
                 ? ["Rivalry", "Entrants", "Buyer", "Substitutes"]
@@ -2755,7 +2794,9 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
             const itemY = isFinancialDashboard && financialLayout
               ? visualY + priorRowHeight + rowIndex * 3
               : visualY + rowIndex * (itemHeight + 3);
-            const score = typeof typedItem !== "string" && "score" in typedItem ? typedItem.score ?? null : extractScoreFromAliases(metricContent, aliases);
+            const score = typeof typedItem !== "string" && "score" in typedItem
+              ? typedItem.score ?? null
+              : extractScoreFromAliases(metricContent, aliases);
             const value = typeof typedItem !== "string" && typedItem.value
               ? typedItem.value
               : isUnitEconomics && label === "Gross Margin"
@@ -2892,8 +2933,14 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
           return 46;
         }
 
-        if (normalizedTitle.includes("founder score")) {
-          return 34;
+        if (
+          section.field === "founderScore" ||
+          normalizedTitle.includes("founder score") ||
+          normalizedTitle.includes("founder readiness") ||
+          normalizedTitle.includes("kurucu skoru") ||
+          normalizedTitle.includes("kurucu hazırlık")
+        ) {
+          return 46;
         }
 
         if (normalizedTitle.includes("tam / sam / som")) {
@@ -2925,7 +2972,7 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
           return 48;
         }
 
-        return /founder score|scenario|roadmap|competitor|porter|kpi|risk|unit economics/i.test(section.title)
+        return /founder score|founder readiness|scenario|roadmap|competitor|porter|kpi|risk|unit economics/i.test(section.title)
           ? 22
           : 0;
       };
@@ -2973,7 +3020,20 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
             ? localizePdfPresentationText(cleanPdfEvidenceMetadataText(normalizePdfTamSamSomBodyContent(section.content)), pdfLocale)
             : isSourceSectionTitle(section.title)
               ? localizePdfPresentationText(formatPdfCitationContent(section.content), pdfLocale)
-              : localizePdfPresentationText(cleanPdfEvidenceMetadataText(removeDuplicateVisualText(section.title, section.content)), pdfLocale);
+              : localizePdfPresentationText(
+                  cleanPdfEvidenceMetadataText(
+                    removeDuplicateVisualText(
+                      section.title,
+                      section.field === "founderScore"
+                        ? normalizeFounderReadinessScoreText(
+                            section.content,
+                            readFounderReadinessScoreValue(report.investmentScore)
+                          )
+                        : section.content
+                    )
+                  ),
+                  pdfLocale
+                );
         const bodyLines = splitPdfReadableLines(sectionBodyContent, bodyWidth);
         const hasBodyText = sectionBodyContent.trim().length > 0;
 
@@ -3096,9 +3156,10 @@ export default function ReportPdfButton({ report }: { report: DashboardReport })
 
           pdf.setFontSize(14);
           pdf.setTextColor("#ffffff");
+          const displaySectionTitle = getPdfSectionCardTitle(section, pdfLocale);
           const sectionTitle = isContinued && isSourceSectionTitle(section.title)
             ? ""
-            : `${section.title}${isContinued ? pdfLocale === "tr" ? " devamı" : " continued" : ""}`;
+            : `${displaySectionTitle}${isContinued ? pdfLocale === "tr" ? " devamı" : " continued" : ""}`;
 
           if (sectionTitle) {
             pdf.text(sectionTitle, bodyX, y + 12.5, {

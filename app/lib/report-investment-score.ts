@@ -11,7 +11,7 @@ export type ReportInvestmentScore = {
   weaknesses?: string[];
   topRisks?: string[];
   categories?: Record<string, unknown>;
-  decisionEngine?: Record<string, { score?: number; maximumScore?: number; label?: string }>;
+  decisionEngine?: Record<string, { score?: number; maximumScore?: number; label?: string; reasoning?: string[] }>;
 };
 
 export type ReportBenchmarkFit = {
