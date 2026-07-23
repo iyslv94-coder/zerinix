@@ -10,6 +10,7 @@ export type AIUsageOperationType =
   | "chat"
   | "plan_report"
   | "market_report"
+  | "executive_report"
   | "pdf_export";
 export type AiRequestKind =
   | "simple_chat"
@@ -37,6 +38,24 @@ export type AIUsage = {
   createdAt: string;
 };
 
+export type AICacheOperationType =
+  | "chat"
+  | "plan_report"
+  | "market_report"
+  | "executive_report";
+
+export type AICache = {
+  id: string;
+  cacheKey: string;
+  operationType: AICacheOperationType;
+  inputHash: string;
+  model: string;
+  responseData: unknown;
+  tokenSavings: number;
+  createdAt: string;
+  expiresAt: string;
+};
+
 type UsageLimit = {
   dailyRequests: number;
   monthlyRequests: number;
@@ -54,6 +73,7 @@ type AiUsageLimitConfig = Record<PlanTier, AiOperationLimit>;
 
 type CachedAiResponse = {
   responseText: string;
+  responseData?: unknown;
   promptTokens: number;
   completionTokens: number;
   totalTokens: number;
@@ -103,13 +123,24 @@ type CacheInput = {
   cacheKey: string;
   promptHash: string;
   endpoint: string;
+  operationType?: AIUsageOperationType;
   reportField?: string;
   language: string;
   model: string;
   responseText: string;
+  responseData?: unknown;
   tokenUsage: TokenUsage;
   estimatedCostUsd: number;
   expiresInDays?: number;
+};
+
+type AiCacheConfig = Record<AICacheOperationType, { ttlHours: number }>;
+
+const defaultAiCacheConfig: AiCacheConfig = {
+  chat: { ttlHours: 24 },
+  plan_report: { ttlHours: 24 * 7 },
+  market_report: { ttlHours: 24 * 7 },
+  executive_report: { ttlHours: 24 * 7 },
 };
 
 function isUuid(value: string) {
@@ -211,6 +242,52 @@ function getAiUsageLimitConfig(): AiUsageLimitConfig {
   }
 }
 
+function normalizeCacheOperationType(value: unknown): AICacheOperationType {
+  return value === "plan_report" ||
+    value === "market_report" ||
+    value === "executive_report"
+    ? value
+    : "chat";
+}
+
+function getAiCacheConfig(): AiCacheConfig {
+  const rawConfig = process.env.AI_CACHE_CONFIG;
+
+  if (!rawConfig) {
+    return defaultAiCacheConfig;
+  }
+
+  try {
+    const parsed = JSON.parse(rawConfig) as Record<string, unknown>;
+
+    return (["chat", "plan_report", "market_report", "executive_report"] as const).reduce<AiCacheConfig>(
+      (config, operationType) => {
+        const operationConfig = parsed[operationType] && typeof parsed[operationType] === "object"
+          ? parsed[operationType] as Record<string, unknown>
+          : {};
+        const ttlHours = safeLimitNumber(
+          operationConfig.ttlHours ?? operationConfig.ttl_hours,
+          defaultAiCacheConfig[operationType].ttlHours
+        );
+
+        config[operationType] = { ttlHours };
+        return config;
+      },
+      { ...defaultAiCacheConfig }
+    );
+  } catch {
+    return defaultAiCacheConfig;
+  }
+}
+
+function getAiCacheTtlMs(operationType: AICacheOperationType) {
+  return getAiCacheConfig()[operationType].ttlHours * 60 * 60 * 1_000;
+}
+
+function shouldAllowGlobalAiCacheSharing() {
+  return process.env.AI_CACHE_ALLOW_GLOBAL_SHARING === "true";
+}
+
 function inferOperationType(input: {
   endpoint: string;
   requestKind?: AiRequestKind;
@@ -223,6 +300,7 @@ function inferOperationType(input: {
     metadataOperation === "chat" ||
     metadataOperation === "plan_report" ||
     metadataOperation === "market_report" ||
+    metadataOperation === "executive_report" ||
     metadataOperation === "pdf_export"
   ) {
     return metadataOperation;
@@ -355,13 +433,35 @@ export function createAiPromptHash(prompt: string) {
 }
 
 export function createAiCacheKey(parts: {
+  operationType?: AICacheOperationType;
   endpoint: string;
   normalizedPrompt: string;
   mode: string;
   language: string;
   model: string;
+  options?: Record<string, unknown>;
 }) {
-  return hashAiPayload(JSON.stringify(parts));
+  const normalizedParts = {
+    operationType: parts.operationType ?? normalizeCacheOperationType(inferOperationType({
+      endpoint: parts.endpoint,
+      reportField: parts.mode,
+    })),
+    endpoint: parts.endpoint,
+    inputHash: hashAiPayload(parts.normalizedPrompt),
+    mode: parts.mode,
+    language: parts.language,
+    model: parts.model,
+    options: parts.options
+      ? Object.keys(parts.options)
+          .sort()
+          .reduce<Record<string, unknown>>((sorted, key) => {
+            sorted[key] = parts.options?.[key];
+            return sorted;
+          }, {})
+      : {},
+  };
+
+  return hashAiPayload(JSON.stringify(normalizedParts));
 }
 
 export async function getUserPlanTier(
@@ -600,102 +700,160 @@ export async function getCachedAiResponse(
   userId: string,
   cacheKey: string
 ): Promise<CachedAiResponse | null> {
-  const { data: globalData, error: globalError } = await supabase.rpc(
-    "get_global_ai_response_cache_entry",
-    {
-      request_cache_key: cacheKey,
-    }
-  );
-
-  if (!globalError) {
-    const row = Array.isArray(globalData) ? globalData[0] : globalData;
-
-    if (row?.response_text) {
-      return {
-        responseText: String(row.response_text),
-        promptTokens: safeNumber(row.prompt_tokens),
-        completionTokens: safeNumber(row.completion_tokens),
-        totalTokens: safeNumber(row.total_tokens),
-        estimatedCostUsd: safeNumber(row.estimated_cost_usd),
-        model: typeof row.model === "string" ? row.model : "",
-      };
-    }
-  } else {
-    logServerError("ai-governance:global-cache-read", globalError);
-  }
-
-  const { data, error } = await supabase
+  const primary = await supabase
     .from("ai_response_cache")
     .select(
-      "response_text,prompt_tokens,completion_tokens,total_tokens,estimated_cost_usd,model,hit_count"
+      "response_text,response_data,prompt_tokens,completion_tokens,total_tokens,estimated_cost_usd,model,hit_count"
     )
     .eq("user_id", userId)
     .eq("cache_key", cacheKey)
     .gt("expires_at", new Date().toISOString())
     .maybeSingle();
+  let data = primary.data as Record<string, unknown> | null;
+  let error = primary.error;
+
+  if (error && /response_data|column/i.test(error.message || "")) {
+    const fallback = await supabase
+      .from("ai_response_cache")
+      .select(
+        "response_text,prompt_tokens,completion_tokens,total_tokens,estimated_cost_usd,model,hit_count"
+      )
+      .eq("user_id", userId)
+      .eq("cache_key", cacheKey)
+      .gt("expires_at", new Date().toISOString())
+      .maybeSingle();
+
+    data = fallback.data as Record<string, unknown> | null;
+    error = fallback.error;
+  }
 
   if (error) {
     logServerError("ai-governance:cache-read", error);
-    return null;
+  } else if (data?.response_text) {
+    const hitCount = typeof data.hit_count === "number" ? data.hit_count : 0;
+    const { error: updateError } = await supabase
+      .from("ai_response_cache")
+      .update({ hit_count: hitCount + 1 })
+      .eq("user_id", userId)
+      .eq("cache_key", cacheKey);
+
+    if (updateError) {
+      logServerError("ai-governance:cache-hit-update", updateError);
+    }
+
+    return {
+      responseText: String(data.response_text),
+      responseData: data.response_data,
+      promptTokens: safeNumber(data.prompt_tokens),
+      completionTokens: safeNumber(data.completion_tokens),
+      totalTokens: safeNumber(data.total_tokens),
+      estimatedCostUsd: safeNumber(data.estimated_cost_usd),
+      model: typeof data.model === "string" ? data.model : "",
+    };
   }
 
-  if (!data?.response_text) {
-    return null;
+  if (shouldAllowGlobalAiCacheSharing()) {
+    const { data: globalData, error: globalError } = await supabase.rpc(
+      "get_global_ai_response_cache_entry",
+      {
+        request_cache_key: cacheKey,
+      }
+    );
+
+    if (!globalError) {
+      const row = Array.isArray(globalData) ? globalData[0] : globalData;
+
+      if (row?.response_text) {
+        return {
+          responseText: String(row.response_text),
+          promptTokens: safeNumber(row.prompt_tokens),
+          completionTokens: safeNumber(row.completion_tokens),
+          totalTokens: safeNumber(row.total_tokens),
+          estimatedCostUsd: safeNumber(row.estimated_cost_usd),
+          model: typeof row.model === "string" ? row.model : "",
+        };
+      }
+    } else {
+      logServerError("ai-governance:global-cache-read", globalError);
+    }
   }
 
-  const hitCount = typeof data.hit_count === "number" ? data.hit_count : 0;
-  const { error: updateError } = await supabase
-    .from("ai_response_cache")
-    .update({ hit_count: hitCount + 1 })
-    .eq("user_id", userId)
-    .eq("cache_key", cacheKey);
-
-  if (updateError) {
-    logServerError("ai-governance:cache-hit-update", updateError);
-  }
-
-  return {
-    responseText: String(data.response_text),
-    promptTokens: safeNumber(data.prompt_tokens),
-    completionTokens: safeNumber(data.completion_tokens),
-    totalTokens: safeNumber(data.total_tokens),
-    estimatedCostUsd: safeNumber(data.estimated_cost_usd),
-    model: typeof data.model === "string" ? data.model : "",
-  };
+  return null;
 }
 
 export async function storeCachedAiResponse(
   supabase: SupabaseClient,
   input: CacheInput
 ) {
-  const expiresAt = new Date(
-    Date.now() + (input.expiresInDays ?? 7) * 24 * 60 * 60 * 1_000
-  ).toISOString();
-  const { error: globalError } = await supabase.rpc(
-    "upsert_global_ai_response_cache_entry",
-    {
-      request_cache_key: input.cacheKey,
-      request_prompt_hash: input.promptHash,
-      request_endpoint: input.endpoint,
-      request_report_field: input.reportField ?? null,
-      request_language: input.language,
-      request_model: input.model,
-      request_response_text: input.responseText,
-      request_prompt_tokens: input.tokenUsage.promptTokens,
-      request_completion_tokens: input.tokenUsage.completionTokens,
-      request_total_tokens: input.tokenUsage.totalTokens,
-      request_estimated_cost_usd: input.estimatedCostUsd,
-      request_expires_at: expiresAt,
+  const operationType = normalizeCacheOperationType(input.operationType ?? inferOperationType({
+    endpoint: input.endpoint,
+    reportField: input.reportField,
+  }));
+  const ttlMs = input.expiresInDays
+    ? input.expiresInDays * 24 * 60 * 60 * 1_000
+    : getAiCacheTtlMs(operationType);
+  const expiresAt = new Date(Date.now() + ttlMs).toISOString();
+
+  if (shouldAllowGlobalAiCacheSharing()) {
+    const { error: globalError } = await supabase.rpc(
+      "upsert_global_ai_response_cache_entry",
+      {
+        request_cache_key: input.cacheKey,
+        request_prompt_hash: input.promptHash,
+        request_endpoint: input.endpoint,
+        request_report_field: input.reportField ?? null,
+        request_language: input.language,
+        request_model: input.model,
+        request_response_text: input.responseText,
+        request_prompt_tokens: input.tokenUsage.promptTokens,
+        request_completion_tokens: input.tokenUsage.completionTokens,
+        request_total_tokens: input.tokenUsage.totalTokens,
+        request_estimated_cost_usd: input.estimatedCostUsd,
+        request_expires_at: expiresAt,
+      }
+    );
+
+    if (!globalError) {
+      return;
     }
+
+    logServerError("ai-governance:global-cache-write", globalError);
+  }
+
+  const cacheRow = {
+    user_id: input.userId,
+    cache_key: input.cacheKey,
+    operation_type: operationType,
+    input_hash: input.promptHash,
+    prompt_hash: input.promptHash,
+    endpoint: input.endpoint,
+    report_field: input.reportField ?? null,
+    language: input.language,
+    model: input.model,
+    response_text: input.responseText,
+    response_data: input.responseData ?? { text: input.responseText },
+    prompt_tokens: input.tokenUsage.promptTokens,
+    completion_tokens: input.tokenUsage.completionTokens,
+    total_tokens: input.tokenUsage.totalTokens,
+    token_savings: input.tokenUsage.totalTokens,
+    estimated_cost_usd: input.estimatedCostUsd,
+    expires_at: expiresAt,
+  };
+  const { error } = await supabase.from("ai_response_cache").upsert(
+    cacheRow,
+    { onConflict: "user_id,cache_key" }
   );
 
-  if (!globalError) {
+  if (!error) {
     return;
   }
 
-  logServerError("ai-governance:global-cache-write", globalError);
+  if (!/operation_type|input_hash|response_data|token_savings|column/i.test(error.message || "")) {
+    logServerError("ai-governance:cache-write", error);
+    return;
+  }
 
-  const { error } = await supabase.from("ai_response_cache").upsert(
+  const { error: fallbackError } = await supabase.from("ai_response_cache").upsert(
     {
       user_id: input.userId,
       cache_key: input.cacheKey,
@@ -714,8 +872,8 @@ export async function storeCachedAiResponse(
     { onConflict: "user_id,cache_key" }
   );
 
-  if (error) {
-    logServerError("ai-governance:cache-write", error);
+  if (fallbackError) {
+    logServerError("ai-governance:cache-write", fallbackError);
   }
 }
 
@@ -771,6 +929,15 @@ export async function recordAiUsage(
     metadata: {
       ...metadata,
       operation_type: operationType,
+      ...(input.cacheHit
+        ? {
+            cache_event: "hit",
+            token_savings: input.tokenUsage.totalTokens,
+            estimated_token_savings: input.tokenUsage.totalTokens,
+          }
+        : {
+            cache_event: "miss",
+          }),
     },
   });
 

@@ -118,6 +118,9 @@ export type AdminDashboardData = {
     cost: number;
     blockedRequests: number;
     limitReachedEvents: number;
+    cacheHits: number;
+    cacheMisses: number;
+    estimatedTokenSavings: number;
     costPerUser: number | null;
     costPerReport: number | null;
     costRanges: {
@@ -799,6 +802,9 @@ function buildMockAdminDashboardData(dateRange: AdminDateRange): AdminDashboardD
       cost: 0,
       blockedRequests: 0,
       limitReachedEvents: 0,
+      cacheHits: 0,
+      cacheMisses: 0,
+      estimatedTokenSavings: 0,
       costPerUser: null,
       costPerReport: null,
       costRanges: {
@@ -2640,6 +2646,9 @@ function calculateOpenAiAnalytics(input: {
       cost,
       blockedRequests: 0,
       limitReachedEvents: 0,
+      cacheHits: 0,
+      cacheMisses: 0,
+      estimatedTokenSavings: 0,
       costPerUser: input.totalUsers > 0 ? Number((cost / input.totalUsers).toFixed(4)) : null,
       costPerReport: null,
       costRanges: input.official.costRanges,
@@ -2672,6 +2681,22 @@ function calculateOpenAiAnalytics(input: {
   const limitReachedEvents = input.usage.filter(
     (row) => readString(row.status).toLowerCase() === "rate_limited"
   ).length;
+  const cacheHits = input.usage.filter((row) => Boolean(row.cache_hit)).length;
+  const cacheMisses = input.usage.filter((row) => !Boolean(row.cache_hit)).length;
+  const estimatedTokenSavings = input.usage.reduce((sum, row) => {
+    if (!Boolean(row.cache_hit)) {
+      return sum;
+    }
+
+    const metadata = readUsageMetadata(row);
+    const explicitSavings =
+      readNumber(metadata.token_savings) ||
+      readNumber(metadata.tokenSavings) ||
+      readNumber(metadata.estimated_token_savings) ||
+      readNumber(metadata.estimatedTokenSavings);
+
+    return sum + (explicitSavings || readUsageTokenCounts(row).totalTokens);
+  }, 0);
   const modelMap = new Map<
     string,
     {
@@ -2756,6 +2781,9 @@ function calculateOpenAiAnalytics(input: {
     cost,
     blockedRequests,
     limitReachedEvents,
+    cacheHits,
+    cacheMisses,
+    estimatedTokenSavings,
     costPerUser: input.totalUsers > 0 ? Number((cost / input.totalUsers).toFixed(4)) : null,
     costPerReport: null,
     costRanges: {
