@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { logServerError } from "@/app/lib/security/errors";
 import { QUOTA_COUNTING_USAGE_KIND_EXCLUSION } from "@/app/lib/ai/quota-rules.mjs";
 import { estimateModelCostUsd } from "@/app/lib/ai/pricing";
+import { resolveAiModelForRequestKind } from "@/app/lib/ai/model-router";
 
 export type PlanTier = "free" | "pro" | "business";
 export type AIUsageOperationType =
@@ -310,15 +311,11 @@ function buildUsageLimitMessage(operationType: AIUsageOperationType) {
 }
 
 export function selectAiModel(kind: AiRequestKind) {
-  if (kind === "simple_chat") {
-    return "gpt-5-nano";
-  }
-
-  return "gpt-5-mini";
+  return resolveAiModelForRequestKind(kind);
 }
 
 export function estimateAiCostUsd(model: string, tokenUsage: TokenUsage) {
-  return estimateModelCostUsd(model, tokenUsage) ?? estimateModelCostUsd("gpt-5-mini", tokenUsage) ?? 0;
+  return estimateModelCostUsd(model, tokenUsage) ?? 0;
 }
 
 export function extractTokenUsage(response: unknown): TokenUsage {

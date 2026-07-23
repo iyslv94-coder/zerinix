@@ -123,7 +123,8 @@ export function getAiConfigurationErrorMessage(error: unknown) {
 
   if (
     message.includes("OPENAI_API_KEY") ||
-    message.includes("AI environment mode")
+    message.includes("AI environment mode") ||
+    message.includes("AI model routing")
   ) {
     return message;
   }
