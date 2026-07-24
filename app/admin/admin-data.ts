@@ -8,6 +8,10 @@ import { getSupabaseServiceRoleKey, getSupabaseUrl } from "@/app/lib/supabase/en
 import { getStripeConfiguration } from "@/app/lib/billing/stripe";
 import { getResendConfiguration } from "@/app/lib/integrations/resend";
 import { estimateModelCostUsd, getModelPricing } from "@/app/lib/ai/pricing";
+import {
+  createPredictiveCostIntelligence,
+  type PredictiveCostIntelligence,
+} from "@/app/lib/predictive-cost-intelligence";
 
 export type AdminUserContext = {
   user: User;
@@ -140,6 +144,7 @@ export type AdminDashboardData = {
     highRiskReportCount: number;
     highImpactReportCount: number;
     averageImplementationComplexity: number;
+    predictiveCost: PredictiveCostIntelligence;
     cachedTokens: number;
     totalTokens: number;
     cost: number;
@@ -592,6 +597,28 @@ function combineMetricStatuses(...statuses: AdminMetricStatus[]): AdminMetricSta
   return "NO DATA";
 }
 
+function emptyPredictiveCost(): PredictiveCostIntelligence {
+  return {
+    hourlyCost: 0,
+    dailyCost: 0,
+    weeklyCost: 0,
+    monthlyCost: 0,
+    forecastToday: 0,
+    forecastWeek: 0,
+    forecastMonth: 0,
+    currentBurnRate: 0,
+    projectedBurnRate: 0,
+    projectedMonthlySpend: 0,
+    estimatedRemainingFreeCredits: null,
+    costRisk: "low",
+    costTrend: "flat",
+    projected_cost: 0,
+    burn_rate: 0,
+    forecast_accuracy: 0,
+    anomaly_score: 0,
+  };
+}
+
 function isFailedAiUsageStatus(value: unknown) {
   return readString(value).toLowerCase() === "failed";
 }
@@ -853,6 +880,7 @@ function buildMockAdminDashboardData(dateRange: AdminDateRange): AdminDashboardD
       highRiskReportCount: 0,
       highImpactReportCount: 0,
       averageImplementationComplexity: 0,
+      predictiveCost: emptyPredictiveCost(),
       cachedTokens: 0,
       totalTokens: 0,
       cost: 0,
@@ -2775,6 +2803,7 @@ function calculateOpenAiAnalytics(input: {
       highRiskReportCount: 0,
       highImpactReportCount: 0,
       averageImplementationComplexity: 0,
+      predictiveCost: emptyPredictiveCost(),
       cachedTokens: input.official.cachedTokens,
       totalTokens: input.official.totalTokens,
       cost,
@@ -3051,6 +3080,7 @@ function calculateOpenAiAnalytics(input: {
   const decisionDistribution = [...decisionDistributionMap.entries()]
     .map(([decision, count]) => ({ decision, count }))
     .sort((a, b) => b.count - a.count);
+  const predictiveCost = createPredictiveCostIntelligence(input.usage);
   const estimatedTokenSavings = input.usage.reduce((sum, row) => {
     if (!Boolean(row.cache_hit)) {
       return sum;
@@ -3173,6 +3203,7 @@ function calculateOpenAiAnalytics(input: {
     highRiskReportCount,
     highImpactReportCount,
     averageImplementationComplexity,
+    predictiveCost,
     cachedTokens,
     totalTokens,
     cost,
