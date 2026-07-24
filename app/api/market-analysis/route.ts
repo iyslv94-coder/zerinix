@@ -31,6 +31,7 @@ import {
   formatValidationIntelligenceSummary,
   type AiFinancialModelContext,
 } from "@/app/lib/ai/financial-assumptions";
+import { createAiCostOptimizationMetrics } from "@/app/lib/ai/token-optimization";
 import { isReportGenerationFailureText } from "@/app/lib/report-errors";
 import {
   createOpenAiClient,
@@ -1802,6 +1803,9 @@ Prefer causal reasoning over descriptive text and avoid unsupported assertions.
 Finish every section with a complete sentence or complete bullet. Never end mid-sentence.
 Do not generate business-plan sections here. Do not suggest website URLs, domain names, brand names, or site ideas for the product.
 Do not include markdown code fences, braces inside string values, or commentary outside JSON.`;
+      const fullReportInputCostMetrics = createAiCostOptimizationMetrics({
+        beforeText: `${instructions}\n${fullReportInput}`,
+      });
       const queuedJob = createAiJobDescriptor({
         kind: "market_analysis",
         userId: user.id,
@@ -1939,6 +1943,7 @@ Do not include markdown code fences, braces inside string values, or commentary 
             actual_ai_call: true,
             max_ai_calls_per_report: MAX_AI_CALLS_PER_MARKET_REPORT,
             job: queuedJob,
+            ...fullReportInputCostMetrics,
           },
         });
 
@@ -1999,6 +2004,7 @@ Do not include markdown code fences, braces inside string values, or commentary 
             actual_ai_call: true,
             max_ai_calls_per_report: MAX_AI_CALLS_PER_MARKET_REPORT,
             job: queuedJob,
+            ...fullReportInputCostMetrics,
             failure_reason:
               error instanceof Error && error.message ? error.message : "GenerationFailed",
           },

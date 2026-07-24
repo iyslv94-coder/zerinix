@@ -441,6 +441,8 @@ function OpenAiAnalyticsSection({ data }: { data: AdminDashboardData }) {
           ["Tokens", formatCompactNumber(data.openAiAnalytics.totalTokens)],
           ["Input", formatCompactNumber(data.openAiAnalytics.inputTokens)],
           ["Output", formatCompactNumber(data.openAiAnalytics.outputTokens)],
+          ["Avg input", formatCompactNumber(data.openAiAnalytics.averageInputTokens)],
+          ["Avg output", formatCompactNumber(data.openAiAnalytics.averageOutputTokens)],
           ["Cache hits", formatCompactNumber(data.openAiAnalytics.cacheHits)],
           ["Cache misses", formatCompactNumber(data.openAiAnalytics.cacheMisses)],
           ["Token savings", formatCompactNumber(data.openAiAnalytics.estimatedTokenSavings)],

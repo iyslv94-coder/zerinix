@@ -30,6 +30,10 @@ import {
 } from "@/app/lib/ai/runtime";
 import { sanitizeAiResponseText } from "@/app/lib/ai/response-sanitization";
 import {
+  createAiCostOptimizationMetrics,
+  optimizeChatHistoryForCost,
+} from "@/app/lib/ai/token-optimization";
+import {
   applyUserMemoryOperations,
   buildUserMemoryContext,
   extractExplicitMemoryOperations,
@@ -140,6 +144,7 @@ const MAX_ATTACHMENT_SIZE_BYTES = 5_000_000;
 const MAX_TOTAL_ATTACHMENT_SIZE_BYTES = 12_000_000;
 const MAX_ATTACHMENT_TEXT_BYTES = 20_000;
 const MAX_ATTACHMENT_NAME_LENGTH = 180;
+const MAX_REPORT_MEMORY_SECTION_CHARS = 2_800;
 const allowedAttachmentExtensions = new Set([
   "txt",
   "md",
@@ -404,6 +409,16 @@ function getRelevantReportSectionTitles(
   return selectedTitles.size ? selectedTitles : null;
 }
 
+function trimReportMemorySectionContent(value: string) {
+  const content = value.replace(/\s+/g, " ").trim();
+
+  if (content.length <= MAX_REPORT_MEMORY_SECTION_CHARS) {
+    return content;
+  }
+
+  return `${content.slice(0, 2_000).trim()} … ${content.slice(-700).trim()}`;
+}
+
 function buildReportMemoryContext(
   report: DashboardReport | null,
   prompt = "",
@@ -418,7 +433,7 @@ function buildReportMemoryContext(
     .filter((section) => !relevantTitles || relevantTitles.has(section.title.trim()))
     .map((section) => {
       const title = section.title.trim();
-      const content = section.content.replace(/\s+/g, " ").trim();
+      const content = trimReportMemorySectionContent(section.content);
 
       if (!title || !content) {
         return "";
@@ -1634,6 +1649,17 @@ export async function POST(req: Request) {
     });
 
     const maxOutputTokens = getChatMaxOutputTokens(requestKind);
+    const optimizedHistory = optimizeChatHistoryForCost(
+      messages.map((message) => ({
+        role: message.role,
+        content: message.content,
+      })),
+      {
+        maxRecentMessages:
+          reportMemory || attachmentContext ? 12 : requestKind === "simple_chat" ? 8 : 10,
+        maxTotalChars: reportMemory || attachmentContext ? 22_000 : 16_000,
+      }
+    );
     const instructionsText = [
       "You are ZERINIX AI, a premium business operating assistant.",
       "Always reply in the same language as the user's latest message. This overrides saved profile language, persistent memory language, browser locale, and previous conversation language.",
@@ -1666,7 +1692,7 @@ export async function POST(req: Request) {
       "Keep Business Plan and Market Analysis separate: do not generate a PDF-style report in Chat mode. If the user explicitly wants a full structured report, suggest AI Plan or Market Analysis.",
       "Use concise markdown when it improves readability. Match the user's language.",
     ].join("\n");
-    const inputMessages = [
+    const originalInputMessages = [
       ...messages.map((message) => ({
         role: message.role,
         content: message.content,
@@ -1692,6 +1718,38 @@ export async function POST(req: Request) {
         content: prompt,
       },
     ];
+    const inputMessages = [
+      ...optimizedHistory.messages,
+      ...(attachmentContext
+        ? [
+            {
+              role: "user" as const,
+              content: `Attached file context:\n\n${attachmentContext}`,
+            },
+          ]
+        : []),
+      ...(reportMemory
+        ? [
+            {
+              role: "user" as const,
+              content: `Saved ZERINIX report memory. Use this as the primary source for answering report-related questions:\n\n${reportMemory.content}`,
+            },
+          ]
+        : []),
+      {
+        role: "user" as const,
+        content: prompt,
+      },
+    ];
+    const inputCostMetrics = createAiCostOptimizationMetrics({
+      beforeText: `${instructionsText}\n${originalInputMessages
+        .map((message) => `${message.role}: ${message.content}`)
+        .join("\n")}`,
+      afterText: `${instructionsText}\n${inputMessages
+        .map((message) => `${message.role}: ${message.content}`)
+        .join("\n")}`,
+      trimmedMessageCount: optimizedHistory.metrics.trimmed_message_count,
+    });
     const finalPromptLength =
       instructionsText.length +
       inputMessages.reduce((total, message) => total + message.content.length, 0);
@@ -1708,6 +1766,8 @@ export async function POST(req: Request) {
       reportMemoryLength: reportMemory?.content.length || 0,
       promptLength: prompt.length,
       finalPromptLength,
+      estimatedInputTokenSavings: inputCostMetrics.estimated_input_token_savings,
+      trimmedMessageCount: inputCostMetrics.trimmed_message_count,
       providerCalled: true,
       quotaConsumed: false,
     });
@@ -1935,6 +1995,7 @@ export async function POST(req: Request) {
                 response_status: getResponseStatus(completedResponse) || null,
                 incomplete_reason: incompleteReason || null,
                 display_fallback_used: usedDisplayFallback,
+                ...inputCostMetrics,
               },
             });
 
@@ -1993,6 +2054,7 @@ export async function POST(req: Request) {
                 quota_consumed: false,
                 usage_kind: "chat_message",
                 conversation_id: conversationId || null,
+                ...inputCostMetrics,
                 selected_intent: selectedIntent,
                 selected_expert: selectedExpert,
                 request_kind: requestKind,

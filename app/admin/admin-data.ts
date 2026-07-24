@@ -113,6 +113,8 @@ export type AdminDashboardData = {
   openAiAnalytics: {
     inputTokens: number;
     outputTokens: number;
+    averageInputTokens: number;
+    averageOutputTokens: number;
     cachedTokens: number;
     totalTokens: number;
     cost: number;
@@ -799,6 +801,8 @@ function buildMockAdminDashboardData(dateRange: AdminDateRange): AdminDashboardD
     openAiAnalytics: {
       inputTokens: 0,
       outputTokens: 0,
+      averageInputTokens: 0,
+      averageOutputTokens: 0,
       cachedTokens: 0,
       totalTokens: 0,
       cost: 0,
@@ -2688,6 +2692,12 @@ function calculateOpenAiAnalytics(input: {
     return {
       inputTokens: input.official.inputTokens,
       outputTokens: input.official.outputTokens,
+      averageInputTokens: input.official.modelUsage.length
+        ? Math.round(input.official.inputTokens / Math.max(1, input.official.modelUsage.reduce((sum, model) => sum + model.requests, 0)))
+        : 0,
+      averageOutputTokens: input.official.modelUsage.length
+        ? Math.round(input.official.outputTokens / Math.max(1, input.official.modelUsage.reduce((sum, model) => sum + model.requests, 0)))
+        : 0,
       cachedTokens: input.official.cachedTokens,
       totalTokens: input.official.totalTokens,
       cost,
@@ -2732,6 +2742,9 @@ function calculateOpenAiAnalytics(input: {
   ).length;
   const cacheHits = input.usage.filter((row) => Boolean(row.cache_hit)).length;
   const cacheMisses = input.usage.filter((row) => !Boolean(row.cache_hit)).length;
+  const aiRequestCount = input.usage.length;
+  const averageInputTokens = aiRequestCount > 0 ? Math.round(inputTokens / aiRequestCount) : 0;
+  const averageOutputTokens = aiRequestCount > 0 ? Math.round(outputTokens / aiRequestCount) : 0;
   const estimatedTokenSavings = input.usage.reduce((sum, row) => {
     if (!Boolean(row.cache_hit)) {
       return sum;
@@ -2827,6 +2840,8 @@ function calculateOpenAiAnalytics(input: {
   return {
     inputTokens,
     outputTokens,
+    averageInputTokens,
+    averageOutputTokens,
     cachedTokens,
     totalTokens,
     cost,
