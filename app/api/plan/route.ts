@@ -34,6 +34,7 @@ import {
 import { createAiCostOptimizationMetrics } from "@/app/lib/ai/token-optimization";
 import { isReportGenerationFailureText } from "@/app/lib/report-errors";
 import { validateGeneratedReportSections } from "@/app/lib/report-quality-validation";
+import { scoreReportSources } from "@/app/lib/source-reliability";
 import {
   createOpenAiClient,
   getAiConfigurationErrorMessage,
@@ -2073,6 +2074,7 @@ Write only the content for this section. Do not write a JSON object, field name,
           responseLanguage
         );
         const cachedReportValidation = validateGeneratedReportSections(parsedCachedReport);
+        const cachedSourceReliability = scoreReportSources(parsedCachedReport);
 
         await recordAiUsage(supabase, {
           userId: user.id,
@@ -2098,6 +2100,7 @@ Write only the content for this section. Do not write a JSON object, field name,
             actual_ai_call: false,
             cachedEstimatedCostUsd: cachedFullReport.estimatedCostUsd,
             ...cachedReportValidation,
+            ...cachedSourceReliability,
           },
         });
 
@@ -2252,6 +2255,7 @@ ${buildFullReportStructureDirectives("business_plan").map((directive) => `- ${di
           responseLanguage
         );
         const reportValidation = validateGeneratedReportSections(parsedReport);
+        const sourceReliability = scoreReportSources(parsedReport);
         const cacheResponseText = JSON.stringify(parsedReport);
 
         if (!isReportGenerationFailureText(cacheResponseText)) {
@@ -2294,6 +2298,7 @@ ${buildFullReportStructureDirectives("business_plan").map((directive) => `- ${di
             job: queuedJob,
             ...fullReportInputCostMetrics,
             ...reportValidation,
+            ...sourceReliability,
           },
         });
 

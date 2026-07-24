@@ -452,6 +452,8 @@ function OpenAiAnalyticsSection({ data }: { data: AdminDashboardData }) {
           ["Warnings", formatCompactNumber(data.openAiAnalytics.validationWarningCount)],
           ["Missing sections", formatCompactNumber(data.openAiAnalytics.missingSectionCount)],
           ["Duplicates", formatCompactNumber(data.openAiAnalytics.duplicateSectionCount)],
+          ["Source reliability", data.openAiAnalytics.averageSourceReliability ? `${data.openAiAnalytics.averageSourceReliability}/100` : "NO DATA"],
+          ["Weak sources", formatCompactNumber(data.openAiAnalytics.weakSourceReportCount)],
           ["Cache hits", formatCompactNumber(data.openAiAnalytics.cacheHits)],
           ["Cache misses", formatCompactNumber(data.openAiAnalytics.cacheMisses)],
           ["Token savings", formatCompactNumber(data.openAiAnalytics.estimatedTokenSavings)],
@@ -465,6 +467,16 @@ function OpenAiAnalyticsSection({ data }: { data: AdminDashboardData }) {
           </div>
         ))}
       </div>
+
+      {data.openAiAnalytics.sourceCategoryDistribution.length ? (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {data.openAiAnalytics.sourceCategoryDistribution.slice(0, 6).map((item) => (
+            <span key={item.category} className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-[11px] text-zinc-400">
+              {item.category}: {formatCompactNumber(item.count)}
+            </span>
+          ))}
+        </div>
+      ) : null}
 
       {data.openAiAnalytics.topAbuseReasons.length ? (
         <div className="mt-4 rounded-[1rem] border border-white/10 bg-black/20 p-3">

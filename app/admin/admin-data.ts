@@ -124,6 +124,9 @@ export type AdminDashboardData = {
     validationWarningCount: number;
     missingSectionCount: number;
     duplicateSectionCount: number;
+    averageSourceReliability: number;
+    weakSourceReportCount: number;
+    sourceCategoryDistribution: Array<{ category: string; count: number }>;
     cachedTokens: number;
     totalTokens: number;
     cost: number;
@@ -821,6 +824,9 @@ function buildMockAdminDashboardData(dateRange: AdminDateRange): AdminDashboardD
       validationWarningCount: 0,
       missingSectionCount: 0,
       duplicateSectionCount: 0,
+      averageSourceReliability: 0,
+      weakSourceReportCount: 0,
+      sourceCategoryDistribution: [],
       cachedTokens: 0,
       totalTokens: 0,
       cost: 0,
@@ -2727,6 +2733,9 @@ function calculateOpenAiAnalytics(input: {
       validationWarningCount: 0,
       missingSectionCount: 0,
       duplicateSectionCount: 0,
+      averageSourceReliability: 0,
+      weakSourceReportCount: 0,
+      sourceCategoryDistribution: [],
       cachedTokens: input.official.cachedTokens,
       totalTokens: input.official.totalTokens,
       cost,
@@ -2835,6 +2844,39 @@ function calculateOpenAiAnalytics(input: {
 
     return sum + (Array.isArray(duplicateSections) ? duplicateSections.length : 0);
   }, 0);
+  const sourceScores = input.usage
+    .map((row) => readNumber(readUsageMetadata(row).average_source_score))
+    .filter((score) => score > 0);
+  const averageSourceReliability = sourceScores.length
+    ? Math.round(sourceScores.reduce((sum, score) => sum + score, 0) / sourceScores.length)
+    : 0;
+  const weakSourceReportCount = input.usage.filter((row) => {
+    const metadata = readUsageMetadata(row);
+    const sourceCount = readNumber(metadata.source_count);
+    const averageScore = readNumber(metadata.average_source_score);
+
+    return sourceCount > 0 && averageScore > 0 && averageScore < 50;
+  }).length;
+  const sourceDistributionMap = new Map<string, number>();
+
+  input.usage.forEach((row) => {
+    const distribution = readUsageMetadata(row).source_distribution;
+
+    if (!distribution || typeof distribution !== "object" || Array.isArray(distribution)) {
+      return;
+    }
+
+    Object.entries(distribution as Record<string, unknown>).forEach(([category, count]) => {
+      sourceDistributionMap.set(
+        category,
+        (sourceDistributionMap.get(category) || 0) + readNumber(count)
+      );
+    });
+  });
+  const sourceCategoryDistribution = [...sourceDistributionMap.entries()]
+    .filter(([, count]) => count > 0)
+    .map(([category, count]) => ({ category, count }))
+    .sort((a, b) => b.count - a.count);
   const estimatedTokenSavings = input.usage.reduce((sum, row) => {
     if (!Boolean(row.cache_hit)) {
       return sum;
@@ -2941,6 +2983,9 @@ function calculateOpenAiAnalytics(input: {
     validationWarningCount,
     missingSectionCount,
     duplicateSectionCount,
+    averageSourceReliability,
+    weakSourceReportCount,
+    sourceCategoryDistribution,
     cachedTokens,
     totalTokens,
     cost,
