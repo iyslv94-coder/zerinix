@@ -17,6 +17,11 @@ import {
   EMPTY_PORTFOLIO_INTELLIGENCE,
   type PortfolioIntelligence,
 } from "@/app/lib/ai-portfolio-intelligence";
+import {
+  createProductionReadiness,
+  EMPTY_PRODUCTION_READINESS,
+  type ProductionReadiness,
+} from "@/app/lib/production-readiness";
 
 export type AdminUserContext = {
   user: User;
@@ -291,6 +296,7 @@ export type AdminDashboardData = {
   };
   recentErrors: Array<{ id: string; endpoint: string; status: string; createdAt: string }>;
   systemStatus: AdminSystemStatus[];
+  productionReadiness: ProductionReadiness;
   exportTables: AdminExportTable[];
   notifications: AdminNotificationSummary;
 };
@@ -1047,6 +1053,7 @@ function buildMockAdminDashboardData(dateRange: AdminDateRange): AdminDashboardD
     usageSummary,
     recentErrors,
     systemStatus: buildMockSystemStatus(),
+    productionReadiness: EMPTY_PRODUCTION_READINESS,
     exportTables: buildExportTables({
       recentUsers,
       recentActivity,
@@ -4497,6 +4504,30 @@ export async function loadAdminDashboardData(input?: {
     totalUsers,
     official: openAiCostCenter,
   });
+  const stripeConfig = getStripeConfiguration();
+  const resendConfig = getResendConfiguration();
+  const productionReadiness = createProductionReadiness({
+    systemStatus,
+    sourceStatus: {
+      revenue: revenueSummary.status,
+      aiUsage: aiUsageSourceStatus,
+      users: totalUsers > 0 || newUsers > 0 || activeUsers > 0 ? "LIVE" : "NO DATA",
+      reports: combineMetricStatuses(reportCount.status, reportStatusSummary.status),
+      workspaces: workspaceSummary.status,
+      subscriptions: billingSummary.status,
+    },
+    openAiAnalytics,
+    env: {
+      hasAppUrl: Boolean(process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL),
+      hasSupabaseUrl: Boolean(getSupabaseUrl()),
+      hasSupabaseServiceRole: Boolean(getSupabaseServiceRoleKey()),
+      hasOpenAiKey: Boolean(process.env.OPENAI_API_KEY || process.env.OPENAI_ADMIN_API_KEY),
+      stripeConfigured: stripeConfig.configured,
+      stripeEnabled: stripeConfig.enabled,
+      resendConfigured: resendConfig.configured,
+      resendEnabled: resendConfig.enabled,
+    },
+  });
   const userAnalytics = calculateUserAnalytics({
     planDistribution,
     userGrowth,
@@ -4576,6 +4607,7 @@ export async function loadAdminDashboardData(input?: {
     usageSummary,
     recentErrors,
     systemStatus,
+    productionReadiness,
     exportTables: buildExportTables({
       recentUsers: recentUsers.users,
       recentActivity,

@@ -831,6 +831,87 @@ function MostExpensiveReportsCard({ data }: { data: AdminDashboardData }) {
   );
 }
 
+function readinessStatusClass(status: AdminDashboardData["productionReadiness"]["launchChecklist"][number]["status"]) {
+  if (status === "pass") {
+    return "border-emerald-300/20 bg-emerald-300/10 text-emerald-100";
+  }
+
+  if (status === "warning") {
+    return "border-amber-300/20 bg-amber-950/20 text-amber-100";
+  }
+
+  return "border-red-300/20 bg-red-950/20 text-red-100";
+}
+
+function ProductionReadinessCard({ data }: { data: AdminDashboardData }) {
+  const readiness = data.productionReadiness;
+  const visibleIssues = readiness.failedChecks.length ? readiness.failedChecks : readiness.warnings;
+  const status =
+    readiness.failedChecks.length > 0
+      ? "ERROR"
+      : readiness.warnings.length > 0
+        ? "ESTIMATED"
+        : "LIVE";
+
+  return (
+    <section className={`min-w-0 flex h-full min-h-[21rem] flex-col rounded-[1.5rem] p-5 lg:col-span-2 min-[1440px]:col-span-6 ${dashboardTheme.surface}`}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-[17px] font-semibold tracking-tight text-white">Production Readiness</h2>
+          <p className="mt-1.5 text-xs leading-5 text-zinc-500">Launch checklist from health, config and AI telemetry.</p>
+        </div>
+        <StatusBadge status={status} />
+      </div>
+
+      <div className="mt-5 grid gap-3 sm:grid-cols-[auto_minmax(0,1fr)]">
+        <div className="flex h-28 w-28 shrink-0 flex-col items-center justify-center rounded-[1.2rem] border border-emerald-300/15 bg-emerald-300/[0.06] shadow-lg shadow-black/20">
+          <span className="text-3xl font-semibold tracking-tight text-white">{readiness.readinessScore}</span>
+          <span className="mt-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-emerald-100/70">Ready / 100</span>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2.5">
+          <div className="rounded-[1rem] border border-white/10 bg-black/20 px-3 py-3">
+            <p className="text-[10px] uppercase tracking-[0.16em] text-zinc-600">Failed</p>
+            <p className="mt-1 text-lg font-semibold text-red-100">{readiness.failedChecks.length}</p>
+          </div>
+          <div className="rounded-[1rem] border border-white/10 bg-black/20 px-3 py-3">
+            <p className="text-[10px] uppercase tracking-[0.16em] text-zinc-600">Warnings</p>
+            <p className="mt-1 text-lg font-semibold text-amber-100">{readiness.warnings.length}</p>
+          </div>
+          <div className="rounded-[1rem] border border-white/10 bg-black/20 px-3 py-3">
+            <p className="text-[10px] uppercase tracking-[0.16em] text-zinc-600">Healthy</p>
+            <p className="mt-1 text-lg font-semibold text-emerald-100">{readiness.systemHealthSummary.healthy}</p>
+          </div>
+          <div className="rounded-[1rem] border border-white/10 bg-black/20 px-3 py-3">
+            <p className="text-[10px] uppercase tracking-[0.16em] text-zinc-600">Needs Review</p>
+            <p className="mt-1 text-lg font-semibold text-zinc-100">
+              {readiness.systemHealthSummary.degraded + readiness.systemHealthSummary.unknown}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-5 flex-1 space-y-2.5">
+        {visibleIssues.length ? (
+          visibleIssues.slice(0, 4).map((check) => (
+            <div key={check.id} className={`rounded-[1rem] border px-3 py-3 ${readinessStatusClass(check.status)}`}>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-semibold text-white">{check.label}</p>
+                <span className="text-[10px] font-semibold uppercase tracking-[0.14em]">{check.category.replace(/_/g, " ")}</span>
+              </div>
+              <p className="mt-1 text-xs leading-5 text-zinc-300">{check.detail}</p>
+            </div>
+          ))
+        ) : (
+          <div className="flex min-h-[8rem] items-center justify-center rounded-[1.15rem] border border-emerald-300/15 bg-emerald-300/[0.06] p-6 text-center text-sm leading-6 text-emerald-50/80">
+            All launch readiness checks are passing.
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
 function SubscriptionRevenueCard({ data }: { data: AdminDashboardData }) {
   return (
     <section className={`min-w-0 flex h-full min-h-[23rem] flex-col rounded-[1.5rem] p-5 lg:col-span-4 min-[1440px]:col-span-2 ${dashboardTheme.surface}`}>
@@ -1028,6 +1109,7 @@ export default async function AdminDashboardPage({
         <section className="grid items-stretch gap-4 lg:grid-cols-2 min-[1440px]:grid-cols-12 [&>section]:mt-0">
           <OpenAiAnalyticsSection data={data} />
           <MostExpensiveReportsCard data={data} />
+          <ProductionReadinessCard data={data} />
           <AdminSystemHealth initialStatuses={data.systemStatus} />
         </section>
 
