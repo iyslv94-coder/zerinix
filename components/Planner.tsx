@@ -6997,6 +6997,179 @@ function ReportGenerationShell({
   );
 }
 
+function createPlannerMessageId() {
+  return crypto.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function usePlannerChat() {
+  const [chatPrompt, setChatPrompt] = useState("");
+  const [chatLoading, setChatLoading] = useState(false);
+  const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
+  const [isDraggingFiles, setIsDraggingFiles] = useState(false);
+
+  return {
+    chatPrompt,
+    setChatPrompt,
+    chatLoading,
+    setChatLoading,
+    attachments,
+    setAttachments,
+    isDraggingFiles,
+    setIsDraggingFiles,
+  };
+}
+
+function useReportGeneration({
+  initialConversations,
+  initialMode,
+  initialReport,
+  regenerationContext,
+  restoredReportMode,
+  restoredMarketReport,
+  restoredPlanReport,
+}: {
+  initialConversations: Conversation[];
+  initialMode?: ChatMode;
+  initialReport: InitialReport | null;
+  regenerationContext: RegenerationContext | null;
+  restoredReportMode: ChatMode | null;
+  restoredMarketReport: MarketReport | null;
+  restoredPlanReport: PlanReport | null;
+}) {
+  const [result, setResult] = useState(
+    initialReport?.status?.toLowerCase() === "completed" ? "" : ""
+  );
+  const [reportGenerationError, setReportGenerationError] = useState("");
+  const [reportGenerationWarning, setReportGenerationWarning] = useState("");
+  const [marketReport, setMarketReport] = useState<MarketReport | null>(
+    restoredMarketReport
+  );
+  const [planReport, setPlanReport] = useState<PlanReport | null>(
+    restoredPlanReport
+  );
+  const [activeReportId, setActiveReportId] = useState(
+    () => regenerationContext?.reportId || initialReport?.id || getStoredActiveReportId()
+  );
+  const [loading, setLoading] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [workflowCompletedSteps, setWorkflowCompletedSteps] = useState(0);
+  const [reportProgress, setReportProgress] = useState(0);
+  const [currentReportSectionName, setCurrentReportSectionName] = useState("");
+  const [lastRequest, setLastRequest] = useState<LastRequest | null>(() =>
+    getInitialLastRequest({
+      regenerationContext,
+      restoredReportMode,
+      initialReport,
+      initialMode,
+      initialConversations,
+    })
+  );
+  const [currentReportInvestmentScore, setCurrentReportInvestmentScore] =
+    useState<ReportInvestmentScore | undefined>(initialReport?.investmentScore);
+  const [currentReportMetadata, setCurrentReportMetadata] =
+    useState<ReportMetadata | undefined>(initialReport?.metadata);
+  const [regeneratingReportMode, setRegeneratingReportMode] =
+    useState<ChatMode | null>(null);
+
+  return {
+    result,
+    setResult,
+    reportGenerationError,
+    setReportGenerationError,
+    reportGenerationWarning,
+    setReportGenerationWarning,
+    marketReport,
+    setMarketReport,
+    planReport,
+    setPlanReport,
+    activeReportId,
+    setActiveReportId,
+    loading,
+    setLoading,
+    analyzing,
+    setAnalyzing,
+    workflowCompletedSteps,
+    setWorkflowCompletedSteps,
+    reportProgress,
+    setReportProgress,
+    currentReportSectionName,
+    setCurrentReportSectionName,
+    lastRequest,
+    setLastRequest,
+    currentReportInvestmentScore,
+    setCurrentReportInvestmentScore,
+    currentReportMetadata,
+    setCurrentReportMetadata,
+    regeneratingReportMode,
+    setRegeneratingReportMode,
+  };
+}
+
+function useConversations({
+  initialConversations,
+  conversationLoadError,
+}: {
+  initialConversations: Conversation[];
+  conversationLoadError: string;
+}) {
+  const initialConversationId = useMemo(
+    () => initialConversations[0]?.id || createPlannerMessageId(),
+    [initialConversations]
+  );
+  const [activeConversationId, setActiveConversationId] = useState(initialConversationId);
+  const [conversations, setConversations] = useState<Conversation[]>(() =>
+    initialConversations.length > 0
+      ? initialConversations
+      : [createConversation(initialConversationId)]
+  );
+  const [conversationError, setConversationError] = useState(conversationLoadError);
+  const [userEmail, setUserEmail] = useState("");
+  const persistedConversationIdsRef = useRef(
+    new Set(initialConversations.map((conversation) => conversation.id))
+  );
+  const activeConversation = useMemo(
+    () =>
+      conversations.find((conversation) => conversation.id === activeConversationId) ||
+      conversations[0],
+    [activeConversationId, conversations]
+  );
+  const messages = activeConversation?.messages || [];
+
+  function updateConversation(
+    conversationId: string,
+    updater: (conversation: Conversation) => Conversation
+  ) {
+    setConversations((current) =>
+      current.map((conversation) =>
+        conversation.id === conversationId ? updater(conversation) : conversation
+      )
+    );
+  }
+
+  function updateActiveConversation(
+    updater: (conversation: Conversation) => Conversation
+  ) {
+    updateConversation(activeConversationId, updater);
+  }
+
+  return {
+    initialConversationId,
+    activeConversationId,
+    setActiveConversationId,
+    conversations,
+    setConversations,
+    activeConversation,
+    messages,
+    conversationError,
+    setConversationError,
+    userEmail,
+    setUserEmail,
+    persistedConversationIdsRef,
+    updateConversation,
+    updateActiveConversation,
+  };
+}
+
 export default function Planner({
   initialConversations = [],
   conversationLoadError = "",
@@ -7033,37 +7206,76 @@ export default function Planner({
     additionalContext: regenerationContext?.prompt || "",
   };
   const [prompt, setPrompt] = useState(() => buildExecutiveBriefPrompt(initialExecutiveBrief));
-  const [chatPrompt, setChatPrompt] = useState("");
   const [executiveBrief, setExecutiveBrief] = useState<ExecutiveBriefFields>(initialExecutiveBrief);
   const [advancedOptionsOpen, setAdvancedOptionsOpen] = useState(false);
-  const [result, setResult] = useState(
-    initialReport?.status?.toLowerCase() === "completed" ? "" : ""
-  );
-  const [reportGenerationError, setReportGenerationError] = useState("");
-  const [reportGenerationWarning, setReportGenerationWarning] = useState("");
-  const [marketReport, setMarketReport] = useState<MarketReport | null>(
-    restoredMarketReport as MarketReport | null
-  );
-  const [planReport, setPlanReport] = useState<PlanReport | null>(
-    restoredPlanReport as PlanReport | null
-  );
-  const [activeReportId, setActiveReportId] = useState(
-    () => regenerationContext?.reportId || initialReport?.id || getStoredActiveReportId()
-  );
-  const [loading, setLoading] = useState(false);
-  const [analyzing, setAnalyzing] = useState(false);
-  const [chatLoading, setChatLoading] = useState(false);
-  const initialConversationId = useMemo(
-    () => initialConversations[0]?.id || createMessageId(),
-    [initialConversations]
-  );
-  const [activeConversationId, setActiveConversationId] = useState(initialConversationId);
-  const [conversations, setConversations] = useState<Conversation[]>(() =>
-    initialConversations.length > 0
-      ? initialConversations
-      : [createConversation(initialConversationId)]
-  );
-  const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
+  const {
+    chatPrompt,
+    setChatPrompt,
+    chatLoading,
+    setChatLoading,
+    attachments,
+    setAttachments,
+    isDraggingFiles,
+    setIsDraggingFiles,
+  } = usePlannerChat();
+  const {
+    result,
+    setResult,
+    reportGenerationError,
+    setReportGenerationError,
+    reportGenerationWarning,
+    setReportGenerationWarning,
+    marketReport,
+    setMarketReport,
+    planReport,
+    setPlanReport,
+    activeReportId,
+    setActiveReportId,
+    loading,
+    setLoading,
+    analyzing,
+    setAnalyzing,
+    workflowCompletedSteps,
+    setWorkflowCompletedSteps,
+    reportProgress,
+    setReportProgress,
+    currentReportSectionName,
+    setCurrentReportSectionName,
+    lastRequest,
+    setLastRequest,
+    currentReportInvestmentScore,
+    setCurrentReportInvestmentScore,
+    currentReportMetadata,
+    setCurrentReportMetadata,
+    regeneratingReportMode,
+    setRegeneratingReportMode,
+  } = useReportGeneration({
+    initialConversations,
+    initialMode,
+    initialReport,
+    regenerationContext,
+    restoredReportMode,
+    restoredMarketReport: restoredMarketReport as MarketReport | null,
+    restoredPlanReport: restoredPlanReport as PlanReport | null,
+  });
+  const {
+    activeConversationId,
+    setActiveConversationId,
+    conversations,
+    setConversations,
+    activeConversation,
+    messages,
+    conversationError,
+    setConversationError,
+    userEmail,
+    setUserEmail,
+    persistedConversationIdsRef,
+    updateConversation,
+    updateActiveConversation,
+  } = useConversations({
+    initialConversations,
+    conversationLoadError,
+  });
   const [activeMode, setActiveMode] = useState<ChatMode>(
     (regenerationContext
       ? regenerationContext.reportType === "Market Analysis"
@@ -7104,44 +7316,13 @@ export default function Planner({
       initialReport?.workspaceId
     )
   );
-  const [workflowCompletedSteps, setWorkflowCompletedSteps] = useState(0);
-  const [reportProgress, setReportProgress] = useState(0);
-  const [currentReportSectionName, setCurrentReportSectionName] = useState("");
-  const [isDraggingFiles, setIsDraggingFiles] = useState(false);
-  const [conversationError, setConversationError] = useState(conversationLoadError);
-  const [userEmail, setUserEmail] = useState("");
-  const [lastRequest, setLastRequest] = useState<LastRequest | null>(() =>
-    getInitialLastRequest({
-      regenerationContext,
-      restoredReportMode,
-      initialReport,
-      initialMode,
-      initialConversations,
-    })
-  );
-  const [currentReportInvestmentScore, setCurrentReportInvestmentScore] =
-    useState<ReportInvestmentScore | undefined>(initialReport?.investmentScore);
-  const [currentReportMetadata, setCurrentReportMetadata] =
-    useState<ReportMetadata | undefined>(initialReport?.metadata);
-  const [regeneratingReportMode, setRegeneratingReportMode] =
-    useState<ChatMode | null>(null);
   const chatScrollerRef = useRef<HTMLDivElement | null>(null);
   const composerRef = useRef<HTMLInputElement | null>(null);
   const isNearBottomRef = useRef(true);
   const scrollFrameRef = useRef<number | null>(null);
-  const persistedConversationIdsRef = useRef(
-    new Set(initialConversations.map((conversation) => conversation.id))
-  );
 
   const isReportWorking = loading || analyzing;
   const isWorking = isReportWorking || chatLoading;
-  const activeConversation = useMemo(
-    () =>
-      conversations.find((conversation) => conversation.id === activeConversationId) ||
-      conversations[0],
-    [activeConversationId, conversations]
-  );
-  const messages = activeConversation?.messages || [];
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -7236,24 +7417,7 @@ export default function Planner({
   });
 
   function createMessageId() {
-    return crypto.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  }
-
-  function updateConversation(
-    conversationId: string,
-    updater: (conversation: Conversation) => Conversation
-  ) {
-    setConversations((current) =>
-      current.map((conversation) =>
-        conversation.id === conversationId ? updater(conversation) : conversation
-      )
-    );
-  }
-
-  function updateActiveConversation(
-    updater: (conversation: Conversation) => Conversation
-  ) {
-    updateConversation(activeConversationId, updater);
+    return createPlannerMessageId();
   }
 
   async function createNewConversation() {
