@@ -155,6 +155,18 @@ export type AdminDashboardData = {
       ratio: number;
     };
     cumulativeHoursSaved: number;
+    averageBusinessImpact: number;
+    impactByReportType: Array<{ reportType: string; averageImpact: number; count: number }>;
+    impactCategoryDistribution: Array<{ category: string; count: number }>;
+    strategicVsTacticalReports: {
+      informational: number;
+      tactical: number;
+      strategic: number;
+      transformational: number;
+    };
+    highestBusinessImpactReports: Array<{ label: string; score: number; category: string }>;
+    estimatedTotalBusinessImpactValue: number;
+    businessImpactTrend: AdminChartSeries[];
     cachedTokens: number;
     totalTokens: number;
     cost: number;
@@ -897,6 +909,18 @@ function buildMockAdminDashboardData(dateRange: AdminDateRange): AdminDashboardD
       highestRoiReports: [],
       aiCostVsBusinessValue: { costUsd: 0, valueUsd: 0, ratio: 0 },
       cumulativeHoursSaved: 0,
+      averageBusinessImpact: 0,
+      impactByReportType: [],
+      impactCategoryDistribution: [],
+      strategicVsTacticalReports: {
+        informational: 0,
+        tactical: 0,
+        strategic: 0,
+        transformational: 0,
+      },
+      highestBusinessImpactReports: [],
+      estimatedTotalBusinessImpactValue: 0,
+      businessImpactTrend: [],
       cachedTokens: 0,
       totalTokens: 0,
       cost: 0,
@@ -2826,6 +2850,18 @@ function calculateOpenAiAnalytics(input: {
       highestRoiReports: [],
       aiCostVsBusinessValue: { costUsd: cost, valueUsd: 0, ratio: 0 },
       cumulativeHoursSaved: 0,
+      averageBusinessImpact: 0,
+      impactByReportType: [],
+      impactCategoryDistribution: [],
+      strategicVsTacticalReports: {
+        informational: 0,
+        tactical: 0,
+        strategic: 0,
+        transformational: 0,
+      },
+      highestBusinessImpactReports: [],
+      estimatedTotalBusinessImpactValue: 0,
+      businessImpactTrend: [],
       cachedTokens: input.official.cachedTokens,
       totalTokens: input.official.totalTokens,
       cost,
@@ -3104,22 +3140,34 @@ function calculateOpenAiAnalytics(input: {
     .sort((a, b) => b.count - a.count);
   const predictiveCost = createPredictiveCostIntelligence(input.usage);
   const valueByReportTypeMap = new Map<string, number>();
+  const impactByReportTypeMap = new Map<string, { totalImpact: number; count: number }>();
+  const impactCategoryMap = new Map<string, number>();
+  const impactTrendMap = new Map<string, { totalImpact: number; count: number }>();
   const roiRows: Array<{
     label: string;
     roiRatio: number;
     valueUsd: number;
   }> = [];
+  const businessImpactRows: Array<{
+    label: string;
+    score: number;
+    category: string;
+  }> = [];
   let totalEstimatedValueCreated = 0;
+  let estimatedTotalBusinessImpactValue = 0;
   let cumulativeHoursSaved = 0;
   const roiRatios: number[] = [];
+  const businessImpactScores: number[] = [];
 
   input.usage.forEach((row) => {
     const metadata = readUsageMetadata(row);
     const estimatedValue = readNumber(metadata.estimated_value_usd);
     const hoursSaved = readNumber(metadata.estimated_hours_saved);
     const roiRatio = readNumber(metadata.roi_ratio);
+    const businessImpactScore = readNumber(metadata.business_impact_score);
+    const impactCategory = readString(metadata.impact_category);
 
-    if (estimatedValue <= 0) {
+    if (estimatedValue <= 0 && businessImpactScore <= 0) {
       return;
     }
 
@@ -3129,12 +3177,14 @@ function calculateOpenAiAnalytics(input: {
       readString(row.report_field) ||
       readString(row.endpoint, reportType);
 
-    totalEstimatedValueCreated += estimatedValue;
-    cumulativeHoursSaved += hoursSaved;
-    valueByReportTypeMap.set(
-      reportType,
-      (valueByReportTypeMap.get(reportType) || 0) + estimatedValue
-    );
+    if (estimatedValue > 0) {
+      totalEstimatedValueCreated += estimatedValue;
+      cumulativeHoursSaved += hoursSaved;
+      valueByReportTypeMap.set(
+        reportType,
+        (valueByReportTypeMap.get(reportType) || 0) + estimatedValue
+      );
+    }
 
     if (roiRatio > 0) {
       roiRatios.push(roiRatio);
@@ -3142,6 +3192,38 @@ function calculateOpenAiAnalytics(input: {
         label,
         roiRatio,
         valueUsd: estimatedValue,
+      });
+    }
+
+    if (businessImpactScore > 0) {
+      businessImpactScores.push(businessImpactScore);
+      estimatedTotalBusinessImpactValue +=
+        readNumber(metadata.revenue_potential) * 12 +
+        readNumber(metadata.efficiency_score) * 8 +
+        readNumber(metadata.decision_speed_score) * 6;
+      const currentTypeImpact = impactByReportTypeMap.get(reportType) || {
+        totalImpact: 0,
+        count: 0,
+      };
+      currentTypeImpact.totalImpact += businessImpactScore;
+      currentTypeImpact.count += 1;
+      impactByReportTypeMap.set(reportType, currentTypeImpact);
+
+      if (impactCategory) {
+        impactCategoryMap.set(impactCategory, (impactCategoryMap.get(impactCategory) || 0) + 1);
+      }
+
+      const createdAt = readString(row.created_at);
+      const trendLabel = createdAt ? createdAt.slice(0, 10) : "unknown";
+      const currentTrend = impactTrendMap.get(trendLabel) || { totalImpact: 0, count: 0 };
+      currentTrend.totalImpact += businessImpactScore;
+      currentTrend.count += 1;
+      impactTrendMap.set(trendLabel, currentTrend);
+
+      businessImpactRows.push({
+        label,
+        score: businessImpactScore,
+        category: impactCategory || "Unclassified",
       });
     }
   });
@@ -3164,6 +3246,39 @@ function calculateOpenAiAnalytics(input: {
     valueUsd: totalEstimatedValue,
     ratio: cost > 0 ? Number((totalEstimatedValue / cost).toFixed(2)) : 0,
   };
+  const averageBusinessImpact = businessImpactScores.length
+    ? Math.round(
+        businessImpactScores.reduce((sum, score) => sum + score, 0) /
+          businessImpactScores.length
+      )
+    : 0;
+  const impactByReportType = [...impactByReportTypeMap.entries()]
+    .map(([reportType, summary]) => ({
+      reportType,
+      averageImpact: Math.round(summary.totalImpact / Math.max(1, summary.count)),
+      count: summary.count,
+    }))
+    .sort((a, b) => b.averageImpact - a.averageImpact);
+  const impactCategoryDistribution = [...impactCategoryMap.entries()]
+    .map(([category, count]) => ({ category, count }))
+    .sort((a, b) => b.count - a.count);
+  const getImpactCategoryCount = (category: string) => impactCategoryMap.get(category) || 0;
+  const strategicVsTacticalReports = {
+    informational: getImpactCategoryCount("Informational"),
+    tactical: getImpactCategoryCount("Tactical"),
+    strategic: getImpactCategoryCount("Strategic"),
+    transformational: getImpactCategoryCount("Transformational"),
+  };
+  const highestBusinessImpactReports = businessImpactRows
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 5);
+  const businessImpactTrend = [...impactTrendMap.entries()]
+    .map(([label, summary]) => ({
+      label,
+      value: Math.round(summary.totalImpact / Math.max(1, summary.count)),
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label))
+    .slice(-14);
   const estimatedTokenSavings = input.usage.reduce((sum, row) => {
     if (!Boolean(row.cache_hit)) {
       return sum;
@@ -3293,6 +3408,13 @@ function calculateOpenAiAnalytics(input: {
     highestRoiReports,
     aiCostVsBusinessValue,
     cumulativeHoursSaved: Number(cumulativeHoursSaved.toFixed(1)),
+    averageBusinessImpact,
+    impactByReportType,
+    impactCategoryDistribution,
+    strategicVsTacticalReports,
+    highestBusinessImpactReports,
+    estimatedTotalBusinessImpactValue: roundUsd(estimatedTotalBusinessImpactValue),
+    businessImpactTrend,
     cachedTokens,
     totalTokens,
     cost,

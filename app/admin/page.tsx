@@ -474,6 +474,10 @@ function OpenAiAnalyticsSection({ data }: { data: AdminDashboardData }) {
           ["Avg ROI", data.openAiAnalytics.averageRoiRatio ? `${data.openAiAnalytics.averageRoiRatio}x` : "NO DATA"],
           ["Value / cost", data.openAiAnalytics.aiCostVsBusinessValue.ratio ? `${data.openAiAnalytics.aiCostVsBusinessValue.ratio}x` : "NO DATA"],
           ["Hours saved", data.openAiAnalytics.cumulativeHoursSaved ? formatCompactNumber(data.openAiAnalytics.cumulativeHoursSaved) : "NO DATA"],
+          ["Business impact", data.openAiAnalytics.averageBusinessImpact ? `${data.openAiAnalytics.averageBusinessImpact}/100` : "NO DATA"],
+          ["Impact value", data.openAiAnalytics.estimatedTotalBusinessImpactValue ? formatCurrency(data.openAiAnalytics.estimatedTotalBusinessImpactValue) : "NO DATA"],
+          ["Strategic", formatCompactNumber(data.openAiAnalytics.strategicVsTacticalReports.strategic)],
+          ["Tactical", formatCompactNumber(data.openAiAnalytics.strategicVsTacticalReports.tactical)],
           ["Cache hits", formatCompactNumber(data.openAiAnalytics.cacheHits)],
           ["Cache misses", formatCompactNumber(data.openAiAnalytics.cacheMisses)],
           ["Token savings", formatCompactNumber(data.openAiAnalytics.estimatedTokenSavings)],
@@ -548,6 +552,31 @@ function OpenAiAnalyticsSection({ data }: { data: AdminDashboardData }) {
           {data.openAiAnalytics.highestRoiReports.slice(0, 3).map((item) => (
             <span key={`${item.label}-${item.roiRatio}`} className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-[11px] text-zinc-400">
               ROI {item.roiRatio}x: {formatCurrency(item.valueUsd)}
+            </span>
+          ))}
+        </div>
+      ) : null}
+
+      {data.openAiAnalytics.impactCategoryDistribution.length || data.openAiAnalytics.impactByReportType.length ? (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {data.openAiAnalytics.impactCategoryDistribution.map((item) => (
+            <span key={item.category} className="rounded-full border border-cyan-300/15 bg-cyan-300/5 px-2.5 py-1 text-[11px] text-cyan-100/80">
+              {item.category}: {formatCompactNumber(item.count)}
+            </span>
+          ))}
+          {data.openAiAnalytics.impactByReportType.slice(0, 4).map((item) => (
+            <span key={item.reportType} className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-[11px] text-zinc-400">
+              {item.reportType.replace(/_/g, " ")}: {item.averageImpact}/100
+            </span>
+          ))}
+        </div>
+      ) : null}
+
+      {data.openAiAnalytics.highestBusinessImpactReports.length ? (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {data.openAiAnalytics.highestBusinessImpactReports.slice(0, 3).map((item) => (
+            <span key={`${item.label}-${item.score}`} className="rounded-full border border-teal-300/15 bg-teal-300/5 px-2.5 py-1 text-[11px] text-teal-100/80">
+              Impact {item.score}/100 · {item.category}
             </span>
           ))}
         </div>

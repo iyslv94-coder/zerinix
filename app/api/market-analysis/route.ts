@@ -39,6 +39,7 @@ import { scoreReportSources } from "@/app/lib/source-reliability";
 import { aggregateReportEvidence } from "@/app/lib/live-evidence";
 import { createExecutiveDecisionIntelligence } from "@/app/lib/executive-decision-intelligence";
 import { createAiRoiIntelligence } from "@/app/lib/ai-roi-intelligence";
+import { createAiBusinessImpactIntelligence } from "@/app/lib/ai-business-impact-intelligence";
 import {
   createOpenAiClient,
   getAiConfigurationErrorMessage,
@@ -1715,6 +1716,15 @@ Do not generate business-plan sections here. Do not suggest website URLs, domain
             confidence: cachedReportConfidence,
             decision: cachedDecisionIntelligence,
           });
+          const cachedBusinessImpactIntelligence = createAiBusinessImpactIntelligence({
+            report: parsedCachedReport,
+            validation: cachedReportValidation,
+            sources: cachedSourceReliability,
+            evidence: cachedLiveEvidence,
+            confidence: cachedReportConfidence,
+            decision: cachedDecisionIntelligence,
+            roi: cachedRoiIntelligence,
+          });
 
           await recordAiUsage(supabase, {
             userId: user.id,
@@ -1745,6 +1755,7 @@ Do not generate business-plan sections here. Do not suggest website URLs, domain
               ...cachedReportConfidence,
               ...cachedDecisionIntelligence,
               ...cachedRoiIntelligence,
+              ...cachedBusinessImpactIntelligence,
             },
           });
 
@@ -1934,6 +1945,15 @@ Do not include markdown code fences, braces inside string values, or commentary 
           confidence: reportConfidence,
           decision: decisionIntelligence,
         });
+        const businessImpactIntelligence = createAiBusinessImpactIntelligence({
+          report: parsedReport,
+          validation: reportValidation,
+          sources: sourceReliability,
+          evidence: liveEvidence,
+          confidence: reportConfidence,
+          decision: decisionIntelligence,
+          roi: roiIntelligence,
+        });
         const cacheResponseText = JSON.stringify(parsedReport);
         const isPartialReport = Boolean(missingFields.length || invalidFields.length);
 
@@ -2012,6 +2032,7 @@ Do not include markdown code fences, braces inside string values, or commentary 
             ...reportConfidence,
             ...decisionIntelligence,
             ...roiIntelligence,
+            ...businessImpactIntelligence,
           },
         });
 
