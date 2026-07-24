@@ -41,6 +41,7 @@ import { createExecutiveDecisionIntelligence } from "@/app/lib/executive-decisio
 import { createAiRoiIntelligence } from "@/app/lib/ai-roi-intelligence";
 import { createAiBusinessImpactIntelligence } from "@/app/lib/ai-business-impact-intelligence";
 import { createAiOutcomeIntelligence } from "@/app/lib/ai-outcome-intelligence";
+import { createMarketIntelligence } from "@/app/lib/market-intelligence";
 import {
   createOpenAiClient,
   getAiConfigurationErrorMessage,
@@ -1707,6 +1708,14 @@ Do not generate business-plan sections here. Do not suggest website URLs, domain
             evidence: cachedLiveEvidence,
             confidence: cachedReportConfidence,
           });
+          const cachedMarketIntelligence = createMarketIntelligence({
+            report: parsedCachedReport,
+            context: canonicalFinancialAssumptions,
+            sources: cachedSourceReliability,
+            evidence: cachedLiveEvidence,
+            confidence: cachedReportConfidence,
+            decision: cachedDecisionIntelligence,
+          });
           const cachedRoiIntelligence = createAiRoiIntelligence({
             operationType: "market_report",
             estimatedCostUsd: cachedFullReport.estimatedCostUsd,
@@ -1764,6 +1773,7 @@ Do not generate business-plan sections here. Do not suggest website URLs, domain
               ...cachedLiveEvidence,
               ...cachedReportConfidence,
               ...cachedDecisionIntelligence,
+              ...cachedMarketIntelligence,
               ...cachedRoiIntelligence,
               ...cachedBusinessImpactIntelligence,
               ...cachedOutcomeIntelligence,
@@ -1946,6 +1956,14 @@ Do not include markdown code fences, braces inside string values, or commentary 
           evidence: liveEvidence,
           confidence: reportConfidence,
         });
+        const marketIntelligence = createMarketIntelligence({
+          report: parsedReport,
+          context: canonicalFinancialAssumptions,
+          sources: sourceReliability,
+          evidence: liveEvidence,
+          confidence: reportConfidence,
+          decision: decisionIntelligence,
+        });
         const roiIntelligence = createAiRoiIntelligence({
           operationType: "market_report",
           estimatedCostUsd,
@@ -2051,6 +2069,7 @@ Do not include markdown code fences, braces inside string values, or commentary 
             ...liveEvidence,
             ...reportConfidence,
             ...decisionIntelligence,
+            ...marketIntelligence,
             ...roiIntelligence,
             ...businessImpactIntelligence,
             ...outcomeIntelligence,

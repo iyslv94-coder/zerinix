@@ -178,6 +178,10 @@ export type AdminDashboardData = {
     highestPredictedOutcomeReports: Array<{ label: string; score: number; category: string }>;
     executionRiskDistribution: Array<{ risk: string; count: number }>;
     portfolio: PortfolioIntelligence;
+    averageMarketScore: number;
+    strongestIndustries: Array<{ industry: string; score: number; count: number }>;
+    highestOpportunityCategories: Array<{ category: string; score: number; count: number }>;
+    competitiveRiskTrends: AdminChartSeries[];
     cachedTokens: number;
     totalTokens: number;
     cost: number;
@@ -938,6 +942,10 @@ function buildMockAdminDashboardData(dateRange: AdminDateRange): AdminDashboardD
       highestPredictedOutcomeReports: [],
       executionRiskDistribution: [],
       portfolio: EMPTY_PORTFOLIO_INTELLIGENCE,
+      averageMarketScore: 0,
+      strongestIndustries: [],
+      highestOpportunityCategories: [],
+      competitiveRiskTrends: [],
       cachedTokens: 0,
       totalTokens: 0,
       cost: 0,
@@ -2885,6 +2893,10 @@ function calculateOpenAiAnalytics(input: {
       highestPredictedOutcomeReports: [],
       executionRiskDistribution: [],
       portfolio: EMPTY_PORTFOLIO_INTELLIGENCE,
+      averageMarketScore: 0,
+      strongestIndustries: [],
+      highestOpportunityCategories: [],
+      competitiveRiskTrends: [],
       cachedTokens: input.official.cachedTokens,
       totalTokens: input.official.totalTokens,
       cost,
@@ -3184,12 +3196,16 @@ function calculateOpenAiAnalytics(input: {
     score: number;
     category: string;
   }> = [];
+  const marketIndustryMap = new Map<string, { totalScore: number; count: number }>();
+  const opportunityCategoryMap = new Map<string, { totalScore: number; count: number }>();
+  const competitiveRiskTrendMap = new Map<string, { totalPressure: number; count: number }>();
   let totalEstimatedValueCreated = 0;
   let estimatedTotalBusinessImpactValue = 0;
   let cumulativeHoursSaved = 0;
   const roiRatios: number[] = [];
   const businessImpactScores: number[] = [];
   const outcomeScores: number[] = [];
+  const marketScores: number[] = [];
 
   input.usage.forEach((row) => {
     const metadata = readUsageMetadata(row);
@@ -3202,8 +3218,9 @@ function calculateOpenAiAnalytics(input: {
     const adoptionProbability = readNumber(metadata.adoption_probability);
     const implementationRisk = readNumber(metadata.implementation_risk);
     const outcomeCategory = readString(metadata.outcome_category);
+    const marketScore = readNumber(metadata.market_intelligence_score);
 
-    if (estimatedValue <= 0 && businessImpactScore <= 0 && outcomeScore <= 0) {
+    if (estimatedValue <= 0 && businessImpactScore <= 0 && outcomeScore <= 0 && marketScore <= 0) {
       return;
     }
 
@@ -3303,6 +3320,37 @@ function calculateOpenAiAnalytics(input: {
         (executionRiskDistributionMap.get(riskRange) || 0) + 1
       );
     }
+
+    if (marketScore > 0) {
+      marketScores.push(marketScore);
+      const industry = readString(metadata.market_industry, "Unknown");
+      const industrySummary = marketIndustryMap.get(industry) || {
+        totalScore: 0,
+        count: 0,
+      };
+      industrySummary.totalScore += marketScore;
+      industrySummary.count += 1;
+      marketIndustryMap.set(industry, industrySummary);
+
+      const opportunity = readString(metadata.opportunity_level, "unknown");
+      const opportunitySummary = opportunityCategoryMap.get(opportunity) || {
+        totalScore: 0,
+        count: 0,
+      };
+      opportunitySummary.totalScore += readNumber(metadata.opportunity_score) || marketScore;
+      opportunitySummary.count += 1;
+      opportunityCategoryMap.set(opportunity, opportunitySummary);
+
+      const createdAt = readString(row.created_at);
+      const trendLabel = createdAt ? createdAt.slice(0, 10) : "unknown";
+      const trendSummary = competitiveRiskTrendMap.get(trendLabel) || {
+        totalPressure: 0,
+        count: 0,
+      };
+      trendSummary.totalPressure += readNumber(metadata.competitive_intensity);
+      trendSummary.count += 1;
+      competitiveRiskTrendMap.set(trendLabel, trendSummary);
+    }
   });
   const totalEstimatedValue = roundUsd(totalEstimatedValueCreated);
   const averageRoiRatio = roiRatios.length
@@ -3375,6 +3423,31 @@ function calculateOpenAiAnalytics(input: {
   const highestPredictedOutcomeReports = outcomeRows
     .sort((a, b) => b.score - a.score)
     .slice(0, 5);
+  const averageMarketScore = marketScores.length
+    ? Math.round(marketScores.reduce((sum, score) => sum + score, 0) / marketScores.length)
+    : 0;
+  const strongestIndustries = [...marketIndustryMap.entries()]
+    .map(([industry, summary]) => ({
+      industry,
+      score: Math.round(summary.totalScore / Math.max(1, summary.count)),
+      count: summary.count,
+    }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 5);
+  const highestOpportunityCategories = [...opportunityCategoryMap.entries()]
+    .map(([category, summary]) => ({
+      category,
+      score: Math.round(summary.totalScore / Math.max(1, summary.count)),
+      count: summary.count,
+    }))
+    .sort((a, b) => b.score - a.score);
+  const competitiveRiskTrends = [...competitiveRiskTrendMap.entries()]
+    .map(([label, summary]) => ({
+      label,
+      value: Math.round(summary.totalPressure / Math.max(1, summary.count)),
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label))
+    .slice(-14);
   const estimatedTokenSavings = input.usage.reduce((sum, row) => {
     if (!Boolean(row.cache_hit)) {
       return sum;
@@ -3544,6 +3617,10 @@ function calculateOpenAiAnalytics(input: {
     highestPredictedOutcomeReports,
     executionRiskDistribution,
     portfolio,
+    averageMarketScore,
+    strongestIndustries,
+    highestOpportunityCategories,
+    competitiveRiskTrends,
     cachedTokens,
     totalTokens,
     cost,

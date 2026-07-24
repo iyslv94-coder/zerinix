@@ -485,6 +485,9 @@ function OpenAiAnalyticsSection({ data }: { data: AdminDashboardData }) {
           ["Health", data.openAiAnalytics.portfolio.portfolio_health_score ? `${data.openAiAnalytics.portfolio.portfolio_health_score}/100` : "NO DATA"],
           ["Portfolio risk", data.openAiAnalytics.portfolio.portfolio_risk.toUpperCase()],
           ["AI value index", data.openAiAnalytics.portfolio.overallAiValueIndex ? `${data.openAiAnalytics.portfolio.overallAiValueIndex}/100` : "NO DATA"],
+          ["Market score", data.openAiAnalytics.averageMarketScore ? `${data.openAiAnalytics.averageMarketScore}/100` : "NO DATA"],
+          ["Top industry", data.openAiAnalytics.strongestIndustries[0]?.industry || "NO DATA"],
+          ["Opportunity", data.openAiAnalytics.highestOpportunityCategories[0]?.category?.toUpperCase() || "NO DATA"],
           ["Cache hits", formatCompactNumber(data.openAiAnalytics.cacheHits)],
           ["Cache misses", formatCompactNumber(data.openAiAnalytics.cacheMisses)],
           ["Token savings", formatCompactNumber(data.openAiAnalytics.estimatedTokenSavings)],
@@ -649,6 +652,31 @@ function OpenAiAnalyticsSection({ data }: { data: AdminDashboardData }) {
           {data.openAiAnalytics.portfolio.lowestPerformingCategories.slice(0, 3).map((item) => (
             <span key={`low-${item.reportType}`} className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-[11px] text-zinc-400">
               Low {item.reportType.replace(/_/g, " ")}: {item.score}/100
+            </span>
+          ))}
+        </div>
+      ) : null}
+
+      {data.openAiAnalytics.strongestIndustries.length || data.openAiAnalytics.highestOpportunityCategories.length ? (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {data.openAiAnalytics.strongestIndustries.slice(0, 4).map((item) => (
+            <span key={item.industry} className="rounded-full border border-cyan-300/15 bg-cyan-300/5 px-2.5 py-1 text-[11px] text-cyan-100/80">
+              {item.industry}: {item.score}/100
+            </span>
+          ))}
+          {data.openAiAnalytics.highestOpportunityCategories.slice(0, 4).map((item) => (
+            <span key={item.category} className="rounded-full border border-emerald-300/15 bg-emerald-300/5 px-2.5 py-1 text-[11px] text-emerald-100/80">
+              Opportunity {item.category}: {item.score}/100
+            </span>
+          ))}
+        </div>
+      ) : null}
+
+      {data.openAiAnalytics.competitiveRiskTrends.length ? (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {data.openAiAnalytics.competitiveRiskTrends.slice(-5).map((item) => (
+            <span key={item.label} className="rounded-full border border-amber-300/15 bg-amber-300/5 px-2.5 py-1 text-[11px] text-amber-100/80">
+              Competitive pressure {item.label}: {item.value}/100
             </span>
           ))}
         </div>

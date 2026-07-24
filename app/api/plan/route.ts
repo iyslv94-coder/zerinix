@@ -41,6 +41,7 @@ import { createExecutiveDecisionIntelligence } from "@/app/lib/executive-decisio
 import { createAiRoiIntelligence } from "@/app/lib/ai-roi-intelligence";
 import { createAiBusinessImpactIntelligence } from "@/app/lib/ai-business-impact-intelligence";
 import { createAiOutcomeIntelligence } from "@/app/lib/ai-outcome-intelligence";
+import { createMarketIntelligence } from "@/app/lib/market-intelligence";
 import {
   createOpenAiClient,
   getAiConfigurationErrorMessage,
@@ -2094,6 +2095,14 @@ Write only the content for this section. Do not write a JSON object, field name,
           evidence: cachedLiveEvidence,
           confidence: cachedReportConfidence,
         });
+        const cachedMarketIntelligence = createMarketIntelligence({
+          report: parsedCachedReport,
+          context: canonicalFinancialAssumptions,
+          sources: cachedSourceReliability,
+          evidence: cachedLiveEvidence,
+          confidence: cachedReportConfidence,
+          decision: cachedDecisionIntelligence,
+        });
         const cachedRoiIntelligence = createAiRoiIntelligence({
           operationType: "plan_report",
           estimatedCostUsd: cachedFullReport.estimatedCostUsd,
@@ -2151,6 +2160,7 @@ Write only the content for this section. Do not write a JSON object, field name,
             ...cachedLiveEvidence,
             ...cachedReportConfidence,
             ...cachedDecisionIntelligence,
+            ...cachedMarketIntelligence,
             ...cachedRoiIntelligence,
             ...cachedBusinessImpactIntelligence,
             ...cachedOutcomeIntelligence,
@@ -2322,6 +2332,14 @@ ${buildFullReportStructureDirectives("business_plan").map((directive) => `- ${di
           evidence: liveEvidence,
           confidence: reportConfidence,
         });
+        const marketIntelligence = createMarketIntelligence({
+          report: parsedReport,
+          context: canonicalFinancialAssumptions,
+          sources: sourceReliability,
+          evidence: liveEvidence,
+          confidence: reportConfidence,
+          decision: decisionIntelligence,
+        });
         const roiIntelligence = createAiRoiIntelligence({
           operationType: "plan_report",
           estimatedCostUsd,
@@ -2396,6 +2414,7 @@ ${buildFullReportStructureDirectives("business_plan").map((directive) => `- ${di
             ...liveEvidence,
             ...reportConfidence,
             ...decisionIntelligence,
+            ...marketIntelligence,
             ...roiIntelligence,
             ...businessImpactIntelligence,
             ...outcomeIntelligence,
