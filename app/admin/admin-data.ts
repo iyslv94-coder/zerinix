@@ -131,6 +131,10 @@ export type AdminDashboardData = {
     lowConfidenceReportCount: number;
     confidenceDistribution: Array<{ level: string; count: number }>;
     topConfidenceWarnings: Array<{ reason: string; count: number }>;
+    averageEvidenceCount: number;
+    reportsWithoutEvidence: number;
+    evidenceFreshnessDistribution: Array<{ freshness: string; count: number }>;
+    evidenceSourceTypeDistribution: Array<{ type: string; count: number }>;
     cachedTokens: number;
     totalTokens: number;
     cost: number;
@@ -835,6 +839,10 @@ function buildMockAdminDashboardData(dateRange: AdminDateRange): AdminDashboardD
       lowConfidenceReportCount: 0,
       confidenceDistribution: [],
       topConfidenceWarnings: [],
+      averageEvidenceCount: 0,
+      reportsWithoutEvidence: 0,
+      evidenceFreshnessDistribution: [],
+      evidenceSourceTypeDistribution: [],
       cachedTokens: 0,
       totalTokens: 0,
       cost: 0,
@@ -2748,6 +2756,10 @@ function calculateOpenAiAnalytics(input: {
       lowConfidenceReportCount: 0,
       confidenceDistribution: [],
       topConfidenceWarnings: [],
+      averageEvidenceCount: 0,
+      reportsWithoutEvidence: 0,
+      evidenceFreshnessDistribution: [],
+      evidenceSourceTypeDistribution: [],
       cachedTokens: input.official.cachedTokens,
       totalTokens: input.official.totalTokens,
       cost,
@@ -2932,6 +2944,60 @@ function calculateOpenAiAnalytics(input: {
     .map(([reason, count]) => ({ reason, count }))
     .sort((a, b) => b.count - a.count)
     .slice(0, 5);
+  const evidenceCounts = input.usage
+    .map((row) => readNumber(readUsageMetadata(row).evidence_count))
+    .filter((count) => count > 0);
+  const averageEvidenceCount = evidenceCounts.length
+    ? Math.round(evidenceCounts.reduce((sum, count) => sum + count, 0) / evidenceCounts.length)
+    : 0;
+  const reportsWithoutEvidence = input.usage.filter((row) => {
+    const metadata = readUsageMetadata(row);
+    const operationType = readUsageOperationType(row);
+
+    return (
+      (operationType === "plan_report" ||
+        operationType === "market_report" ||
+        operationType === "executive_report") &&
+      readNumber(metadata.evidence_count) === 0
+    );
+  }).length;
+  const freshnessMap = new Map<string, number>();
+  const evidenceSourceTypeMap = new Map<string, number>();
+
+  input.usage.forEach((row) => {
+    const metadata = readUsageMetadata(row);
+    const freshnessScore = readNumber(metadata.freshness_score);
+    const freshness =
+      freshnessScore >= 85
+        ? "Fresh"
+        : freshnessScore >= 70
+          ? "Current"
+          : freshnessScore >= 50
+            ? "Aging"
+            : freshnessScore > 0
+              ? "Stale"
+              : "Unknown";
+    const distribution = metadata.evidence_source_type_distribution;
+
+    if (readNumber(metadata.evidence_count) > 0 || freshnessScore > 0) {
+      freshnessMap.set(freshness, (freshnessMap.get(freshness) || 0) + 1);
+    }
+
+    if (!distribution || typeof distribution !== "object" || Array.isArray(distribution)) {
+      return;
+    }
+
+    Object.entries(distribution as Record<string, unknown>).forEach(([type, count]) => {
+      evidenceSourceTypeMap.set(type, (evidenceSourceTypeMap.get(type) || 0) + readNumber(count));
+    });
+  });
+  const evidenceFreshnessDistribution = [...freshnessMap.entries()]
+    .map(([freshness, count]) => ({ freshness, count }))
+    .sort((a, b) => b.count - a.count);
+  const evidenceSourceTypeDistribution = [...evidenceSourceTypeMap.entries()]
+    .filter(([, count]) => count > 0)
+    .map(([type, count]) => ({ type, count }))
+    .sort((a, b) => b.count - a.count);
   const estimatedTokenSavings = input.usage.reduce((sum, row) => {
     if (!Boolean(row.cache_hit)) {
       return sum;
@@ -3045,6 +3111,10 @@ function calculateOpenAiAnalytics(input: {
     lowConfidenceReportCount,
     confidenceDistribution,
     topConfidenceWarnings,
+    averageEvidenceCount,
+    reportsWithoutEvidence,
+    evidenceFreshnessDistribution,
+    evidenceSourceTypeDistribution,
     cachedTokens,
     totalTokens,
     cost,

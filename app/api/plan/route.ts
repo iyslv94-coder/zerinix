@@ -36,6 +36,7 @@ import { isReportGenerationFailureText } from "@/app/lib/report-errors";
 import { validateGeneratedReportSections } from "@/app/lib/report-quality-validation";
 import { evaluateReportConfidence } from "@/app/lib/report-confidence";
 import { scoreReportSources } from "@/app/lib/source-reliability";
+import { aggregateReportEvidence } from "@/app/lib/live-evidence";
 import {
   createOpenAiClient,
   getAiConfigurationErrorMessage,
@@ -2076,6 +2077,7 @@ Write only the content for this section. Do not write a JSON object, field name,
         );
         const cachedReportValidation = validateGeneratedReportSections(parsedCachedReport);
         const cachedSourceReliability = scoreReportSources(parsedCachedReport);
+        const cachedLiveEvidence = aggregateReportEvidence({ report: parsedCachedReport });
         const cachedReportConfidence = evaluateReportConfidence({
           report: parsedCachedReport,
           validation: cachedReportValidation,
@@ -2107,6 +2109,7 @@ Write only the content for this section. Do not write a JSON object, field name,
             cachedEstimatedCostUsd: cachedFullReport.estimatedCostUsd,
             ...cachedReportValidation,
             ...cachedSourceReliability,
+            ...cachedLiveEvidence,
             ...cachedReportConfidence,
           },
         });
@@ -2263,6 +2266,7 @@ ${buildFullReportStructureDirectives("business_plan").map((directive) => `- ${di
         );
         const reportValidation = validateGeneratedReportSections(parsedReport);
         const sourceReliability = scoreReportSources(parsedReport);
+        const liveEvidence = aggregateReportEvidence({ report: parsedReport });
         const reportConfidence = evaluateReportConfidence({
           report: parsedReport,
           validation: reportValidation,
@@ -2311,6 +2315,7 @@ ${buildFullReportStructureDirectives("business_plan").map((directive) => `- ${di
             ...fullReportInputCostMetrics,
             ...reportValidation,
             ...sourceReliability,
+            ...liveEvidence,
             ...reportConfidence,
           },
         });

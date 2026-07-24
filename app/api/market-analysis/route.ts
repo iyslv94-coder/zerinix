@@ -36,6 +36,7 @@ import { isReportGenerationFailureText } from "@/app/lib/report-errors";
 import { validateGeneratedReportSections } from "@/app/lib/report-quality-validation";
 import { evaluateReportConfidence } from "@/app/lib/report-confidence";
 import { scoreReportSources } from "@/app/lib/source-reliability";
+import { aggregateReportEvidence } from "@/app/lib/live-evidence";
 import {
   createOpenAiClient,
   getAiConfigurationErrorMessage,
@@ -1689,6 +1690,7 @@ Do not generate business-plan sections here. Do not suggest website URLs, domain
           }
           const cachedReportValidation = validateGeneratedReportSections(parsedCachedReport);
           const cachedSourceReliability = scoreReportSources(parsedCachedReport);
+          const cachedLiveEvidence = aggregateReportEvidence({ report: parsedCachedReport });
           const cachedReportConfidence = evaluateReportConfidence({
             report: parsedCachedReport,
             validation: cachedReportValidation,
@@ -1720,6 +1722,7 @@ Do not generate business-plan sections here. Do not suggest website URLs, domain
               cachedEstimatedCostUsd: cachedFullReport.estimatedCostUsd,
               ...cachedReportValidation,
               ...cachedSourceReliability,
+              ...cachedLiveEvidence,
               ...cachedReportConfidence,
             },
           });
@@ -1887,6 +1890,7 @@ Do not include markdown code fences, braces inside string values, or commentary 
         );
         const reportValidation = validateGeneratedReportSections(parsedReport);
         const sourceReliability = scoreReportSources(parsedReport);
+        const liveEvidence = aggregateReportEvidence({ report: parsedReport });
         const reportConfidence = evaluateReportConfidence({
           report: parsedReport,
           validation: reportValidation,
@@ -1966,6 +1970,7 @@ Do not include markdown code fences, braces inside string values, or commentary 
             ...fullReportInputCostMetrics,
             ...reportValidation,
             ...sourceReliability,
+            ...liveEvidence,
             ...reportConfidence,
           },
         });

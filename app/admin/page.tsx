@@ -456,6 +456,8 @@ function OpenAiAnalyticsSection({ data }: { data: AdminDashboardData }) {
           ["Weak sources", formatCompactNumber(data.openAiAnalytics.weakSourceReportCount)],
           ["Confidence", data.openAiAnalytics.averageReportConfidence ? `${data.openAiAnalytics.averageReportConfidence}/100` : "NO DATA"],
           ["Low confidence", formatCompactNumber(data.openAiAnalytics.lowConfidenceReportCount)],
+          ["Evidence", formatCompactNumber(data.openAiAnalytics.averageEvidenceCount)],
+          ["No evidence", formatCompactNumber(data.openAiAnalytics.reportsWithoutEvidence)],
           ["Cache hits", formatCompactNumber(data.openAiAnalytics.cacheHits)],
           ["Cache misses", formatCompactNumber(data.openAiAnalytics.cacheMisses)],
           ["Token savings", formatCompactNumber(data.openAiAnalytics.estimatedTokenSavings)],
@@ -490,6 +492,21 @@ function OpenAiAnalyticsSection({ data }: { data: AdminDashboardData }) {
           {data.openAiAnalytics.topConfidenceWarnings.slice(0, 3).map((item) => (
             <span key={item.reason} className="rounded-full border border-amber-300/15 bg-amber-300/5 px-2.5 py-1 text-[11px] text-amber-100/80">
               {item.reason}: {formatCompactNumber(item.count)}
+            </span>
+          ))}
+        </div>
+      ) : null}
+
+      {data.openAiAnalytics.evidenceFreshnessDistribution.length || data.openAiAnalytics.evidenceSourceTypeDistribution.length ? (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {data.openAiAnalytics.evidenceFreshnessDistribution.map((item) => (
+            <span key={item.freshness} className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-[11px] text-zinc-400">
+              {item.freshness}: {formatCompactNumber(item.count)}
+            </span>
+          ))}
+          {data.openAiAnalytics.evidenceSourceTypeDistribution.slice(0, 5).map((item) => (
+            <span key={item.type} className="rounded-full border border-emerald-300/15 bg-emerald-300/5 px-2.5 py-1 text-[11px] text-emerald-100/80">
+              {item.type}: {formatCompactNumber(item.count)}
             </span>
           ))}
         </div>
