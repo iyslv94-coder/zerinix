@@ -167,6 +167,11 @@ export type AdminDashboardData = {
     highestBusinessImpactReports: Array<{ label: string; score: number; category: string }>;
     estimatedTotalBusinessImpactValue: number;
     businessImpactTrend: AdminChartSeries[];
+    averageOutcomeScore: number;
+    implementationSuccessTrend: AdminChartSeries[];
+    adoptionDistribution: Array<{ range: string; count: number }>;
+    highestPredictedOutcomeReports: Array<{ label: string; score: number; category: string }>;
+    executionRiskDistribution: Array<{ risk: string; count: number }>;
     cachedTokens: number;
     totalTokens: number;
     cost: number;
@@ -921,6 +926,11 @@ function buildMockAdminDashboardData(dateRange: AdminDateRange): AdminDashboardD
       highestBusinessImpactReports: [],
       estimatedTotalBusinessImpactValue: 0,
       businessImpactTrend: [],
+      averageOutcomeScore: 0,
+      implementationSuccessTrend: [],
+      adoptionDistribution: [],
+      highestPredictedOutcomeReports: [],
+      executionRiskDistribution: [],
       cachedTokens: 0,
       totalTokens: 0,
       cost: 0,
@@ -2862,6 +2872,11 @@ function calculateOpenAiAnalytics(input: {
       highestBusinessImpactReports: [],
       estimatedTotalBusinessImpactValue: 0,
       businessImpactTrend: [],
+      averageOutcomeScore: 0,
+      implementationSuccessTrend: [],
+      adoptionDistribution: [],
+      highestPredictedOutcomeReports: [],
+      executionRiskDistribution: [],
       cachedTokens: input.official.cachedTokens,
       totalTokens: input.official.totalTokens,
       cost,
@@ -3143,6 +3158,9 @@ function calculateOpenAiAnalytics(input: {
   const impactByReportTypeMap = new Map<string, { totalImpact: number; count: number }>();
   const impactCategoryMap = new Map<string, number>();
   const impactTrendMap = new Map<string, { totalImpact: number; count: number }>();
+  const implementationSuccessTrendMap = new Map<string, { totalOutcome: number; count: number }>();
+  const adoptionDistributionMap = new Map<string, number>();
+  const executionRiskDistributionMap = new Map<string, number>();
   const roiRows: Array<{
     label: string;
     roiRatio: number;
@@ -3153,11 +3171,17 @@ function calculateOpenAiAnalytics(input: {
     score: number;
     category: string;
   }> = [];
+  const outcomeRows: Array<{
+    label: string;
+    score: number;
+    category: string;
+  }> = [];
   let totalEstimatedValueCreated = 0;
   let estimatedTotalBusinessImpactValue = 0;
   let cumulativeHoursSaved = 0;
   const roiRatios: number[] = [];
   const businessImpactScores: number[] = [];
+  const outcomeScores: number[] = [];
 
   input.usage.forEach((row) => {
     const metadata = readUsageMetadata(row);
@@ -3166,8 +3190,12 @@ function calculateOpenAiAnalytics(input: {
     const roiRatio = readNumber(metadata.roi_ratio);
     const businessImpactScore = readNumber(metadata.business_impact_score);
     const impactCategory = readString(metadata.impact_category);
+    const outcomeScore = readNumber(metadata.outcome_score);
+    const adoptionProbability = readNumber(metadata.adoption_probability);
+    const implementationRisk = readNumber(metadata.implementation_risk);
+    const outcomeCategory = readString(metadata.outcome_category);
 
-    if (estimatedValue <= 0 && businessImpactScore <= 0) {
+    if (estimatedValue <= 0 && businessImpactScore <= 0 && outcomeScore <= 0) {
       return;
     }
 
@@ -3226,6 +3254,47 @@ function calculateOpenAiAnalytics(input: {
         category: impactCategory || "Unclassified",
       });
     }
+
+    if (outcomeScore > 0) {
+      outcomeScores.push(outcomeScore);
+      outcomeRows.push({
+        label,
+        score: outcomeScore,
+        category: outcomeCategory || "Unclassified",
+      });
+
+      const createdAt = readString(row.created_at);
+      const trendLabel = createdAt ? createdAt.slice(0, 10) : "unknown";
+      const currentOutcomeTrend = implementationSuccessTrendMap.get(trendLabel) || {
+        totalOutcome: 0,
+        count: 0,
+      };
+      currentOutcomeTrend.totalOutcome += outcomeScore;
+      currentOutcomeTrend.count += 1;
+      implementationSuccessTrendMap.set(trendLabel, currentOutcomeTrend);
+
+      const adoptionRange =
+        adoptionProbability >= 75
+          ? "High adoption"
+          : adoptionProbability >= 50
+            ? "Moderate adoption"
+            : "Low adoption";
+      adoptionDistributionMap.set(
+        adoptionRange,
+        (adoptionDistributionMap.get(adoptionRange) || 0) + 1
+      );
+
+      const riskRange =
+        implementationRisk >= 70
+          ? "High risk"
+          : implementationRisk >= 45
+            ? "Medium risk"
+            : "Low risk";
+      executionRiskDistributionMap.set(
+        riskRange,
+        (executionRiskDistributionMap.get(riskRange) || 0) + 1
+      );
+    }
   });
   const totalEstimatedValue = roundUsd(totalEstimatedValueCreated);
   const averageRoiRatio = roiRatios.length
@@ -3279,6 +3348,25 @@ function calculateOpenAiAnalytics(input: {
     }))
     .sort((a, b) => a.label.localeCompare(b.label))
     .slice(-14);
+  const averageOutcomeScore = outcomeScores.length
+    ? Math.round(outcomeScores.reduce((sum, score) => sum + score, 0) / outcomeScores.length)
+    : 0;
+  const implementationSuccessTrend = [...implementationSuccessTrendMap.entries()]
+    .map(([label, summary]) => ({
+      label,
+      value: Math.round(summary.totalOutcome / Math.max(1, summary.count)),
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label))
+    .slice(-14);
+  const adoptionDistribution = [...adoptionDistributionMap.entries()]
+    .map(([range, count]) => ({ range, count }))
+    .sort((a, b) => b.count - a.count);
+  const executionRiskDistribution = [...executionRiskDistributionMap.entries()]
+    .map(([risk, count]) => ({ risk, count }))
+    .sort((a, b) => b.count - a.count);
+  const highestPredictedOutcomeReports = outcomeRows
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 5);
   const estimatedTokenSavings = input.usage.reduce((sum, row) => {
     if (!Boolean(row.cache_hit)) {
       return sum;
@@ -3415,6 +3503,11 @@ function calculateOpenAiAnalytics(input: {
     highestBusinessImpactReports,
     estimatedTotalBusinessImpactValue: roundUsd(estimatedTotalBusinessImpactValue),
     businessImpactTrend,
+    averageOutcomeScore,
+    implementationSuccessTrend,
+    adoptionDistribution,
+    highestPredictedOutcomeReports,
+    executionRiskDistribution,
     cachedTokens,
     totalTokens,
     cost,
