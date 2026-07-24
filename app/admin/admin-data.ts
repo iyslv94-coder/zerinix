@@ -182,6 +182,10 @@ export type AdminDashboardData = {
     strongestIndustries: Array<{ industry: string; score: number; count: number }>;
     highestOpportunityCategories: Array<{ category: string; score: number; count: number }>;
     competitiveRiskTrends: AdminChartSeries[];
+    averageFounderHealth: number;
+    actionCompletionTrend: AdminChartSeries[];
+    mostCommonBlockers: Array<{ blocker: string; count: number }>;
+    executionReadinessDistribution: Array<{ range: string; count: number }>;
     cachedTokens: number;
     totalTokens: number;
     cost: number;
@@ -946,6 +950,10 @@ function buildMockAdminDashboardData(dateRange: AdminDateRange): AdminDashboardD
       strongestIndustries: [],
       highestOpportunityCategories: [],
       competitiveRiskTrends: [],
+      averageFounderHealth: 0,
+      actionCompletionTrend: [],
+      mostCommonBlockers: [],
+      executionReadinessDistribution: [],
       cachedTokens: 0,
       totalTokens: 0,
       cost: 0,
@@ -2897,6 +2905,10 @@ function calculateOpenAiAnalytics(input: {
       strongestIndustries: [],
       highestOpportunityCategories: [],
       competitiveRiskTrends: [],
+      averageFounderHealth: 0,
+      actionCompletionTrend: [],
+      mostCommonBlockers: [],
+      executionReadinessDistribution: [],
       cachedTokens: input.official.cachedTokens,
       totalTokens: input.official.totalTokens,
       cost,
@@ -3199,6 +3211,9 @@ function calculateOpenAiAnalytics(input: {
   const marketIndustryMap = new Map<string, { totalScore: number; count: number }>();
   const opportunityCategoryMap = new Map<string, { totalScore: number; count: number }>();
   const competitiveRiskTrendMap = new Map<string, { totalPressure: number; count: number }>();
+  const actionCompletionTrendMap = new Map<string, { totalCompletion: number; count: number }>();
+  const blockerMap = new Map<string, number>();
+  const executionReadinessDistributionMap = new Map<string, number>();
   let totalEstimatedValueCreated = 0;
   let estimatedTotalBusinessImpactValue = 0;
   let cumulativeHoursSaved = 0;
@@ -3206,6 +3221,7 @@ function calculateOpenAiAnalytics(input: {
   const businessImpactScores: number[] = [];
   const outcomeScores: number[] = [];
   const marketScores: number[] = [];
+  const founderHealthScores: number[] = [];
 
   input.usage.forEach((row) => {
     const metadata = readUsageMetadata(row);
@@ -3219,8 +3235,15 @@ function calculateOpenAiAnalytics(input: {
     const implementationRisk = readNumber(metadata.implementation_risk);
     const outcomeCategory = readString(metadata.outcome_category);
     const marketScore = readNumber(metadata.market_intelligence_score);
+    const founderHealthScore = readNumber(metadata.founder_health_score);
 
-    if (estimatedValue <= 0 && businessImpactScore <= 0 && outcomeScore <= 0 && marketScore <= 0) {
+    if (
+      estimatedValue <= 0 &&
+      businessImpactScore <= 0 &&
+      outcomeScore <= 0 &&
+      marketScore <= 0 &&
+      founderHealthScore <= 0
+    ) {
       return;
     }
 
@@ -3351,6 +3374,42 @@ function calculateOpenAiAnalytics(input: {
       trendSummary.count += 1;
       competitiveRiskTrendMap.set(trendLabel, trendSummary);
     }
+
+    if (founderHealthScore > 0) {
+      founderHealthScores.push(founderHealthScore);
+      const createdAt = readString(row.created_at);
+      const trendLabel = createdAt ? createdAt.slice(0, 10) : "unknown";
+      const completionTrend = actionCompletionTrendMap.get(trendLabel) || {
+        totalCompletion: 0,
+        count: 0,
+      };
+      completionTrend.totalCompletion += readNumber(metadata.action_completion_rate);
+      completionTrend.count += 1;
+      actionCompletionTrendMap.set(trendLabel, completionTrend);
+
+      const executionReadiness = readNumber(metadata.execution_readiness);
+      const readinessRange =
+        executionReadiness >= 75
+          ? "High readiness"
+          : executionReadiness >= 50
+            ? "Moderate readiness"
+            : "Low readiness";
+      executionReadinessDistributionMap.set(
+        readinessRange,
+        (executionReadinessDistributionMap.get(readinessRange) || 0) + 1
+      );
+
+      const blockers = readUsageMetadata(row).founder_blockers;
+      if (Array.isArray(blockers)) {
+        blockers.forEach((blocker) => {
+          const label = readString(blocker);
+
+          if (label) {
+            blockerMap.set(label, (blockerMap.get(label) || 0) + 1);
+          }
+        });
+      }
+    }
   });
   const totalEstimatedValue = roundUsd(totalEstimatedValueCreated);
   const averageRoiRatio = roiRatios.length
@@ -3448,6 +3507,26 @@ function calculateOpenAiAnalytics(input: {
     }))
     .sort((a, b) => a.label.localeCompare(b.label))
     .slice(-14);
+  const averageFounderHealth = founderHealthScores.length
+    ? Math.round(
+        founderHealthScores.reduce((sum, score) => sum + score, 0) /
+          founderHealthScores.length
+      )
+    : 0;
+  const actionCompletionTrend = [...actionCompletionTrendMap.entries()]
+    .map(([label, summary]) => ({
+      label,
+      value: Math.round(summary.totalCompletion / Math.max(1, summary.count)),
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label))
+    .slice(-14);
+  const mostCommonBlockers = [...blockerMap.entries()]
+    .map(([blocker, count]) => ({ blocker, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 6);
+  const executionReadinessDistribution = [...executionReadinessDistributionMap.entries()]
+    .map(([range, count]) => ({ range, count }))
+    .sort((a, b) => b.count - a.count);
   const estimatedTokenSavings = input.usage.reduce((sum, row) => {
     if (!Boolean(row.cache_hit)) {
       return sum;
@@ -3621,6 +3700,10 @@ function calculateOpenAiAnalytics(input: {
     strongestIndustries,
     highestOpportunityCategories,
     competitiveRiskTrends,
+    averageFounderHealth,
+    actionCompletionTrend,
+    mostCommonBlockers,
+    executionReadinessDistribution,
     cachedTokens,
     totalTokens,
     cost,

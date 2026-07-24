@@ -488,6 +488,9 @@ function OpenAiAnalyticsSection({ data }: { data: AdminDashboardData }) {
           ["Market score", data.openAiAnalytics.averageMarketScore ? `${data.openAiAnalytics.averageMarketScore}/100` : "NO DATA"],
           ["Top industry", data.openAiAnalytics.strongestIndustries[0]?.industry || "NO DATA"],
           ["Opportunity", data.openAiAnalytics.highestOpportunityCategories[0]?.category?.toUpperCase() || "NO DATA"],
+          ["Founder health", data.openAiAnalytics.averageFounderHealth ? `${data.openAiAnalytics.averageFounderHealth}/100` : "NO DATA"],
+          ["Action completion", data.openAiAnalytics.actionCompletionTrend.at(-1) ? `${data.openAiAnalytics.actionCompletionTrend.at(-1)?.value}%` : "NO DATA"],
+          ["Execution readiness", data.openAiAnalytics.executionReadinessDistribution[0]?.range || "NO DATA"],
           ["Cache hits", formatCompactNumber(data.openAiAnalytics.cacheHits)],
           ["Cache misses", formatCompactNumber(data.openAiAnalytics.cacheMisses)],
           ["Token savings", formatCompactNumber(data.openAiAnalytics.estimatedTokenSavings)],
@@ -677,6 +680,31 @@ function OpenAiAnalyticsSection({ data }: { data: AdminDashboardData }) {
           {data.openAiAnalytics.competitiveRiskTrends.slice(-5).map((item) => (
             <span key={item.label} className="rounded-full border border-amber-300/15 bg-amber-300/5 px-2.5 py-1 text-[11px] text-amber-100/80">
               Competitive pressure {item.label}: {item.value}/100
+            </span>
+          ))}
+        </div>
+      ) : null}
+
+      {data.openAiAnalytics.executionReadinessDistribution.length || data.openAiAnalytics.mostCommonBlockers.length ? (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {data.openAiAnalytics.executionReadinessDistribution.map((item) => (
+            <span key={item.range} className="rounded-full border border-teal-300/15 bg-teal-300/5 px-2.5 py-1 text-[11px] text-teal-100/80">
+              {item.range}: {formatCompactNumber(item.count)}
+            </span>
+          ))}
+          {data.openAiAnalytics.mostCommonBlockers.map((item) => (
+            <span key={item.blocker} className="rounded-full border border-rose-300/15 bg-rose-300/5 px-2.5 py-1 text-[11px] text-rose-100/80">
+              {item.blocker}: {formatCompactNumber(item.count)}
+            </span>
+          ))}
+        </div>
+      ) : null}
+
+      {data.openAiAnalytics.actionCompletionTrend.length ? (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {data.openAiAnalytics.actionCompletionTrend.slice(-5).map((item) => (
+            <span key={item.label} className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-[11px] text-zinc-400">
+              Completion {item.label}: {item.value}%
             </span>
           ))}
         </div>

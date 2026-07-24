@@ -42,6 +42,7 @@ import { createAiRoiIntelligence } from "@/app/lib/ai-roi-intelligence";
 import { createAiBusinessImpactIntelligence } from "@/app/lib/ai-business-impact-intelligence";
 import { createAiOutcomeIntelligence } from "@/app/lib/ai-outcome-intelligence";
 import { createMarketIntelligence } from "@/app/lib/market-intelligence";
+import { createFounderOperatingSystem } from "@/app/lib/founder-operating-system";
 import {
   createOpenAiClient,
   getAiConfigurationErrorMessage,
@@ -2131,6 +2132,17 @@ Write only the content for this section. Do not write a JSON object, field name,
           roi: cachedRoiIntelligence,
           businessImpact: cachedBusinessImpactIntelligence,
         });
+        const cachedFounderOperatingSystem = createFounderOperatingSystem({
+          validation: cachedReportValidation,
+          sources: cachedSourceReliability,
+          evidence: cachedLiveEvidence,
+          confidence: cachedReportConfidence,
+          decision: cachedDecisionIntelligence,
+          roi: cachedRoiIntelligence,
+          businessImpact: cachedBusinessImpactIntelligence,
+          outcome: cachedOutcomeIntelligence,
+          market: cachedMarketIntelligence,
+        });
 
         await recordAiUsage(supabase, {
           userId: user.id,
@@ -2164,6 +2176,7 @@ Write only the content for this section. Do not write a JSON object, field name,
             ...cachedRoiIntelligence,
             ...cachedBusinessImpactIntelligence,
             ...cachedOutcomeIntelligence,
+            ...cachedFounderOperatingSystem,
           },
         });
 
@@ -2368,6 +2381,17 @@ ${buildFullReportStructureDirectives("business_plan").map((directive) => `- ${di
           roi: roiIntelligence,
           businessImpact: businessImpactIntelligence,
         });
+        const founderOperatingSystem = createFounderOperatingSystem({
+          validation: reportValidation,
+          sources: sourceReliability,
+          evidence: liveEvidence,
+          confidence: reportConfidence,
+          decision: decisionIntelligence,
+          roi: roiIntelligence,
+          businessImpact: businessImpactIntelligence,
+          outcome: outcomeIntelligence,
+          market: marketIntelligence,
+        });
         const cacheResponseText = JSON.stringify(parsedReport);
 
         if (!isReportGenerationFailureText(cacheResponseText)) {
@@ -2418,6 +2442,7 @@ ${buildFullReportStructureDirectives("business_plan").map((directive) => `- ${di
             ...roiIntelligence,
             ...businessImpactIntelligence,
             ...outcomeIntelligence,
+            ...founderOperatingSystem,
           },
         });
 
