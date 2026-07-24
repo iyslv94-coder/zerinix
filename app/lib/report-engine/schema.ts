@@ -1,5 +1,7 @@
 import type { ReportMetadata } from "@/app/lib/report-investment-score";
 
+export type ResponseLanguage = "English" | "Turkish";
+
 export type ReportSectionPayload = {
   title: string;
   content: string;
@@ -26,3 +28,24 @@ export type ReportStreamEvent<
   partial?: boolean;
 };
 
+export function createFullReportJsonSchema(name: string, fields: readonly string[]) {
+  return {
+    type: "json_schema" as const,
+    name,
+    strict: true,
+    schema: {
+      type: "object",
+      additionalProperties: false,
+      properties: Object.fromEntries(
+        fields.map((field) => [
+          field,
+          {
+            type: "string",
+            minLength: 1,
+          },
+        ])
+      ),
+      required: [...fields],
+    },
+  };
+}
