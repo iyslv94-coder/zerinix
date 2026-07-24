@@ -7,7 +7,6 @@ import {
   useMemo,
   useRef,
   useState,
-  type DragEvent,
   type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
 } from "react";
@@ -105,6 +104,12 @@ import {
   sourceTypeToEvidenceLevel,
   type EvidenceLevel,
 } from "@/app/lib/report-evidence";
+import {
+  cleanEvidenceMetadataForDisplay,
+  formatMetricCardValue,
+} from "@/components/planner/report-utils";
+import { useAttachments } from "@/components/planner/useAttachments";
+import { useReportExport } from "@/components/planner/useReportExport";
 
 type ReportSection = {
   field?: keyof (MarketReport & PlanReport) | string;
@@ -2105,43 +2110,6 @@ function extractCanonicalFinancialMetricValue(
   }
 
   return compactPdfMetricValue(rawValue);
-}
-
-function formatMetricCardValue(value: string) {
-  const cleanValue = value.trim().replace(/\*\*/g, "");
-
-  if (!cleanValue) {
-    return "";
-  }
-
-  return cleanValue
-    .split(/\b(?:formula|assumptions?|varsayımlar|confidence|güven|evidence|validation evidence|validation needed|metadata|referans|benchmark(?: source| comparison)?|raw benchmark context|explanation|justification|source)\b\s*[:\-–—=]/i)[0]
-    .split(/\s+(?:based on|using|assuming|calculated from|derived from)\s+/i)[0]
-    .split(/\s*[;|]\s*/)[0]
-    .replace(/^["'`]+|["'`]+$/g, "")
-    .replace(/(\d)\.\s+(\d)(\s*[kKmMbB%])?/g, "$1.$2$3")
-    .replace(/(\d),\s+(\d{3})/g, "$1,$2")
-    .trim();
-}
-
-function cleanEvidenceMetadataForDisplay(content: string) {
-  return content
-    .split("\n")
-    .filter((line) => {
-      const trimmed = line.trim();
-
-      return !/^(?:[-*•]\s*)?(?:formula|assumptions?|varsayımlar|confidence|güven|evidence|validation evidence|validation needed|metadata|referans|raw validation context|raw benchmark context|internal evidence keys?|benchmark(?:source| source| comparison)?)\s*[:=]/i.test(trimmed);
-    })
-    .map((line) =>
-      line
-        .replace(/\s*\|\s*(?:formula|assumptions?|varsayımlar|confidence|güven|evidence|validation evidence|validation needed|metadata|referans|raw validation context|raw benchmark context|internal evidence keys?|benchmark(?:source| source| comparison)?)\s*[:=][^|\n]+/gi, "")
-        .replace(/\b(?:formula|assumptions?|varsayımlar|confidence|güven|evidence|validation evidence|validation needed|metadata|referans|raw validation context|raw benchmark context|internal evidence keys?|benchmarkSource|benchmark)\s*=\s*[^|;\n]+/gi, "")
-        .replace(/\bplanning assumptions require validation\b[.;]?/gi, "")
-        .trimEnd()
-    )
-    .join("\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
 }
 
 function cleanExecutiveText(value: string, maxLength = 180) {
@@ -5460,9 +5428,6 @@ const ReportPanel = memo(function ReportPanel({
   benchmarkScore?: ReportBenchmarkScore;
   reportQuality?: ReportQualityScore;
 }) {
-  const [exportingPdf, setExportingPdf] = useState(false);
-  const [pdfError, setPdfError] = useState("");
-  const [pdfFontBase64, setPdfFontBase64] = useState("");
   const sections = useMemo<ReportSection[]>(() => {
     if (reportData) {
       return dedupeReportSections(
@@ -5513,42 +5478,14 @@ const ReportPanel = memo(function ReportPanel({
       section.content &&
       section.content !== waitingMessage
   );
-
-  useEffect(() => {
-    let mounted = true;
-
-    loadPdfFont()
-      .then((fontBase64) => {
-        if (mounted) {
-          setPdfFontBase64(fontBase64);
-        }
-      })
-      .catch((error) => {
-        console.error(error);
-      });
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
+  const { exportingPdf, pdfError, setPdfError, runPdfExport } = useReportExport({
+    canExport: hasReportContent,
+    failureMessage: effectiveFailureMessage,
+    loadFont: loadPdfFont,
+  });
 
   async function downloadPdf() {
-    if (effectiveFailureMessage) {
-      setPdfError("Report generation failed. PDF export is available only after a report completes successfully.");
-      return;
-    }
-
-    if (!hasReportContent || exportingPdf) {
-      return;
-    }
-
-    if (!pdfFontBase64) {
-      setPdfError("PDF font is still loading. Please try again in a few seconds.");
-      return;
-    }
-
-    setExportingPdf(true);
-    setPdfError("");
+    await runPdfExport(async (pdfFontBase64) => {
     const isSafari =
       /^((?!chrome|android).)*safari/i.test(navigator.userAgent) ||
       navigator.vendor.includes("Apple");
@@ -6701,9 +6638,8 @@ const ReportPanel = memo(function ReportPanel({
     } catch (error) {
       console.error(error);
       setPdfError("PDF could not be created. Please try again.");
-    } finally {
-      setExportingPdf(false);
     }
+    });
   }
 
   if (effectiveFailureMessage) {
@@ -7004,8 +6940,13 @@ function createPlannerMessageId() {
 function usePlannerChat() {
   const [chatPrompt, setChatPrompt] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
-  const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
-  const [isDraggingFiles, setIsDraggingFiles] = useState(false);
+  const {
+    attachments,
+    setAttachments,
+    isDraggingFiles,
+    setIsDraggingFiles,
+    handleDropFiles,
+  } = useAttachments({ createId: createPlannerMessageId });
 
   return {
     chatPrompt,
@@ -7016,6 +6957,7 @@ function usePlannerChat() {
     setAttachments,
     isDraggingFiles,
     setIsDraggingFiles,
+    handleDropFiles,
   };
 }
 
@@ -7402,6 +7344,7 @@ export default function Planner({
     setAttachments,
     isDraggingFiles,
     setIsDraggingFiles,
+    handleDropFiles,
   } = usePlannerChat();
   const {
     result,
@@ -7979,46 +7922,6 @@ export default function Planner({
     setPlanReport(null);
     setWorkflowCompletedSteps(0);
     void loadPersistedMessages(conversationId);
-  }
-
-  async function readAttachmentText(file: File) {
-    const textLike =
-      file.type.startsWith("text/") ||
-      /\.(txt|md|csv|json|ts|tsx|js|jsx|css|html|sql)$/i.test(file.name);
-
-    if (!textLike || file.size > 220_000) {
-      return "";
-    }
-
-    try {
-      return (await file.text()).slice(0, 20_000);
-    } catch (error) {
-      console.error("[attachment text read failed]", error);
-      return "";
-    }
-  }
-
-  async function handleFiles(files: FileList | null) {
-    if (!files) {
-      return;
-    }
-
-    const uploadedFiles = await Promise.all(
-      Array.from(files).map(async (file) => ({
-        id: createMessageId(),
-        name: file.name,
-        size: file.size,
-        textContent: await readAttachmentText(file),
-      }))
-    );
-
-    setAttachments((current) => [...current, ...uploadedFiles]);
-  }
-
-  function handleDropFiles(event: DragEvent<HTMLElement>) {
-    event.preventDefault();
-    setIsDraggingFiles(false);
-    void handleFiles(event.dataTransfer.files);
   }
 
   function updateExecutiveBriefField(field: ExecutiveBriefField, value: string) {
