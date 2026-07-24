@@ -43,6 +43,7 @@ import { createAiBusinessImpactIntelligence } from "@/app/lib/ai-business-impact
 import { createAiOutcomeIntelligence } from "@/app/lib/ai-outcome-intelligence";
 import { createMarketIntelligence } from "@/app/lib/market-intelligence";
 import { createFounderOperatingSystem } from "@/app/lib/founder-operating-system";
+import { createReportPersonalization } from "@/app/lib/report-personalization";
 import {
   createOpenAiClient,
   getAiConfigurationErrorMessage,
@@ -2143,6 +2144,16 @@ Write only the content for this section. Do not write a JSON object, field name,
           outcome: cachedOutcomeIntelligence,
           market: cachedMarketIntelligence,
         });
+        const cachedReportPersonalization = createReportPersonalization({
+          prompt: promptText,
+          report: parsedCachedReport,
+          context: canonicalFinancialAssumptions,
+          confidence: cachedReportConfidence,
+          sources: cachedSourceReliability,
+          decision: cachedDecisionIntelligence,
+          market: cachedMarketIntelligence,
+          founderOs: cachedFounderOperatingSystem,
+        });
 
         await recordAiUsage(supabase, {
           userId: user.id,
@@ -2177,6 +2188,7 @@ Write only the content for this section. Do not write a JSON object, field name,
             ...cachedBusinessImpactIntelligence,
             ...cachedOutcomeIntelligence,
             ...cachedFounderOperatingSystem,
+            ...cachedReportPersonalization,
           },
         });
 
@@ -2392,6 +2404,16 @@ ${buildFullReportStructureDirectives("business_plan").map((directive) => `- ${di
           outcome: outcomeIntelligence,
           market: marketIntelligence,
         });
+        const reportPersonalization = createReportPersonalization({
+          prompt: promptText,
+          report: parsedReport,
+          context: canonicalFinancialAssumptions,
+          confidence: reportConfidence,
+          sources: sourceReliability,
+          decision: decisionIntelligence,
+          market: marketIntelligence,
+          founderOs: founderOperatingSystem,
+        });
         const cacheResponseText = JSON.stringify(parsedReport);
 
         if (!isReportGenerationFailureText(cacheResponseText)) {
@@ -2443,6 +2465,7 @@ ${buildFullReportStructureDirectives("business_plan").map((directive) => `- ${di
             ...businessImpactIntelligence,
             ...outcomeIntelligence,
             ...founderOperatingSystem,
+            ...reportPersonalization,
           },
         });
 

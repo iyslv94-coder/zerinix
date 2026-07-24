@@ -43,6 +43,7 @@ import { createAiBusinessImpactIntelligence } from "@/app/lib/ai-business-impact
 import { createAiOutcomeIntelligence } from "@/app/lib/ai-outcome-intelligence";
 import { createMarketIntelligence } from "@/app/lib/market-intelligence";
 import { createFounderOperatingSystem } from "@/app/lib/founder-operating-system";
+import { createReportPersonalization } from "@/app/lib/report-personalization";
 import {
   createOpenAiClient,
   getAiConfigurationErrorMessage,
@@ -1756,6 +1757,16 @@ Do not generate business-plan sections here. Do not suggest website URLs, domain
             outcome: cachedOutcomeIntelligence,
             market: cachedMarketIntelligence,
           });
+          const cachedReportPersonalization = createReportPersonalization({
+            prompt: promptText,
+            report: parsedCachedReport,
+            context: canonicalFinancialAssumptions,
+            confidence: cachedReportConfidence,
+            sources: cachedSourceReliability,
+            decision: cachedDecisionIntelligence,
+            market: cachedMarketIntelligence,
+            founderOs: cachedFounderOperatingSystem,
+          });
 
           await recordAiUsage(supabase, {
             userId: user.id,
@@ -1790,6 +1801,7 @@ Do not generate business-plan sections here. Do not suggest website URLs, domain
               ...cachedBusinessImpactIntelligence,
               ...cachedOutcomeIntelligence,
               ...cachedFounderOperatingSystem,
+              ...cachedReportPersonalization,
             },
           });
 
@@ -2016,6 +2028,16 @@ Do not include markdown code fences, braces inside string values, or commentary 
           outcome: outcomeIntelligence,
           market: marketIntelligence,
         });
+        const reportPersonalization = createReportPersonalization({
+          prompt: promptText,
+          report: parsedReport,
+          context: canonicalFinancialAssumptions,
+          confidence: reportConfidence,
+          sources: sourceReliability,
+          decision: decisionIntelligence,
+          market: marketIntelligence,
+          founderOs: founderOperatingSystem,
+        });
         const cacheResponseText = JSON.stringify(parsedReport);
         const isPartialReport = Boolean(missingFields.length || invalidFields.length);
 
@@ -2098,6 +2120,7 @@ Do not include markdown code fences, braces inside string values, or commentary 
             ...businessImpactIntelligence,
             ...outcomeIntelligence,
             ...founderOperatingSystem,
+            ...reportPersonalization,
           },
         });
 

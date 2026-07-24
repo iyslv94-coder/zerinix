@@ -491,6 +491,9 @@ function OpenAiAnalyticsSection({ data }: { data: AdminDashboardData }) {
           ["Founder health", data.openAiAnalytics.averageFounderHealth ? `${data.openAiAnalytics.averageFounderHealth}/100` : "NO DATA"],
           ["Action completion", data.openAiAnalytics.actionCompletionTrend.at(-1) ? `${data.openAiAnalytics.actionCompletionTrend.at(-1)?.value}%` : "NO DATA"],
           ["Execution readiness", data.openAiAnalytics.executionReadinessDistribution[0]?.range || "NO DATA"],
+          ["Personalized", formatCompactNumber(data.openAiAnalytics.personalizationUsage)],
+          ["Personalization", data.openAiAnalytics.personalizationEffectiveness ? `${data.openAiAnalytics.personalizationEffectiveness}/100` : "NO DATA"],
+          ["Top goal", data.openAiAnalytics.mostCommonFounderGoals[0]?.goal || "NO DATA"],
           ["Cache hits", formatCompactNumber(data.openAiAnalytics.cacheHits)],
           ["Cache misses", formatCompactNumber(data.openAiAnalytics.cacheMisses)],
           ["Token savings", formatCompactNumber(data.openAiAnalytics.estimatedTokenSavings)],
@@ -705,6 +708,21 @@ function OpenAiAnalyticsSection({ data }: { data: AdminDashboardData }) {
           {data.openAiAnalytics.actionCompletionTrend.slice(-5).map((item) => (
             <span key={item.label} className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-[11px] text-zinc-400">
               Completion {item.label}: {item.value}%
+            </span>
+          ))}
+        </div>
+      ) : null}
+
+      {data.openAiAnalytics.mostCommonFounderGoals.length || data.openAiAnalytics.personalizationIndustryDistribution.length ? (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {data.openAiAnalytics.mostCommonFounderGoals.map((item) => (
+            <span key={item.goal} className="rounded-full border border-cyan-300/15 bg-cyan-300/5 px-2.5 py-1 text-[11px] text-cyan-100/80">
+              Goal {item.goal}: {formatCompactNumber(item.count)}
+            </span>
+          ))}
+          {data.openAiAnalytics.personalizationIndustryDistribution.map((item) => (
+            <span key={item.industry} className="rounded-full border border-emerald-300/15 bg-emerald-300/5 px-2.5 py-1 text-[11px] text-emerald-100/80">
+              {item.industry}: {formatCompactNumber(item.count)}
             </span>
           ))}
         </div>
