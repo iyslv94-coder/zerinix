@@ -33,17 +33,6 @@ import {
 } from "@/app/lib/ai/financial-assumptions";
 import { createAiCostOptimizationMetrics } from "@/app/lib/ai/token-optimization";
 import { isReportGenerationFailureText } from "@/app/lib/report-errors";
-import { validateGeneratedReportSections } from "@/app/lib/report-quality-validation";
-import { evaluateReportConfidence } from "@/app/lib/report-confidence";
-import { scoreReportSources } from "@/app/lib/source-reliability";
-import { aggregateReportEvidence } from "@/app/lib/live-evidence";
-import { createExecutiveDecisionIntelligence } from "@/app/lib/executive-decision-intelligence";
-import { createAiRoiIntelligence } from "@/app/lib/ai-roi-intelligence";
-import { createAiBusinessImpactIntelligence } from "@/app/lib/ai-business-impact-intelligence";
-import { createAiOutcomeIntelligence } from "@/app/lib/ai-outcome-intelligence";
-import { createMarketIntelligence } from "@/app/lib/market-intelligence";
-import { createFounderOperatingSystem } from "@/app/lib/founder-operating-system";
-import { createReportPersonalization } from "@/app/lib/report-personalization";
 import {
   createOpenAiClient,
   getAiConfigurationErrorMessage,
@@ -67,6 +56,14 @@ import {
   normalizePdfText,
 } from "@/app/lib/pdf-normalization.mjs";
 import { serializeReportStreamChunk } from "@/app/lib/report-engine/generation-service";
+import {
+  createReportMetadataContext,
+  flattenReportMetadataForUsage,
+} from "@/app/lib/report-engine/metadata";
+import {
+  getCompletedReportFields,
+  isPartialReportResult,
+} from "@/app/lib/report-engine/pipeline";
 
 const fieldPrompts = {
   executiveSummary: {
@@ -1698,77 +1695,12 @@ Do not generate business-plan sections here. Do not suggest website URLs, domain
               source: "cache",
             });
           }
-          const cachedReportValidation = validateGeneratedReportSections(parsedCachedReport);
-          const cachedSourceReliability = scoreReportSources(parsedCachedReport);
-          const cachedLiveEvidence = aggregateReportEvidence({ report: parsedCachedReport });
-          const cachedReportConfidence = evaluateReportConfidence({
-            report: parsedCachedReport,
-            validation: cachedReportValidation,
-            sources: cachedSourceReliability,
-          });
-          const cachedDecisionIntelligence = createExecutiveDecisionIntelligence({
-            report: parsedCachedReport,
-            validation: cachedReportValidation,
-            sources: cachedSourceReliability,
-            evidence: cachedLiveEvidence,
-            confidence: cachedReportConfidence,
-          });
-          const cachedMarketIntelligence = createMarketIntelligence({
-            report: parsedCachedReport,
-            context: canonicalFinancialAssumptions,
-            sources: cachedSourceReliability,
-            evidence: cachedLiveEvidence,
-            confidence: cachedReportConfidence,
-            decision: cachedDecisionIntelligence,
-          });
-          const cachedRoiIntelligence = createAiRoiIntelligence({
-            operationType: "market_report",
-            estimatedCostUsd: cachedFullReport.estimatedCostUsd,
-            report: parsedCachedReport,
-            validation: cachedReportValidation,
-            sources: cachedSourceReliability,
-            evidence: cachedLiveEvidence,
-            confidence: cachedReportConfidence,
-            decision: cachedDecisionIntelligence,
-          });
-          const cachedBusinessImpactIntelligence = createAiBusinessImpactIntelligence({
-            report: parsedCachedReport,
-            validation: cachedReportValidation,
-            sources: cachedSourceReliability,
-            evidence: cachedLiveEvidence,
-            confidence: cachedReportConfidence,
-            decision: cachedDecisionIntelligence,
-            roi: cachedRoiIntelligence,
-          });
-          const cachedOutcomeIntelligence = createAiOutcomeIntelligence({
-            validation: cachedReportValidation,
-            sources: cachedSourceReliability,
-            evidence: cachedLiveEvidence,
-            confidence: cachedReportConfidence,
-            decision: cachedDecisionIntelligence,
-            roi: cachedRoiIntelligence,
-            businessImpact: cachedBusinessImpactIntelligence,
-          });
-          const cachedFounderOperatingSystem = createFounderOperatingSystem({
-            validation: cachedReportValidation,
-            sources: cachedSourceReliability,
-            evidence: cachedLiveEvidence,
-            confidence: cachedReportConfidence,
-            decision: cachedDecisionIntelligence,
-            roi: cachedRoiIntelligence,
-            businessImpact: cachedBusinessImpactIntelligence,
-            outcome: cachedOutcomeIntelligence,
-            market: cachedMarketIntelligence,
-          });
-          const cachedReportPersonalization = createReportPersonalization({
+          const cachedReportMetadataContext = createReportMetadataContext({
             prompt: promptText,
             report: parsedCachedReport,
             context: canonicalFinancialAssumptions,
-            confidence: cachedReportConfidence,
-            sources: cachedSourceReliability,
-            decision: cachedDecisionIntelligence,
-            market: cachedMarketIntelligence,
-            founderOs: cachedFounderOperatingSystem,
+            operationType: "market_report",
+            estimatedCostUsd: cachedFullReport.estimatedCostUsd,
           });
 
           await recordAiUsage(supabase, {
@@ -1794,17 +1726,7 @@ Do not generate business-plan sections here. Do not suggest website URLs, domain
               usage_kind: "full_report_cache_hit",
               actual_ai_call: false,
               cachedEstimatedCostUsd: cachedFullReport.estimatedCostUsd,
-              ...cachedReportValidation,
-              ...cachedSourceReliability,
-              ...cachedLiveEvidence,
-              ...cachedReportConfidence,
-              ...cachedDecisionIntelligence,
-              ...cachedMarketIntelligence,
-              ...cachedRoiIntelligence,
-              ...cachedBusinessImpactIntelligence,
-              ...cachedOutcomeIntelligence,
-              ...cachedFounderOperatingSystem,
-              ...cachedReportPersonalization,
+              ...flattenReportMetadataForUsage(cachedReportMetadataContext),
             },
           });
 
@@ -1969,89 +1891,21 @@ Do not include markdown code fences, braces inside string values, or commentary 
           canonicalFinancialAssumptions,
           responseLanguage
         );
-        const reportValidation = validateGeneratedReportSections(parsedReport);
-        const sourceReliability = scoreReportSources(parsedReport);
-        const liveEvidence = aggregateReportEvidence({ report: parsedReport });
-        const reportConfidence = evaluateReportConfidence({
-          report: parsedReport,
-          validation: reportValidation,
-          sources: sourceReliability,
-        });
-        const decisionIntelligence = createExecutiveDecisionIntelligence({
-          report: parsedReport,
-          validation: reportValidation,
-          sources: sourceReliability,
-          evidence: liveEvidence,
-          confidence: reportConfidence,
-        });
-        const marketIntelligence = createMarketIntelligence({
-          report: parsedReport,
-          context: canonicalFinancialAssumptions,
-          sources: sourceReliability,
-          evidence: liveEvidence,
-          confidence: reportConfidence,
-          decision: decisionIntelligence,
-        });
-        const roiIntelligence = createAiRoiIntelligence({
-          operationType: "market_report",
-          estimatedCostUsd,
-          report: parsedReport,
-          validation: reportValidation,
-          sources: sourceReliability,
-          evidence: liveEvidence,
-          confidence: reportConfidence,
-          decision: decisionIntelligence,
-        });
-        const businessImpactIntelligence = createAiBusinessImpactIntelligence({
-          report: parsedReport,
-          validation: reportValidation,
-          sources: sourceReliability,
-          evidence: liveEvidence,
-          confidence: reportConfidence,
-          decision: decisionIntelligence,
-          roi: roiIntelligence,
-        });
-        const outcomeIntelligence = createAiOutcomeIntelligence({
-          validation: reportValidation,
-          sources: sourceReliability,
-          evidence: liveEvidence,
-          confidence: reportConfidence,
-          decision: decisionIntelligence,
-          roi: roiIntelligence,
-          businessImpact: businessImpactIntelligence,
-        });
-        const founderOperatingSystem = createFounderOperatingSystem({
-          validation: reportValidation,
-          sources: sourceReliability,
-          evidence: liveEvidence,
-          confidence: reportConfidence,
-          decision: decisionIntelligence,
-          roi: roiIntelligence,
-          businessImpact: businessImpactIntelligence,
-          outcome: outcomeIntelligence,
-          market: marketIntelligence,
-        });
-        const reportPersonalization = createReportPersonalization({
+        const reportMetadataContext = createReportMetadataContext({
           prompt: promptText,
           report: parsedReport,
           context: canonicalFinancialAssumptions,
-          confidence: reportConfidence,
-          sources: sourceReliability,
-          decision: decisionIntelligence,
-          market: marketIntelligence,
-          founderOs: founderOperatingSystem,
+          operationType: "market_report",
+          estimatedCostUsd,
         });
         const cacheResponseText = JSON.stringify(parsedReport);
-        const isPartialReport = Boolean(missingFields.length || invalidFields.length);
+        const isPartialReport = isPartialReportResult(missingFields, invalidFields);
 
         logOperationalInfo("[api:market-analysis] full report section validation", {
           reportRequestId: reportRequestId || null,
           model,
           responseTextLength: responseText.length,
-          completedFields: reportFields.filter(
-            (fieldName) =>
-              !missingFields.includes(fieldName) && !invalidFields.includes(fieldName)
-          ),
+          completedFields: getCompletedReportFields(reportFields, missingFields, invalidFields),
           missingFields,
           invalidFields,
           partial: isPartialReport,
@@ -2113,17 +1967,7 @@ Do not include markdown code fences, braces inside string values, or commentary 
             max_ai_calls_per_report: MAX_AI_CALLS_PER_MARKET_REPORT,
             job: queuedJob,
             ...fullReportInputCostMetrics,
-            ...reportValidation,
-            ...sourceReliability,
-            ...liveEvidence,
-            ...reportConfidence,
-            ...decisionIntelligence,
-            ...marketIntelligence,
-            ...roiIntelligence,
-            ...businessImpactIntelligence,
-            ...outcomeIntelligence,
-            ...founderOperatingSystem,
-            ...reportPersonalization,
+            ...flattenReportMetadataForUsage(reportMetadataContext),
           },
         });
 

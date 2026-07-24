@@ -33,17 +33,6 @@ import {
 } from "@/app/lib/ai/financial-assumptions";
 import { createAiCostOptimizationMetrics } from "@/app/lib/ai/token-optimization";
 import { isReportGenerationFailureText } from "@/app/lib/report-errors";
-import { validateGeneratedReportSections } from "@/app/lib/report-quality-validation";
-import { evaluateReportConfidence } from "@/app/lib/report-confidence";
-import { scoreReportSources } from "@/app/lib/source-reliability";
-import { aggregateReportEvidence } from "@/app/lib/live-evidence";
-import { createExecutiveDecisionIntelligence } from "@/app/lib/executive-decision-intelligence";
-import { createAiRoiIntelligence } from "@/app/lib/ai-roi-intelligence";
-import { createAiBusinessImpactIntelligence } from "@/app/lib/ai-business-impact-intelligence";
-import { createAiOutcomeIntelligence } from "@/app/lib/ai-outcome-intelligence";
-import { createMarketIntelligence } from "@/app/lib/market-intelligence";
-import { createFounderOperatingSystem } from "@/app/lib/founder-operating-system";
-import { createReportPersonalization } from "@/app/lib/report-personalization";
 import {
   createOpenAiClient,
   getAiConfigurationErrorMessage,
@@ -66,6 +55,11 @@ import {
   localizePdfPresentationText,
 } from "@/app/lib/pdf-normalization.mjs";
 import { serializeReportStreamChunk } from "@/app/lib/report-engine/generation-service";
+import {
+  createReportMetadataContext,
+  flattenReportMetadataForUsage,
+} from "@/app/lib/report-engine/metadata";
+import type { ReportPipelineStage } from "@/app/lib/report-engine/pipeline";
 
 const planPrompts = {
   executiveSummary: {
@@ -214,21 +208,7 @@ const MAX_AI_CALLS_PER_PLAN_REPORT = 1;
 const FULL_REPORT_MAX_OUTPUT_TOKENS = 12_000;
 
 type ResponseLanguage = "English" | "Turkish";
-type PlanGenerationStage =
-  | "request_validation"
-  | "authentication"
-  | "memory"
-  | "quota"
-  | "cache_read"
-  | "ai_call_budget"
-  | "provider_call"
-  | "response_status"
-  | "response_extraction"
-  | "json_parse"
-  | "report_normalization"
-  | "cache_write"
-  | "usage_write"
-  | "stream_response";
+type PlanGenerationStage = ReportPipelineStage;
 
 const englishPlanFieldLabels: Record<PlanReportField, string> = {
   executiveSummary: "Executive Summary",
@@ -2083,77 +2063,12 @@ Write only the content for this section. Do not write a JSON object, field name,
           canonicalFinancialAssumptions,
           responseLanguage
         );
-        const cachedReportValidation = validateGeneratedReportSections(parsedCachedReport);
-        const cachedSourceReliability = scoreReportSources(parsedCachedReport);
-        const cachedLiveEvidence = aggregateReportEvidence({ report: parsedCachedReport });
-        const cachedReportConfidence = evaluateReportConfidence({
-          report: parsedCachedReport,
-          validation: cachedReportValidation,
-          sources: cachedSourceReliability,
-        });
-        const cachedDecisionIntelligence = createExecutiveDecisionIntelligence({
-          report: parsedCachedReport,
-          validation: cachedReportValidation,
-          sources: cachedSourceReliability,
-          evidence: cachedLiveEvidence,
-          confidence: cachedReportConfidence,
-        });
-        const cachedMarketIntelligence = createMarketIntelligence({
-          report: parsedCachedReport,
-          context: canonicalFinancialAssumptions,
-          sources: cachedSourceReliability,
-          evidence: cachedLiveEvidence,
-          confidence: cachedReportConfidence,
-          decision: cachedDecisionIntelligence,
-        });
-        const cachedRoiIntelligence = createAiRoiIntelligence({
-          operationType: "plan_report",
-          estimatedCostUsd: cachedFullReport.estimatedCostUsd,
-          report: parsedCachedReport,
-          validation: cachedReportValidation,
-          sources: cachedSourceReliability,
-          evidence: cachedLiveEvidence,
-          confidence: cachedReportConfidence,
-          decision: cachedDecisionIntelligence,
-        });
-        const cachedBusinessImpactIntelligence = createAiBusinessImpactIntelligence({
-          report: parsedCachedReport,
-          validation: cachedReportValidation,
-          sources: cachedSourceReliability,
-          evidence: cachedLiveEvidence,
-          confidence: cachedReportConfidence,
-          decision: cachedDecisionIntelligence,
-          roi: cachedRoiIntelligence,
-        });
-        const cachedOutcomeIntelligence = createAiOutcomeIntelligence({
-          validation: cachedReportValidation,
-          sources: cachedSourceReliability,
-          evidence: cachedLiveEvidence,
-          confidence: cachedReportConfidence,
-          decision: cachedDecisionIntelligence,
-          roi: cachedRoiIntelligence,
-          businessImpact: cachedBusinessImpactIntelligence,
-        });
-        const cachedFounderOperatingSystem = createFounderOperatingSystem({
-          validation: cachedReportValidation,
-          sources: cachedSourceReliability,
-          evidence: cachedLiveEvidence,
-          confidence: cachedReportConfidence,
-          decision: cachedDecisionIntelligence,
-          roi: cachedRoiIntelligence,
-          businessImpact: cachedBusinessImpactIntelligence,
-          outcome: cachedOutcomeIntelligence,
-          market: cachedMarketIntelligence,
-        });
-        const cachedReportPersonalization = createReportPersonalization({
+        const cachedReportMetadataContext = createReportMetadataContext({
           prompt: promptText,
           report: parsedCachedReport,
           context: canonicalFinancialAssumptions,
-          confidence: cachedReportConfidence,
-          sources: cachedSourceReliability,
-          decision: cachedDecisionIntelligence,
-          market: cachedMarketIntelligence,
-          founderOs: cachedFounderOperatingSystem,
+          operationType: "plan_report",
+          estimatedCostUsd: cachedFullReport.estimatedCostUsd,
         });
 
         await recordAiUsage(supabase, {
@@ -2179,17 +2094,7 @@ Write only the content for this section. Do not write a JSON object, field name,
             usage_kind: "full_report_cache_hit",
             actual_ai_call: false,
             cachedEstimatedCostUsd: cachedFullReport.estimatedCostUsd,
-            ...cachedReportValidation,
-            ...cachedSourceReliability,
-            ...cachedLiveEvidence,
-            ...cachedReportConfidence,
-            ...cachedDecisionIntelligence,
-            ...cachedMarketIntelligence,
-            ...cachedRoiIntelligence,
-            ...cachedBusinessImpactIntelligence,
-            ...cachedOutcomeIntelligence,
-            ...cachedFounderOperatingSystem,
-            ...cachedReportPersonalization,
+            ...flattenReportMetadataForUsage(cachedReportMetadataContext),
           },
         });
 
@@ -2343,77 +2248,12 @@ ${buildFullReportStructureDirectives("business_plan").map((directive) => `- ${di
           canonicalFinancialAssumptions,
           responseLanguage
         );
-        const reportValidation = validateGeneratedReportSections(parsedReport);
-        const sourceReliability = scoreReportSources(parsedReport);
-        const liveEvidence = aggregateReportEvidence({ report: parsedReport });
-        const reportConfidence = evaluateReportConfidence({
-          report: parsedReport,
-          validation: reportValidation,
-          sources: sourceReliability,
-        });
-        const decisionIntelligence = createExecutiveDecisionIntelligence({
-          report: parsedReport,
-          validation: reportValidation,
-          sources: sourceReliability,
-          evidence: liveEvidence,
-          confidence: reportConfidence,
-        });
-        const marketIntelligence = createMarketIntelligence({
-          report: parsedReport,
-          context: canonicalFinancialAssumptions,
-          sources: sourceReliability,
-          evidence: liveEvidence,
-          confidence: reportConfidence,
-          decision: decisionIntelligence,
-        });
-        const roiIntelligence = createAiRoiIntelligence({
-          operationType: "plan_report",
-          estimatedCostUsd,
-          report: parsedReport,
-          validation: reportValidation,
-          sources: sourceReliability,
-          evidence: liveEvidence,
-          confidence: reportConfidence,
-          decision: decisionIntelligence,
-        });
-        const businessImpactIntelligence = createAiBusinessImpactIntelligence({
-          report: parsedReport,
-          validation: reportValidation,
-          sources: sourceReliability,
-          evidence: liveEvidence,
-          confidence: reportConfidence,
-          decision: decisionIntelligence,
-          roi: roiIntelligence,
-        });
-        const outcomeIntelligence = createAiOutcomeIntelligence({
-          validation: reportValidation,
-          sources: sourceReliability,
-          evidence: liveEvidence,
-          confidence: reportConfidence,
-          decision: decisionIntelligence,
-          roi: roiIntelligence,
-          businessImpact: businessImpactIntelligence,
-        });
-        const founderOperatingSystem = createFounderOperatingSystem({
-          validation: reportValidation,
-          sources: sourceReliability,
-          evidence: liveEvidence,
-          confidence: reportConfidence,
-          decision: decisionIntelligence,
-          roi: roiIntelligence,
-          businessImpact: businessImpactIntelligence,
-          outcome: outcomeIntelligence,
-          market: marketIntelligence,
-        });
-        const reportPersonalization = createReportPersonalization({
+        const reportMetadataContext = createReportMetadataContext({
           prompt: promptText,
           report: parsedReport,
           context: canonicalFinancialAssumptions,
-          confidence: reportConfidence,
-          sources: sourceReliability,
-          decision: decisionIntelligence,
-          market: marketIntelligence,
-          founderOs: founderOperatingSystem,
+          operationType: "plan_report",
+          estimatedCostUsd,
         });
         const cacheResponseText = JSON.stringify(parsedReport);
 
@@ -2456,17 +2296,7 @@ ${buildFullReportStructureDirectives("business_plan").map((directive) => `- ${di
             max_ai_calls_per_report: MAX_AI_CALLS_PER_PLAN_REPORT,
             job: queuedJob,
             ...fullReportInputCostMetrics,
-            ...reportValidation,
-            ...sourceReliability,
-            ...liveEvidence,
-            ...reportConfidence,
-            ...decisionIntelligence,
-            ...marketIntelligence,
-            ...roiIntelligence,
-            ...businessImpactIntelligence,
-            ...outcomeIntelligence,
-            ...founderOperatingSystem,
-            ...reportPersonalization,
+            ...flattenReportMetadataForUsage(reportMetadataContext),
           },
         });
 
